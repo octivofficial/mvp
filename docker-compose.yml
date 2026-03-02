@@ -1,0 +1,62 @@
+---
+# Octiv — One-Click Stack
+# docker compose up -d
+#
+# Services:
+#   redis     : Blackboard (port 6379)
+#   minecraft : PaperMC 1.21.1 (port 25565, RCON 25575)
+
+services:
+
+  redis:
+    image: redis:latest
+    container_name: octiv-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"   # 6380 → 로컬 6379와 충돌 방지
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  minecraft:
+    image: itzg/minecraft-server:latest
+    container_name: octiv-mc
+    restart: unless-stopped
+    environment:
+      EULA: "TRUE"
+      TYPE: PAPER
+      VERSION: "1.21.1"
+      ONLINE_MODE: "FALSE"        # AI 봇 무인증 접속
+      DIFFICULTY: normal
+      GAMEMODE: survival
+      MAX_PLAYERS: "20"
+      LEVEL: octiv-world
+      MOTD: "Octiv | AI Agent Sandbox"
+      ENABLE_RCON: "true"
+      RCON_PASSWORD: octiv_rcon_2026
+      RCON_PORT: "25575"
+      ALLOW_FLIGHT: "true"
+      SPAWN_PROTECTION: "0"
+      ENABLE_COMMAND_BLOCK: "true"
+      MEMORY: "3G"
+      JVM_OPTS: "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200"
+    ports:
+      - "25565:25565"   # Minecraft
+      - "25575:25575"   # RCON
+    volumes:
+      - mc-data:/data
+    healthcheck:
+      test: mc-health
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s    # PaperMC 첫 실행 다운로드 여유
+
+volumes:
+  redis-data:
+  mc-data:

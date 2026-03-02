@@ -1,0 +1,23 @@
+{
+  "name": "octiv",
+  "version": "1.0.0",
+  "description": "Octiv — AI Agent Sandbox powered by OpenClaw + PaperMC",
+  "main": "index.js",
+  "scripts": {
+    "server": "bash start-server.sh",
+    "bot": "node agent/bot.js",
+    "team": "node agent/team.js",
+    "redis:check": "redis-cli ping",
+    "status": "redis-cli hgetall octiv:team:status:latest 2>/dev/null || echo \"Redis key not set yet\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "mineflayer": "^4.35.0",
+    "mineflayer-pathfinder": "^2.4.5",
+    "redis": "^5.11.0",
+    "vm2": "^3.10.5"
+  }
+}

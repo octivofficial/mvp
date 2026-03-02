@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment — secrets 포함, 절대 커밋 금지
+.env
+
+# PaperMC 서버 런타임 파일 (jar만 버전관리)
+server/octiv-world/
+server/cache/
+server/libraries/
+server/logs/
+server/plugins/
+server/versions/
+server/crash-reports/
+server/generated/
+server/bundler/
+server/*.log
+server/session.lock
+
+# OpenClaw 런타임 상태
+agent/.openclaw/
+agent/sessions/
+
+# macOS
+.DS_Store
+
+# npm
+package-lock.json
+npm-debug.log*
+
+# Logs
+logs/
+*.log
