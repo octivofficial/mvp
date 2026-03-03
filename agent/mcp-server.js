@@ -18,6 +18,8 @@ class MCPServer {
       moveTo: this._moveTo.bind(this),
       chopTree: this._chopTree.bind(this),
       inventory: this._inventory.bind(this),
+      setLLMConfig: this._setLLMConfig.bind(this),
+      getLLMConfig: this._getLLMConfig.bind(this),
     };
   }
 
@@ -134,6 +136,28 @@ class MCPServer {
     if (!agentId) throw new Error('Required: agentId');
     await this.board.publish(`command:${agentId}:chopTree`, { action: 'chopTree' });
     return { agentId, command: 'chopTree', status: 'dispatched' };
+  }
+
+  // 4.7: Set LLM config via MCP → persists to Redis
+  async _setLLMConfig(params) {
+    const { model, temperature, maxTokens } = params;
+    const updates = {};
+    if (model) updates.model = model;
+    if (temperature != null) updates.temperature = temperature;
+    if (maxTokens != null) updates.maxTokens = maxTokens;
+
+    const current = await this.board.client.get('octiv:config:llm');
+    const config = current ? JSON.parse(current) : {};
+    Object.assign(config, updates);
+    await this.board.client.set('octiv:config:llm', JSON.stringify(config));
+    await this.board.publish('config:llm:updated', config);
+    return { config, status: 'updated' };
+  }
+
+  // 4.7: Get current LLM config
+  async _getLLMConfig() {
+    const raw = await this.board.client.get('octiv:config:llm');
+    return { config: raw ? JSON.parse(raw) : {} };
   }
 
   // Tool: Get agent inventory

@@ -120,6 +120,22 @@ class LeaderAgent {
     return result;
   }
 
+  // 4.4: Inject learned skill into team system prompt via Blackboard
+  async injectLearnedSkill(skillName, version = 'v1') {
+    const tag = `[Learned Skill ${version}] ${skillName}`;
+    const current = await this.board.get('leader:system_prompt') || {};
+    const skills = current.skills || [];
+    if (!skills.includes(tag)) skills.push(tag);
+
+    await this.board.publish('leader:system_prompt', { skills, updatedAt: Date.now() });
+    // Broadcast to all builders
+    for (let i = 1; i <= this.teamSize; i++) {
+      await this.board.publish(`command:builder-0${i}:prompt_update`, { skills });
+    }
+    console.log(`[Leader] injected: ${tag}`);
+    return { tag, totalSkills: skills.length };
+  }
+
   // Check if team failures warrant Group Reflexion
   async checkReflexionTrigger() {
     if (this.consecutiveTeamFailures >= 3) {
