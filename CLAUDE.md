@@ -11,6 +11,7 @@
 ### START (ALWAYS — before anything else)
 1. `/session-memory` — loads MEMORY.md + debugging.md + patterns.md + session-log + git log
 2. Report state: current Phase, last commit, next task, any blockers
+3. **VERIFY**: Check session-log.md "Changes That Need Verification" → run affected tests, mark `[x]`
 
 ### DURING SESSION
 - `/remember` — anytime you discover something worth keeping
@@ -19,12 +20,14 @@
 - `/manage-skills` — after adding new code patterns
 - `/verify-implementation` — before PRs; full audit
 - `npm test` before every commit (enforced by PreToolUse hook)
+- After code changes: update session-log.md "Changes That Need Verification" with items to check
 
 ### END (ALWAYS — before closing)
 1. `/verify-implementation` — confirm everything passes
-2. `github-agent` — commit + push all changes
-3. `/save-memory` — persist to MEMORY.md + session-log
-4. Tell user: "Memory saved. Next session picks up from [X]"
+2. `grep -rn 'password\|secret\|key' --include='*.js' --include='*.yml' --include='*.md'` — no secrets in tracked files
+3. `github-agent` — commit + push all changes
+4. `/save-memory` — persist to MEMORY.md + session-log (include "Changes That Need Verification" for next session)
+5. Tell user: "Memory saved. Next session picks up from [X]"
 
 ---
 
