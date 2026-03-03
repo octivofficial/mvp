@@ -24,6 +24,25 @@ agent/sessions/
 # macOS
 .DS_Store
 
+# Redis persistence
+dump.rdb
+
+# Obsidian (전체 디렉토리 무시)
+.obsidian/
+vault/
+
+# Documentation (local only)
+TXT/
+
+# IDE settings
+.vscode/
+
+# Session notes
+2026-03-02.md
+setup-obsidian-v3.3-final.sh
+*.kanban.md
+Untitled Kanban.md
+
 # npm
 package-lock.json
 npm-debug.log*

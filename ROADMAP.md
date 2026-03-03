@@ -51,19 +51,19 @@
 > 목표: 단일 봇이 서버에서 안정적으로 동작하는 것을 확인
 
 ### 1.1 인프라 검증
-- Docker Compose 정상 기동 확인 (Redis + PaperMC)
-- Redis 연결 테스트 (Blackboard → publish/get 동작)
-- RCON 명령 실행 확인 (서버 상태 조회)
+- [x] Docker Compose 정상 기동 확인 (Redis + PaperMC)
+- [x] Redis 연결 테스트 (Blackboard → publish/get 동작)
+- [x] RCON 명령 실행 확인 (서버 상태 조회)
 
 ### 1.2 단일 봇 안정화
-- bot.js로 서버 접속 → 스폰 → 기본 동작 검증
-- mineflayer + pathfinder 이동/채굴 안정성 테스트
-- 에러 핸들링 강화 (재접속, 타임아웃, 예외처리)
+- [x] bot.js로 서버 접속 → 스폰 → 기본 동작 검증
+- [x] mineflayer + pathfinder 이동/채굴 안정성 테스트
+- [x] 에러 핸들링 강화 (재접속, 타임아웃, 예외처리)
 
 ### 1.3 Blackboard 통합 테스트
-- bot.js → Blackboard에 상태 게시 → Redis에서 확인
-- Pub/Sub 채널 구독/발행 검증
-- AC 진행도 업데이트 → 조회 사이클 테스트
+- [x] bot.js → Blackboard에 상태 게시 → Redis에서 확인
+- [x] Pub/Sub 채널 구독/발행 검증
+- [x] AC 진행도 업데이트 → 조회 사이클 테스트
 
 ### 마일스톤
 ```

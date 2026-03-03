@@ -4,10 +4,13 @@
   "description": "Octiv — AI Agent Sandbox powered by OpenClaw + PaperMC",
   "main": "index.js",
   "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:bot": "node --test test/bot.test.js",
+    "test:blackboard": "node --test test/blackboard.test.js",
     "server": "bash start-server.sh",
     "bot": "node agent/bot.js",
     "team": "node agent/team.js",
-    "redis:check": "redis-cli ping",
+    "redis:check": "redis-cli -p 6380 ping",
     "status": "redis-cli hgetall octiv:team:status:latest 2>/dev/null || echo \"Redis key not set yet\""
   },
   "keywords": [],
