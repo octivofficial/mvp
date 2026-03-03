@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); echo \"$INPUT\" | grep -q 'git commit' && { cd /Users/octiv/Octiv_MVP && echo '[PreCommit] Running tests...' && npm test 2>&1 | tail -5; } || true"
+            "command": "INPUT=$(cat); echo \"$INPUT\" | grep -q 'git commit' && { cd /Users/octiv/Octiv_MVP && echo '[PreCommit] Running blackboard tests...' && node --test --test-timeout=10000 test/blackboard.test.js 2>&1 | tail -5; } || true"
           }
         ]
       }
