@@ -26,8 +26,7 @@ class MCPServer {
   async start() {
     await this.board.connect();
     // 3.6: Blackboard → MCP sync subscriber
-    this.subscriber = this.board.client.duplicate();
-    await this.subscriber.connect();
+    this.subscriber = await this.board.createSubscriber();
     this._startSync();
     this.server = http.createServer((req, res) => this._handleRequest(req, res));
     return new Promise((resolve) => {
@@ -146,18 +145,17 @@ class MCPServer {
     if (temperature != null) updates.temperature = temperature;
     if (maxTokens != null) updates.maxTokens = maxTokens;
 
-    const current = await this.board.client.get('octiv:config:llm');
-    const config = current ? JSON.parse(current) : {};
+    const config = await this.board.getConfig('config:llm') || {};
     Object.assign(config, updates);
-    await this.board.client.set('octiv:config:llm', JSON.stringify(config));
+    await this.board.setConfig('config:llm', config);
     await this.board.publish('config:llm:updated', config);
     return { config, status: 'updated' };
   }
 
   // 4.7: Get current LLM config
   async _getLLMConfig() {
-    const raw = await this.board.client.get('octiv:config:llm');
-    return { config: raw ? JSON.parse(raw) : {} };
+    const config = await this.board.getConfig('config:llm');
+    return { config: config || {} };
   }
 
   // Tool: Get agent inventory

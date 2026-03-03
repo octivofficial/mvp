@@ -20,8 +20,7 @@ class DashboardServer {
 
   async start() {
     await this.board.connect();
-    this.subscriber = this.board.client.duplicate();
-    await this.subscriber.connect();
+    this.subscriber = await this.board.createSubscriber();
     this._subscribeUpdates();
 
     this.server = http.createServer((req, res) => this._handleRequest(req, res));

@@ -91,8 +91,7 @@ class LeaderAgent {
     console.log('[Leader] triggering Group Reflexion');
     const allErrors = [];
     for (let i = 1; i <= this.teamSize; i++) {
-      const key = `octiv:agent:builder-0${i}:reflexion`;
-      const entries = await this.board.client.lRange(key, 0, -1);
+      const entries = await this.board.getListRange(`agent:builder-0${i}:reflexion`);
       for (const raw of entries) {
         try { allErrors.push(JSON.parse(raw)); } catch {}
       }

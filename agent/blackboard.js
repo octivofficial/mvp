@@ -172,6 +172,62 @@ class Blackboard {
       try { return val ? JSON.parse(val) : null; } catch { return null; }
     });
   }
+
+  // ── Config helpers (avoid direct client access) ────────────
+
+  /**
+   * Get JSON config by key (e.g., 'config:llm', 'skills:daily_meta')
+   */
+  async getConfig(key) {
+    const raw = await this.client.get(PREFIX + key);
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  /**
+   * Set JSON config by key
+   */
+  async setConfig(key, data) {
+    await this.client.set(PREFIX + key, JSON.stringify(data));
+  }
+
+  /**
+   * Get all entries from a hash (e.g., 'agents:registry')
+   */
+  async getHash(key) {
+    return await this.client.hGetAll(PREFIX + key);
+  }
+
+  /**
+   * Set a field in a hash
+   */
+  async setHashField(key, field, data) {
+    await this.client.hSet(PREFIX + key, field, JSON.stringify(data));
+  }
+
+  /**
+   * Delete a field from a hash
+   */
+  async deleteHashField(key, field) {
+    await this.client.hDel(PREFIX + key, field);
+  }
+
+  /**
+   * Create a duplicate client for pub/sub subscribers
+   */
+  async createSubscriber() {
+    const sub = this.client.duplicate();
+    await sub.connect();
+    return sub;
+  }
+
+  /**
+   * Get list range (e.g., reflexion logs)
+   */
+  async getListRange(key, start = 0, stop = -1) {
+    return await this.client.lRange(PREFIX + key, start, stop);
+  }
 }
 
-module.exports = { Blackboard };
+Blackboard.PREFIX = PREFIX;
+
+module.exports = { Blackboard, PREFIX };

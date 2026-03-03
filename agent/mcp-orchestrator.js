@@ -13,7 +13,7 @@ class MCPOrchestrator {
   async init() {
     await this.board.connect();
     // Load existing registry from Redis
-    const registry = await this.board.client.hGetAll('octiv:agents:registry');
+    const registry = await this.board.getHash('agents:registry');
     for (const [id, raw] of Object.entries(registry)) {
       try { this.agents.set(id, JSON.parse(raw)); } catch {}
     }
@@ -23,7 +23,7 @@ class MCPOrchestrator {
   async registerAgent(agentId, role, metadata = {}) {
     const entry = { role, status: 'active', registeredAt: Date.now(), ...metadata };
     this.agents.set(agentId, entry);
-    await this.board.client.hSet('octiv:agents:registry', agentId, JSON.stringify(entry));
+    await this.board.setHashField('agents:registry', agentId, entry);
     await this.board.publish('orchestrator:registered', { agentId, role });
     console.log(`[Orchestrator] registered: ${agentId} (${role})`);
     return entry;
@@ -31,7 +31,7 @@ class MCPOrchestrator {
 
   async deregisterAgent(agentId) {
     this.agents.delete(agentId);
-    await this.board.client.hDel('octiv:agents:registry', agentId);
+    await this.board.deleteHashField('agents:registry', agentId);
     await this.board.publish('orchestrator:deregistered', { agentId });
     console.log(`[Orchestrator] deregistered: ${agentId}`);
   }

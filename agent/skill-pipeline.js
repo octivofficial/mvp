@@ -20,13 +20,10 @@ class SkillPipeline {
   async init() {
     await this.board.connect();
     // Load daily count from Redis
-    const meta = await this.board.client.get('octiv:skills:daily_meta');
-    if (meta) {
-      const parsed = JSON.parse(meta);
-      if (parsed.resetAt > Date.now()) {
-        this.dailyCount = parsed.count;
-        this.dailyResetAt = parsed.resetAt;
-      }
+    const parsed = await this.board.getConfig('skills:daily_meta');
+    if (parsed && parsed.resetAt > Date.now()) {
+      this.dailyCount = parsed.count;
+      this.dailyResetAt = parsed.resetAt;
     }
     console.log(`[SkillPipeline] initialized, daily: ${this.dailyCount}/${DAILY_LIMIT}`);
   }
@@ -110,7 +107,7 @@ class SkillPipeline {
 
     // Discard if success rate drops below threshold
     if (skill.uses >= 3 && skill.success_rate < MIN_SUCCESS_RATE) {
-      await this.board.client.hDel('octiv:skills:library', skillName);
+      await this.board.deleteHashField('skills:library', skillName);
       console.log(`[SkillPipeline] discarded: ${skillName} (rate: ${skill.success_rate.toFixed(2)})`);
       return { discarded: true, skill: skillName, rate: skill.success_rate };
     }
@@ -121,7 +118,7 @@ class SkillPipeline {
 
   // 4.2: Get all skills from library
   async getLibrary() {
-    const all = await this.board.client.hGetAll('octiv:skills:library');
+    const all = await this.board.getHash('skills:library');
     const result = {};
     for (const [name, raw] of Object.entries(all)) {
       try { result[name] = JSON.parse(raw); } catch {}
@@ -147,9 +144,9 @@ class SkillPipeline {
   }
 
   async _saveDailyMeta() {
-    await this.board.client.set('octiv:skills:daily_meta', JSON.stringify({
+    await this.board.setConfig('skills:daily_meta', {
       count: this.dailyCount, resetAt: this.dailyResetAt,
-    }));
+    });
   }
 
   async shutdown() {

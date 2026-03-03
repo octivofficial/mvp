@@ -34,9 +34,8 @@ class ReflexionEngine {
 
   // 4.5: Reload config from Redis (hot reload)
   async reloadConfig() {
-    const raw = await this.board.client.get('octiv:config:llm');
-    if (raw) {
-      const saved = JSON.parse(raw);
+    const saved = await this.board.getConfig('config:llm');
+    if (saved) {
       Object.assign(this.config, saved);
     }
     return this.config;
@@ -45,7 +44,7 @@ class ReflexionEngine {
   // 4.5: Save config to Redis
   async saveConfig(updates) {
     Object.assign(this.config, updates);
-    await this.board.client.set('octiv:config:llm', JSON.stringify(this.config));
+    await this.board.setConfig('config:llm', this.config);
     await this.board.publish('config:llm:updated', this.config);
     return this.config;
   }

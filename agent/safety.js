@@ -34,8 +34,7 @@ class SafetyAgent {
 
   async init() {
     await this.board.connect();
-    this.subscriber = this.board.client.duplicate();
-    await this.subscriber.connect();
+    this.subscriber = await this.board.createSubscriber();
     this._startMonitoring();
     console.log('[Safety] initialized, AC-8 monitoring started');
   }
@@ -180,5 +179,8 @@ class SafetyAgent {
     await this.board.disconnect();
   }
 }
+
+// Static version for use without SafetyAgent instance
+SafetyAgent.filterPromptInjection = SafetyAgent.prototype.filterPromptInjection;
 
 module.exports = { SafetyAgent };

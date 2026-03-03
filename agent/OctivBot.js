@@ -1,6 +1,6 @@
 const redis = require('redis');
 const mineflayer = require('mineflayer');
-const { pathfinder, Movements, goals: { GoalNear, GoalBlock } } = require('mineflayer-pathfinder');
+const { pathfinder } = require('mineflayer-pathfinder');
 
 /**
  * OctivBot Class — Core bot logic for Phase 1.2-1.3
@@ -178,23 +178,6 @@ class OctivBot {
 
         this.reconnectAttempts++;
         await this._createBot();
-    }
-
-    // Phase 2.6: Pathfinder navigation for base class
-    async navigateTo(x, y, z, range = 2) {
-        if (!this.bot || !this.spawned) throw new Error('Bot not spawned');
-        const movements = new Movements(this.bot);
-        this.bot.pathfinder.setMovements(movements);
-        await this.bot.pathfinder.goto(new GoalNear(x, y, z, range));
-        return { x, y, z };
-    }
-
-    async navigateToBlock(x, y, z) {
-        if (!this.bot || !this.spawned) throw new Error('Bot not spawned');
-        const movements = new Movements(this.bot);
-        this.bot.pathfinder.setMovements(movements);
-        await this.bot.pathfinder.goto(new GoalBlock(x, y, z));
-        return { x, y, z };
     }
 
     async shutdown() {

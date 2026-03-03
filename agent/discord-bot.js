@@ -20,6 +20,7 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { createClient } = require('redis');
 const { readFileSync } = require('fs');
 const { join } = require('path');
+const { SafetyAgent } = require('./safety');
 
 // Load channel config
 function loadConfig() {
@@ -264,9 +265,15 @@ class OctivDiscordBot {
     const [agentId, ...taskParts] = args;
     const task = taskParts.join(' ');
 
+    // Sanitize user input against prompt injection
+    const check = SafetyAgent.filterPromptInjection(task);
+    if (!check.safe) {
+      return msg.reply(`Blocked: input rejected (${check.reason})`);
+    }
+
     try {
-      await this.redis.publish('octiv:commands:assign', JSON.stringify({ agentId, task }));
-      msg.reply(`Task "${task}" assigned to ${agentId}`);
+      await this.redis.publish('octiv:commands:assign', JSON.stringify({ agentId, task: check.sanitized }));
+      msg.reply(`Task "${check.sanitized}" assigned to ${agentId}`);
     } catch (err) {
       msg.reply(`Error assigning task: ${err.message}`);
     }
