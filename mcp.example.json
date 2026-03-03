@@ -1,0 +1,72 @@
+{
+  "_comment": "MCP Server Configuration Template — Copy to .mcp.json and fill in env vars",
+  "_security": "NEVER commit .mcp.json with real tokens. Use .env for secrets.",
+  "_docs": "See CLAUDE.md → MCP Security Policy for access level details",
+  "mcpServers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/YOUR_USER/Octiv_MVP"],
+      "env": {}
+    },
+    "memory": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {}
+    },
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "supabase": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y", "@supabase/mcp-server-supabase@latest",
+        "--read-only",
+        "--project-ref", "${SUPABASE_PROJECT_REF}"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      }
+    },
+    "sentry": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@getsentry/sentry-mcp"],
+      "env": {
+        "SENTRY_AUTH_TOKEN": "${SENTRY_AUTH_TOKEN}",
+        "SENTRY_ORG": "octiv",
+        "SENTRY_PROJECT": "octiv-mvp"
+      }
+    },
+    "vercel": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "mcp-vercel"],
+      "env": {
+        "VERCEL_TOKEN": "${VERCEL_TOKEN}",
+        "VERCEL_TEAM_ID": "${VERCEL_TEAM_ID}"
+      }
+    },
+    "figma": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-figma"],
+      "env": {
+        "FIGMA_ACCESS_TOKEN": "${FIGMA_ACCESS_TOKEN}"
+      }
+    },
+    "serena": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "serena-mcp", "--workspace", "/Users/YOUR_USER/Octiv_MVP"],
+      "env": {}
+    }
+  }
+}

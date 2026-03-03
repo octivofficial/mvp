@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "MEM=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory/MEMORY.md; echo \"[Octiv] $(git -C /Users/octiv/Octiv_MVP log --oneline -1 2>/dev/null) | mem:$([ -f $MEM ] && wc -l < $MEM || echo '?')L | redis:$(redis-cli -p 6380 ping 2>/dev/null || echo 'DOWN') | docker:$(docker ps --format '{{.Names}}' 2>/dev/null | tr '\\n' ',' || echo 'DOWN')\""
+            "command": "PROJ=/Users/octiv/Octiv_MVP; MEM=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory; COMMIT=$(git -C $PROJ log --oneline -1 2>/dev/null); BRANCH=$(git -C $PROJ branch --show-current 2>/dev/null); MOD=$(git -C $PROJ diff --name-only 2>/dev/null | wc -l | tr -d ' '); REDIS=$(redis-cli -p 6380 ping 2>/dev/null || echo 'DOWN'); DOCK=$(docker ps --format '{{.Names}}' 2>/dev/null | wc -l | tr -d ' '); ML=$([ -f $MEM/MEMORY.md ] && wc -l < $MEM/MEMORY.md | tr -d ' ' || echo '0'); SL=$([ -f $MEM/session-log.md ] && wc -l < $MEM/session-log.md | tr -d ' ' || echo '0'); echo \"[Octiv] $BRANCH:${COMMIT} | Δ${MOD} | redis:$REDIS | docker:${DOCK} | mem:${ML}L log:${SL}L\""
           }
         ]
       }
@@ -26,6 +26,17 @@
           {
             "type": "command",
             "command": "INPUT=$(cat); echo \"$INPUT\" | grep -q 'rcon' && echo \"$INPUT\" | grep -qE '(op |ban |stop |whitelist )' && { echo '[BLOCKED] Dangerous RCON command denied'; exit 1; } || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); echo \"$INPUT\" | grep -q 'git commit' && { MEM=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory; COMMIT=$(git -C /Users/octiv/Octiv_MVP log --oneline -1 2>/dev/null); echo \"- [$(date '+%H:%M')] committed: $COMMIT\" >> $MEM/session-log.md && echo '[AutoMemory] Commit logged to session-log'; } || true"
           }
         ]
       }
