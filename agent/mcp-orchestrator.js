@@ -24,7 +24,7 @@ class MCPOrchestrator {
     const entry = { role, status: 'active', registeredAt: Date.now(), ...metadata };
     this.agents.set(agentId, entry);
     await this.board.setHashField('agents:registry', agentId, entry);
-    await this.board.publish('orchestrator:registered', { agentId, role });
+    await this.board.publish('orchestrator:registered', { author: 'orchestrator', agentId, role });
     console.log(`[Orchestrator] registered: ${agentId} (${role})`);
     return entry;
   }
@@ -32,7 +32,7 @@ class MCPOrchestrator {
   async deregisterAgent(agentId) {
     this.agents.delete(agentId);
     await this.board.deleteHashField('agents:registry', agentId);
-    await this.board.publish('orchestrator:deregistered', { agentId });
+    await this.board.publish('orchestrator:deregistered', { author: 'orchestrator', agentId });
     console.log(`[Orchestrator] deregistered: ${agentId}`);
   }
 
@@ -50,7 +50,7 @@ class MCPOrchestrator {
 
   async assignTask(agentId, task) {
     if (!this.agents.has(agentId)) throw new Error(`Agent not registered: ${agentId}`);
-    await this.board.publish(`command:${agentId}:task`, task);
+    await this.board.publish(`command:${agentId}:task`, { author: 'orchestrator', ...task });
     console.log(`[Orchestrator] task assigned: ${agentId} → ${task.action}`);
     return { agentId, task, status: 'assigned' };
   }
@@ -59,7 +59,7 @@ class MCPOrchestrator {
     const targets = [];
     const entries = [];
     for (const [id] of this.agents) {
-      entries.push({ channel: `command:${id}:broadcast`, data: command });
+      entries.push({ channel: `command:${id}:broadcast`, data: { author: 'orchestrator', ...command } });
       targets.push(id);
     }
     // Use batchPublish for ~77% latency reduction vs sequential publishes

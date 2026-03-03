@@ -122,6 +122,7 @@ class SafetyAgent {
     this.consecutiveFailures++;
 
     await this.board.publish('safety:threat', {
+      author: 'safety',
       agentId,
       threat,
       consecutiveFailures: this.consecutiveFailures,
@@ -129,6 +130,7 @@ class SafetyAgent {
 
     // Broadcast to AC-8 emergency channel
     await this.board.publish('skills:emergency', {
+      author: 'safety',
       failureType: threat.type,
       agentId,
       triggerSkillCreation: true,
@@ -137,6 +139,7 @@ class SafetyAgent {
     // 3 consecutive failures → force Group Reflexion
     if (this.consecutiveFailures >= 3) {
       await this.board.publish('leader:reflexion', {
+        author: 'safety',
         type: 'group',
         trigger: 'consecutive_failures_3',
         failureType: threat.type,

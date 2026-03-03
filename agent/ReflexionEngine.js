@@ -45,7 +45,7 @@ class ReflexionEngine {
   async saveConfig(updates) {
     Object.assign(this.config, updates);
     await this.board.setConfig('config:llm', this.config);
-    await this.board.publish('config:llm:updated', this.config);
+    await this.board.publish('config:llm:updated', { author: 'reflexion-engine', ...this.config });
     return this.config;
   }
 

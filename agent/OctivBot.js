@@ -116,6 +116,7 @@ class OctivBot {
         }
 
         const data = {
+            author: this.config.username,
             username: this.config.username,
             health: this.bot.health,
             food: this.bot.food,
@@ -131,6 +132,7 @@ class OctivBot {
 
     async _publishStatus(status) {
         const data = {
+            author: this.config.username,
             username: this.config.username,
             status: status,
             position: this.bot.entity?.position || null,

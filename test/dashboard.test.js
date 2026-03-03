@@ -237,9 +237,9 @@ describe('Blackboard — Redis Pipeline (Phase 7.4)', () => {
         await board.connect();
 
         const result = await board.batchPublish([
-            { channel: 'pipeline:test1', data: { value: 1 } },
-            { channel: 'pipeline:test2', data: { value: 2 } },
-            { channel: 'pipeline:test3', data: { value: 3 } },
+            { channel: 'pipeline:test1', data: { author: 'test', value: 1 } },
+            { channel: 'pipeline:test2', data: { author: 'test', value: 2 } },
+            { channel: 'pipeline:test3', data: { author: 'test', value: 3 } },
         ]);
 
         assert.equal(result.count, 3);
@@ -278,8 +278,8 @@ describe('Blackboard — Redis Pipeline (Phase 7.4)', () => {
         await board.connect();
 
         // Seed data
-        await board.publish('pipeline:bg1', { a: 1 });
-        await board.publish('pipeline:bg2', { b: 2 });
+        await board.publish('pipeline:bg1', { author: 'test', a: 1 });
+        await board.publish('pipeline:bg2', { author: 'test', b: 2 });
 
         const results = await board.batchGet(['pipeline:bg1', 'pipeline:bg2', 'pipeline:nonexistent']);
         assert.equal(results[0].a, 1);

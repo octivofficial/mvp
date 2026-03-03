@@ -36,6 +36,7 @@ describe('Blackboard — Redis Integration', () => {
 
   it('Should support publish -> get roundtrip', async () => {
     const testData = {
+      author: 'test',
       status: 'spawned',
       position: { x: 10, y: 64, z: -20 },
       health: 20,
@@ -53,7 +54,7 @@ describe('Blackboard — Redis Integration', () => {
   });
 
   it('Should set TTL on :latest keys (300s)', async () => {
-    await board.publish('test:ttl', { check: true });
+    await board.publish('test:ttl', { author: 'test', check: true });
 
     const ttl = await board.client.ttl('octiv:test:ttl:latest');
     assert.ok(ttl > 0, `TTL should be positive, got: ${ttl}`);
@@ -88,5 +89,65 @@ describe('Blackboard — Redis Integration', () => {
 
     const logs = await board.client.lRange('octiv:agent:test-bot:reflexion', 0, -1);
     assert.ok(logs.length <= 50, `Should keep max 50, got: ${logs.length}`);
+  });
+
+  // ── 眞善美孝永 Validation Tests ──────────────────────────────
+
+  it('孝: Should reject publish without author', async () => {
+    await assert.rejects(
+      () => board.publish('test:no-author', { status: 'oops' }),
+      { message: /孝.*author field is required/ }
+    );
+  });
+
+  it('眞: Should reject publish with empty channel', async () => {
+    await assert.rejects(
+      () => board.publish('', { author: 'test', status: 'ok' }),
+      { message: /眞.*channel must be a non-empty string/ }
+    );
+  });
+
+  it('眞: Should reject publish with non-object data', async () => {
+    await assert.rejects(
+      () => board.publish('test:bad-data', 'not-an-object'),
+      { message: /眞.*data must be a non-empty object/ }
+    );
+  });
+
+  it('善: Should reject publish with oversized payload (>10KB)', async () => {
+    const bigData = { author: 'test', blob: 'x'.repeat(11000) };
+    await assert.rejects(
+      () => board.publish('test:big', bigData),
+      { message: /善.*payload too large/ }
+    );
+  });
+
+  it('美: Should reject publish with invalid channel name', async () => {
+    await assert.rejects(
+      () => board.publish('Test:UPPER', { author: 'test', ok: true }),
+      { message: /美.*channel must be lowercase/ }
+    );
+    await assert.rejects(
+      () => board.publish('test channel', { author: 'test', ok: true }),
+      { message: /美.*channel must be lowercase/ }
+    );
+  });
+
+  it('Should accept valid publish with author', async () => {
+    await board.publish('test:valid', { author: 'test-agent', value: 42 });
+    const result = await board.get('test:valid');
+    assert.equal(result.author, 'test-agent');
+    assert.equal(result.value, 42);
+    assert.ok(result.ts, 'Timestamp should be present');
+  });
+
+  it('孝: batchPublish should reject entries without author', async () => {
+    await assert.rejects(
+      () => board.batchPublish([
+        { channel: 'test:batch1', data: { author: 'test', ok: true } },
+        { channel: 'test:batch2', data: { missing: true } },
+      ]),
+      { message: /孝.*author field is required/ }
+    );
   });
 });

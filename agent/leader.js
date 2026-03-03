@@ -35,7 +35,7 @@ class LeaderAgent {
     else if (!done.has('AC-4')) mission = { ac: 4, action: 'gatherAtShelter', params: {} };
     else mission = { ac: 0, action: 'idle', params: {} };
 
-    await this.board.publish(`command:${agentId}:mission`, mission);
+    await this.board.publish(`command:${agentId}:mission`, { author: 'leader', ...mission });
     return mission;
   }
 
@@ -64,7 +64,7 @@ class LeaderAgent {
       ? 'creative'
       : 'training';
 
-    await this.board.publish('leader:mode', { mode: this.mode, progress });
+    await this.board.publish('leader:mode', { author: 'leader', mode: this.mode, progress });
     console.log(`[Leader] mode: ${this.mode} (progress: ${Math.floor(progress * 100)}%)`);
     return this.mode;
   }
@@ -72,7 +72,7 @@ class LeaderAgent {
   // Aggregate team votes
   async collectVote(agentId, vote) {
     this.votes.push({ agentId, vote, ts: Date.now() });
-    await this.board.publish('leader:votes', { votes: this.votes });
+    await this.board.publish('leader:votes', { author: 'leader', votes: this.votes });
     console.log(`[Leader] vote received: ${agentId} → ${vote}`);
   }
 
@@ -80,6 +80,7 @@ class LeaderAgent {
   async forceGroupReflexion(failureLog) {
     console.warn('[Leader] ⚠️  forcing Group Reflexion!');
     await this.board.publish('leader:reflexion', {
+      author: 'leader',
       type: 'group',
       trigger: 'consecutive_failures',
       failureLog,
@@ -115,7 +116,7 @@ class LeaderAgent {
       totalEntries: allErrors.length,
     };
 
-    await this.board.publish('leader:reflexion:result', result);
+    await this.board.publish('leader:reflexion:result', { author: 'leader', ...result });
     this.consecutiveTeamFailures = 0;
     console.log(`[Leader] Group Reflexion complete: ${allErrors.length} entries from ${this.teamSize} agents`);
     return result;
@@ -128,10 +129,10 @@ class LeaderAgent {
     const skills = current.skills || [];
     if (!skills.includes(tag)) skills.push(tag);
 
-    await this.board.publish('leader:system_prompt', { skills, updatedAt: Date.now() });
+    await this.board.publish('leader:system_prompt', { author: 'leader', skills, updatedAt: Date.now() });
     // Broadcast to all builders
     for (let i = 1; i <= this.teamSize; i++) {
-      await this.board.publish(`command:builder-0${i}:prompt_update`, { skills });
+      await this.board.publish(`command:builder-0${i}:prompt_update`, { author: 'leader', skills });
     }
     console.log(`[Leader] injected: ${tag}`);
     return { tag, totalSkills: skills.length };

@@ -52,8 +52,9 @@ class ExplorerAgent extends BaseRole {
     };
 
     // Publish to Blackboard
-    await this.board.publish(`agent:${this.id}:explored`, discovery);
+    await this.board.publish(`agent:${this.id}:explored`, { author: this.id, ...discovery });
     await this.board.publish(`world:map:${key}`, {
+      author: this.id,
       position: waypoint,
       ...this.worldMap[key],
     });

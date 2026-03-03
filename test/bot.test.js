@@ -479,6 +479,7 @@ describe('BuilderAgent — Shelter Gathering (AC-4)', () => {
         builder._setupPathfinder = () => {};
         // Pre-seed shelter coords in Blackboard
         await builder.board.publish('builder:shelter', {
+            author: 'test',
             position: { x: 50, y: 64, z: -100 },
             size: { x: 3, y: 4, z: 3 },
         });

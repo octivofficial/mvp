@@ -125,7 +125,7 @@ class MCPServer {
     if (!agentId || x == null || y == null || z == null) {
       throw new Error('Required: agentId, x, y, z');
     }
-    await this.board.publish(`command:${agentId}:moveTo`, { x, y, z });
+    await this.board.publish(`command:${agentId}:moveTo`, { author: 'mcp-server', x, y, z });
     return { agentId, command: 'moveTo', target: { x, y, z }, status: 'dispatched' };
   }
 
@@ -133,7 +133,7 @@ class MCPServer {
   async _chopTree(params) {
     const { agentId } = params;
     if (!agentId) throw new Error('Required: agentId');
-    await this.board.publish(`command:${agentId}:chopTree`, { action: 'chopTree' });
+    await this.board.publish(`command:${agentId}:chopTree`, { author: 'mcp-server', action: 'chopTree' });
     return { agentId, command: 'chopTree', status: 'dispatched' };
   }
 
@@ -148,7 +148,7 @@ class MCPServer {
     const config = await this.board.getConfig('config:llm') || {};
     Object.assign(config, updates);
     await this.board.setConfig('config:llm', config);
-    await this.board.publish('config:llm:updated', config);
+    await this.board.publish('config:llm:updated', { author: 'mcp-server', ...config });
     return { config, status: 'updated' };
   }
 

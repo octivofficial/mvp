@@ -27,7 +27,7 @@ class WoodcutterAgent extends BaseRole {
     await this.reportStatus('chopping');
     this.collected++;
     await this.board.publish(`agent:${this.id}:collecting`, {
-      block: 'wood', collected: this.collected, target: this.targetCount,
+      author: this.id, block: 'wood', collected: this.collected, target: this.targetCount,
     });
 
     const done = this.collected >= this.targetCount;

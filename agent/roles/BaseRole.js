@@ -27,7 +27,7 @@ class BaseRole {
 
   async reportStatus(status) {
     this.status = status;
-    await this.board.publish(`agent:${this.id}:status`, { role: this.role, status });
+    await this.board.publish(`agent:${this.id}:status`, { author: this.id, role: this.role, status });
   }
 
   async shutdown() {

@@ -24,9 +24,10 @@ class Blackboard {
   }
 
   /**
-   * Publish agent status
+   * Publish agent status (眞善美孝永 validated)
    */
   async publish(channel, data) {
+    this._validate(channel, data);
     const payload = JSON.stringify({ ts: Date.now(), ...data });
     await this.client.publish(PREFIX + channel, payload);
     await this.client.set(PREFIX + channel + ':latest', payload, { EX: 300 });
@@ -94,6 +95,9 @@ class Blackboard {
    * ~77% latency reduction vs sequential publishes.
    */
   async batchPublish(entries) {
+    for (const { channel, data } of entries) {
+      this._validate(channel, data);
+    }
     const multi = this.client.multi();
     const now = Date.now();
     for (const { channel, data } of entries) {
@@ -171,6 +175,34 @@ class Blackboard {
       const val = results[i];
       try { return val ? JSON.parse(val) : null; } catch { return null; }
     });
+  }
+
+  // ── 眞善美孝永 Validation ────────────────────────────────────
+
+  /**
+   * Validate channel and data before publishing.
+   * 眞 (Truth): channel/data must be valid
+   * 孝 (Respect): author field required
+   * 善 (Goodness): payload size limit (10KB)
+   * 美 (Beauty): channel naming convention
+   */
+  _validate(channel, data) {
+    if (!channel || typeof channel !== 'string') {
+      throw new Error('[Blackboard] 眞: channel must be a non-empty string');
+    }
+    if (!data || typeof data !== 'object') {
+      throw new Error('[Blackboard] 眞: data must be a non-empty object');
+    }
+    if (!data.author) {
+      throw new Error('[Blackboard] 孝: author field is required — identify yourself');
+    }
+    const json = JSON.stringify(data);
+    if (json.length > 10240) {
+      throw new Error('[Blackboard] 善: payload too large (max 10KB)');
+    }
+    if (!/^[a-z0-9:_-]+$/.test(channel)) {
+      throw new Error('[Blackboard] 美: channel must be lowercase alphanumeric with : _ -');
+    }
   }
 
   // ── Config helpers (avoid direct client access) ────────────

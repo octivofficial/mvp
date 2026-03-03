@@ -23,6 +23,7 @@ async function monitorGathering(board, teamSize) {
       if (arrivedCount >= teamSize) {
         clearInterval(checkInterval);
         await board.publish('team:ac4', {
+          author: 'team',
           status: 'done',
           message: `All ${teamSize} builders gathered at shelter`,
         });
@@ -49,6 +50,7 @@ async function main() {
 
   // Record Octiv team initialization state
   await board.publish('team:status', {
+    author: 'team',
     status: 'initializing',
     members: ['leader', 'builder-01', 'builder-02', 'builder-03', 'safety'],
     mission: 'first-day-survival v1.3.1',
@@ -73,6 +75,7 @@ async function main() {
   }
 
   await board.publish('team:status', {
+    author: 'team',
     status: 'running',
     mission: 'first-day-survival v1.3.1',
     startedAt: new Date().toISOString(),

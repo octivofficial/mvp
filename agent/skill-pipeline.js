@@ -61,6 +61,7 @@ class SkillPipeline {
 
     // Broadcast emergency channel
     await this.board.publish('skills:emergency', {
+      author: 'skill-pipeline',
       newSkill: skillJson.name,
       trigger: failureContext.error,
     });

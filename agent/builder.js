@@ -54,6 +54,7 @@ class BuilderAgent {
   async _onSpawn() {
     console.log(`[${this.id}] spawned`);
     await this.board.publish(`agent:${this.id}:status`, {
+      author: this.id,
       status: 'spawned',
       position: this.bot.entity.position,
     });
@@ -79,7 +80,7 @@ class BuilderAgent {
       collected++;
 
       await this.board.updateAC(this.id, 1, collected >= count ? 'done' : 'in_progress');
-      await this.board.publish(`agent:${this.id}:inventory`, { wood: collected });
+      await this.board.publish(`agent:${this.id}:inventory`, { author: this.id, wood: collected });
     }
 
     this.acProgress[1] = true;
@@ -136,6 +137,7 @@ class BuilderAgent {
     this.acProgress[2] = true;
     await this.board.updateAC(this.id, 2, 'done');
     await this.board.publish(`builder:shelter`, {
+      author: this.id,
       position: { x: origin.x, y: origin.y, z: origin.z },
       size: { x: 3, y: 4, z: 3 },
     });
@@ -215,6 +217,7 @@ class BuilderAgent {
     this.acProgress[4] = true;
     await this.board.updateAC(this.id, 4, 'done');
     await this.board.publish(`builder:arrived`, {
+      author: this.id,
       agentId: this.id,
       position: { x, y, z },
     });
@@ -247,6 +250,7 @@ class BuilderAgent {
     await this.bot.collectBlock.collect(blocks);
 
     await this.board.publish(`builder:collecting`, {
+      author: this.id,
       agentId: this.id,
       block: blockName,
       collected: blocks.length,
@@ -291,7 +295,7 @@ class BuilderAgent {
       improvement.error = error.message;
       this.adaptations.improvements.push(improvement);
 
-      await this.board.publish(`agent:${this.id}:improvement`, improvement);
+      await this.board.publish(`agent:${this.id}:improvement`, { author: this.id, ...improvement });
       await this.board.logReflexion(this.id, {
         type: 'self_improve',
         errorType,
@@ -322,6 +326,7 @@ class BuilderAgent {
   // Monitor health changes
   async _onHealthChange() {
     await this.board.publish(`agent:${this.id}:health`, {
+      author: this.id,
       health: this.bot.health,
       food: this.bot.food,
     });
@@ -336,7 +341,7 @@ class BuilderAgent {
   async _reactLoop() {
     while (true) {
       this.reactIterations++;
-      await this.board.publish(`agent:${this.id}:react`, { iteration: this.reactIterations });
+      await this.board.publish(`agent:${this.id}:react`, { author: this.id, iteration: this.reactIterations });
 
       try {
         if (!this.acProgress[1]) {
