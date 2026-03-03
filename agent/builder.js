@@ -27,7 +27,10 @@ class BuilderAgent {
       maxRetries: 3,
       improvements: [],  // log of applied improvements
     };
+    this.logger = null;
   }
+
+  setLogger(logger) { this.logger = logger; }
 
   async init() {
     await this.board.connect();
@@ -75,7 +78,7 @@ class BuilderAgent {
       const log = this.bot.findBlock({ matching: logIds, maxDistance: this.adaptations.searchRadius });
       if (!log) { await this.bot.waitForTicks(20); continue; }
 
-      await this.bot.pathfinder.goto(new GoalBlock(log.position.x, log.position.y, log.position.z));
+      await this._goto(new GoalBlock(log.position.x, log.position.y, log.position.z));
       await this.bot.dig(log);
       collected++;
 
@@ -84,6 +87,7 @@ class BuilderAgent {
     }
 
     this.acProgress[1] = true;
+    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 1, collected });
     console.log(`[${this.id}] ✅ AC-1 done: collected ${collected} wood`);
   }
 
@@ -93,6 +97,7 @@ class BuilderAgent {
     await this.bot.craft(this.bot.registry.itemsByName.wooden_pickaxe, 1, null);
     this.acProgress[3] = true;
     await this.board.updateAC(this.id, 3, 'done');
+    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 3 });
     console.log(`[${this.id}] ✅ AC-3 done: basic tools crafted`);
   }
 
@@ -141,6 +146,7 @@ class BuilderAgent {
       position: { x: origin.x, y: origin.y, z: origin.z },
       size: { x: 3, y: 4, z: 3 },
     });
+    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 2, position: { x: origin.x, y: origin.y, z: origin.z } });
     console.log(`[${this.id}] AC-2 done: shelter at ${origin}`);
   }
 
@@ -191,7 +197,7 @@ class BuilderAgent {
 
   // Navigate near and place block (pathfinder movements must be set before calling)
   async _placeBlockAt(pos, blockName) {
-    await this.bot.pathfinder.goto(new GoalNear(pos.x, pos.y, pos.z, 4));
+    await this._goto(new GoalNear(pos.x, pos.y, pos.z, 4));
 
     const item = this.bot.inventory.items().find(i => i.name === blockName);
     if (!item) throw new Error(`No ${blockName} in inventory`);
@@ -212,7 +218,7 @@ class BuilderAgent {
     const { x, y, z } = shelterData.position;
     this._setupPathfinder();
     // Navigate to shelter interior (center of floor, one block up)
-    await this.bot.pathfinder.goto(new GoalNear(x + 1, y + 1, z + 1, 2));
+    await this._goto(new GoalNear(x + 1, y + 1, z + 1, 2));
 
     this.acProgress[4] = true;
     await this.board.updateAC(this.id, 4, 'done');
@@ -221,6 +227,7 @@ class BuilderAgent {
       agentId: this.id,
       position: { x, y, z },
     });
+    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 4, position: { x, y, z } });
     console.log(`[${this.id}] AC-4 done: arrived at shelter`);
   }
 
@@ -267,6 +274,24 @@ class BuilderAgent {
     this.bot.pathfinder.setMovements(this.movements);
   }
 
+  // Pathfinder goto with timeout (default 30s) to prevent infinite navigation
+  _goto(goal, timeoutMs = 30000) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.bot.pathfinder.stop();
+        reject(new Error(`Pathfinding timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      this.bot.pathfinder.goto(goal).then(() => {
+        clearTimeout(timer);
+        resolve();
+      }).catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+  }
+
   // AC-5: Self-improvement on failure
   async _selfImprove(error) {
     const errorType = this._classifyError(error.message);
@@ -302,6 +327,7 @@ class BuilderAgent {
         improvement,
         iteration: this.reactIterations,
       });
+      if (this.logger) this.logger.logEvent(this.id, { type: 'self_improve', ...improvement });
       console.log(`[${this.id}] AC-5 self-improve: ${improvement.type} → ${improvement.value}`);
 
       // Mark AC-5 done on first successful adaptation
@@ -358,6 +384,7 @@ class BuilderAgent {
         }
       } catch (err) {
         console.error(`[${this.id}] ReAct error:`, err.message);
+        if (this.logger) this.logger.logEvent(this.id, { type: 'error', error: err.message, iteration: this.reactIterations });
         await this.board.logReflexion(this.id, { error: err.message, iteration: this.reactIterations });
         const shouldRetry = await this._selfImprove(err);
         if (!shouldRetry) {

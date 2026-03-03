@@ -30,7 +30,10 @@ class SafetyAgent {
     this.actionHistory = [];
     this.reactIterations = 0;
     this.consecutiveFailures = 0;
+    this.logger = null;
   }
+
+  setLogger(logger) { this.logger = logger; }
 
   async init() {
     await this.board.connect();
@@ -120,6 +123,7 @@ class SafetyAgent {
   async handleThreat(threat, agentId) {
     console.warn(`[Safety] ⚠️  threat detected: ${threat.type} — ${threat.reason}`);
     this.consecutiveFailures++;
+    if (this.logger) this.logger.logEvent(this.id, { type: 'threat', agentId, ...threat });
 
     await this.board.publish('safety:threat', {
       author: 'safety',

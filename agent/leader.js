@@ -12,7 +12,12 @@ class LeaderAgent {
     this.votes = [];
     this.mode = 'training'; // training | creative
     this.consecutiveTeamFailures = 0;
+    this.logger = null;
+    this.skillPipeline = null;
   }
+
+  setLogger(logger) { this.logger = logger; }
+  setSkillPipeline(pipeline) { this.skillPipeline = pipeline; }
 
   async init() {
     await this.board.connect();
@@ -36,6 +41,9 @@ class LeaderAgent {
     else mission = { ac: 0, action: 'idle', params: {} };
 
     await this.board.publish(`command:${agentId}:mission`, { author: 'leader', ...mission });
+    if (this.logger) {
+      this.logger.logEvent(this.id, { type: 'mission_assigned', agentId, mission });
+    }
     return mission;
   }
 
@@ -118,6 +126,24 @@ class LeaderAgent {
 
     await this.board.publish('leader:reflexion:result', { author: 'leader', ...result });
     this.consecutiveTeamFailures = 0;
+
+    if (this.logger) {
+      this.logger.logEvent(this.id, { type: 'group_reflexion', ...result });
+    }
+
+    // Trigger skill creation for the most common error via pipeline
+    if (this.skillPipeline && topError !== 'none') {
+      const skillResult = await this.skillPipeline.generateFromFailure({
+        error: topError,
+        errorType: topError,
+        agentId: this.id,
+        severity: allErrors.length >= 10 ? 'critical' : 'normal',
+      });
+      if (skillResult.success) {
+        await this.injectLearnedSkill(skillResult.skill);
+      }
+    }
+
     console.log(`[Leader] Group Reflexion complete: ${allErrors.length} entries from ${this.teamSize} agents`);
     return result;
   }
@@ -133,6 +159,9 @@ class LeaderAgent {
     // Broadcast to all builders
     for (let i = 1; i <= this.teamSize; i++) {
       await this.board.publish(`command:builder-0${i}:prompt_update`, { author: 'leader', skills });
+    }
+    if (this.logger) {
+      this.logger.logEvent(this.id, { type: 'skill_injected', skill: skillName, version, totalSkills: skills.length });
     }
     console.log(`[Leader] injected: ${tag}`);
     return { tag, totalSkills: skills.length };
