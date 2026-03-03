@@ -11,12 +11,13 @@
 ### START (ALWAYS — before anything else)
 1. `/session-memory` — loads MEMORY.md + debugging.md + patterns.md + session-log + git log
 2. Report state to user: current Phase, last commit, next task, any blockers
-3. Ask: "What are we working on today?"
 
 ### DURING SESSION
 - `/remember` — anytime you discover something worth keeping (bug fix, decision, pattern)
 - `/tdd-workflow` — before implementing any new feature
 - `/security-review` — before committing agent code with external inputs
+- `/manage-skills` — after adding new code patterns; keeps verify skills in sync
+- `/verify-implementation` — before PRs; runs all verify-* skills for full audit
 - Always `npm test` before committing (enforced by PreToolUse hook)
 - Commit often: small, focused commits with `emoji Phase-N: description`
 
@@ -36,6 +37,14 @@
 | `/save-memory` | **Session end** — persist all learnings |
 | `/remember` | **Mid-session** — quick save of one insight |
 
+### Verification (kimoring pattern)
+| Skill | When |
+|-------|------|
+| `/verify-implementation` | Before PR — runs all verify-* skills |
+| `/verify-redis` | After changing any Redis/Blackboard code |
+| `/verify-agents` | After changing any agent/*.js file |
+| `/manage-skills` | After adding new patterns — updates verify skills |
+
 ### Development
 | Skill | When |
 |-------|------|
@@ -43,7 +52,7 @@
 | `/security-review` | Before committing security-sensitive code |
 | `/coding-standards` | When code quality is unclear |
 | `/backend-patterns` | API, Redis, caching design questions |
-| `/notebooklm` | Query project knowledge base (Phase 5+) |
+| `/notebooklm` | Query project knowledge base |
 
 ### Project-Specific
 | Skill | When |
@@ -60,6 +69,10 @@
 ## Available Agents (Subagents)
 | Agent | Trigger |
 |-------|---------|
+| `debug-agent` | **Tests fail / agent crash / CI red** — systematic debugging |
+| `github-agent` | **After any work** — commit, push, verify CI sync |
+| `notebooklm-agent` | **Knowledge lookup** — query NotebookLM knowledge base |
+| `skill-agent` | **Skill maintenance** — create/update/optimize verify skills |
 | `planner` | Before starting any new Phase or complex feature |
 | `architect` | Major structural decisions (new modules, system design) |
 | `code-reviewer` | After writing significant new code |
@@ -78,6 +91,7 @@
   - `📋 docs: update ROADMAP.md phase 2 status`
 - **Never commit**: `.env`, `vault/`, `TXT/`, `.obsidian/`, `node_modules/`, `dump.rdb`
 - **Tests**: `npm test` runs automatically via PreToolUse hook on `git commit`
+- **CI**: GitHub Actions runs `npm test` on every push to `main`
 
 ---
 
@@ -124,5 +138,6 @@
 - **Redis**: `localhost:6380` (Docker: container 6379 → host 6380)
 - **PaperMC**: `localhost:25565` (offline-mode, no auth)
 - **RCON**: `localhost:25575` / pw: `octiv_rcon_2026`
-- **MCP**: `notebooklm` via `npx notebooklm-mcp@latest`
+- **CI/CD**: GitHub Actions (`.github/workflows/ci.yml`) — runs `npm test` on every push
+- **MCP servers**: `notebooklm`, `github` (GITHUB_TOKEN from Keychain), `context7`
 - **Repo**: https://github.com/octivofficial/mvp (branch: `main`)
