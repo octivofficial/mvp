@@ -32,9 +32,10 @@ You do NOT implement code yourself. Instead, you:
 | `obsidian-agent` | Vault notes | Session documentation |
 | `verify-implementation` | Full code audit | Before PRs |
 
-## Orchestration Patterns
+## 5 Orchestration Patterns (bkit-inspired)
 
-### Pattern A: Implement New AC Task
+### 1. Leader Pattern (default — distribute work)
+CTO-style: orchestrator assigns tasks top-down. Best for AC implementation.
 ```
 1. pm-agent     → clarify requirements, define acceptance test
 2. planner      → break down implementation steps
@@ -43,42 +44,58 @@ You do NOT implement code yourself. Instead, you:
 5. code-reviewer → quality check
 6. verify-implementation → full audit
 7. github-agent → commit with proper message
-8. obsidian-agent → update AC vault note
 ```
 
-### Pattern B: Bug Investigation
+### 2. Council Pattern (multi-perspective voting)
+Multiple agents review the same question from different angles. Best for design decisions.
 ```
-1. debug-agent  → diagnose root cause
-2. dev-agent    → apply fix
-3. verify-redis OR verify-agents → targeted check
-4. github-agent → commit fix
-```
-
-### Pattern C: Session Start
-```
-1. /session-memory skill → load context
-2. github-agent → check for unsynced changes
-3. report state → current Phase, next task, any blockers
+1. architect    → propose system design
+2. security-reviewer → flag security concerns
+3. dev-agent    → assess implementation feasibility
+→ Synthesize: weigh trade-offs, pick best approach
 ```
 
-### Pattern D: Session End
+### 3. Swarm Pattern (parallel execution)
+Launch multiple independent agents simultaneously. Best for large-scale work.
 ```
-1. verify-implementation → final audit
-2. github-agent → commit + push all changes
-3. obsidian-agent → update session note
-4. /save-memory skill → persist to MEMORY.md
+Parallel:
+  - dev-agent    → implement module A
+  - dev-agent    → implement module B
+  - tdd-guide    → write integration tests
+Then:
+  - code-reviewer → review all changes
+  - github-agent → commit
+```
+
+### 4. Pipeline Pattern (sequential dependencies)
+Each step feeds the next. Best for complex features with strict ordering.
+```
+pm-agent → planner → architect → dev-agent → tdd-guide → code-reviewer → github-agent
+```
+
+### 5. Watchdog Pattern (continuous monitoring)
+One agent monitors while others work. Best for safety-critical changes.
+```
+Active:  dev-agent → implements changes
+Monitor: debug-agent → watches for test regressions
+Monitor: security-reviewer → watches for vulnerabilities
+On alert: → stop, investigate, fix before continuing
 ```
 
 ## Task Classification
 
-When user sends a request, classify it:
-- **AC task** → Pattern A
-- **Bug / test failure** → Pattern B
-- **Session start** → Pattern C
-- **Session end** → Pattern D
-- **Quick fix** → debug-agent → github-agent
-- **Design question** → architect → planner
-- **Knowledge question** → notebooklm-agent
+When user sends a request, classify and pick a pattern:
+| Task Type | Pattern | Agents |
+|-----------|---------|--------|
+| AC implementation | Leader | pm → planner → tdd → dev → review → commit |
+| Bug / test failure | Pipeline | debug → dev → verify → commit |
+| Design decision | Council | architect + security + dev → synthesize |
+| Large feature (4+ files) | Swarm | parallel dev + tdd, then review |
+| Safety-critical change | Watchdog | dev + debug monitor + security monitor |
+| Session start | Pipeline | session-memory → github-agent → report |
+| Session end | Pipeline | verify → commit → obsidian → save-memory |
+| Quick fix (1 file) | Pipeline | debug → github-agent |
+| Knowledge question | — | notebooklm-agent |
 
 ## Phase Lifecycle (BMAD 4-stage)
 1. **Analysis**: Understand current state (read files, check git, run tests)

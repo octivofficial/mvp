@@ -32,6 +32,17 @@
           }
         ]
       }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "MEM_DIR=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory; TS=$(date '+%Y-%m-%d %H:%M'); echo \"## Auto-save before compaction — $TS\" >> $MEM_DIR/session-log.md && echo \"- Last commit: $(git -C /Users/octiv/Octiv_MVP log --oneline -1 2>/dev/null)\" >> $MEM_DIR/session-log.md && echo \"- Modified: $(git -C /Users/octiv/Octiv_MVP diff --name-only 2>/dev/null | tr '\\n' ', ')\" >> $MEM_DIR/session-log.md && echo '[PreCompact] Memory auto-saved to session-log.md'"
+          }
+        ]
+      }
     ]
   },
   "permissions": {
