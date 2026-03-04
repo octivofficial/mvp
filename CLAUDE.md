@@ -101,7 +101,7 @@ Choose the right pattern for the task at hand:
 | `/rc` | Remote control status / Discord bridge (not yet implemented) |
 | `/auto-memory status` | Show all memory layer stats |
 
-### Skills (19 total)
+### Skills (19 Octiv project skills)
 | Skill | When |
 |-------|------|
 | `/tool-index` | Find any tool |
@@ -123,6 +123,27 @@ Choose the right pattern for the task at hand:
 | `/weather` | Minecraft weather/time queries |
 | `/first-day-survival` | First night survival strategy |
 | `/automated-debugging` | Systematic bug investigation |
+
+### Superpowers (14 global methodology skills)
+Installed from [obra/superpowers](https://github.com/obra/superpowers).
+See `~/.claude/skills/{skill-name}/SKILL.md` for details.
+
+| Skill | When |
+|-------|------|
+| `/brainstorming` | Before creative work — explore intent, requirements, design |
+| `/writing-plans` | Multi-step task → structured plan document |
+| `/executing-plans` | Execute a written plan with review checkpoints |
+| `/test-driven-development` | TDD Iron Law — tests before implementation |
+| `/systematic-debugging` | 4-stage debugging methodology |
+| `/requesting-code-review` | After completing task — structured review request |
+| `/receiving-code-review` | When receiving feedback — rigorous verification |
+| `/verification-before-completion` | Before claiming done — evidence-based proof |
+| `/finishing-a-development-branch` | Branch complete → merge/PR/cleanup decision |
+| `/dispatching-parallel-agents` | 2+ independent tasks → parallel execution |
+| `/subagent-driven-development` | Sub-agent based development pattern |
+| `/using-git-worktrees` | Isolated feature development via worktrees |
+| `/using-superpowers` | Meta — skill discovery and invocation discipline |
+| `/writing-skills` | Meta — TDD-based skill authoring |
 
 ### MCP Servers — Scope Strategy
 
