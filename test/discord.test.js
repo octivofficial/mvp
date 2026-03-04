@@ -3,7 +3,7 @@
  * Tests message parsing, embed formatting, and command routing
  * without requiring actual Discord/Redis connections.
  */
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 // Mock discord.js EmbedBuilder
@@ -333,6 +333,260 @@ describe('OctivDiscordBot — _cmdTeam', () => {
     assert.ok(desc.includes('builder'));
   });
 });
+
+// ── New Integration Tests: _postStatusEmbed, _postAlertEmbed, _resolveChannels ──
+
+describe('OctivDiscordBot — _postStatusEmbed', () => {
+  it('should send embed via mock channel', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postStatusEmbed('octiv:builder-01:status', {
+      agentId: 'builder-01',
+      health: 18,
+      position: { x: 10, y: 64, z: -30 },
+      task: 'collecting wood',
+    });
+
+    assert.ok(sentData, 'send() should have been called');
+    assert.ok(sentData.embeds);
+    assert.equal(sentData.embeds.length, 1);
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('builder-01'));
+    assert.equal(embed.data.color, 0x00ff00); // health > 10
+  });
+
+  it('should no-op when status channel is null', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.channels.status = null;
+
+    // Should not throw
+    bot._postStatusEmbed('octiv:builder-01:status', {
+      agentId: 'builder-01', health: 20,
+    });
+    // No assertion needed — just verifying no throw
+  });
+});
+
+describe('OctivDiscordBot — _postAlertEmbed', () => {
+  it('should send threat alert with @here', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.alerts = { send: async (d) => { sentData = d; } };
+
+    bot._postAlertEmbed('threat', {
+      description: 'Lava detected within 3 blocks',
+      agentId: 'builder-02',
+      threatType: 'lava',
+    });
+
+    assert.ok(sentData);
+    assert.equal(sentData.content, '@here');
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('THREAT'));
+    assert.equal(embed.data.color, 0xff0000);
+  });
+
+  it('should send reflexion alert without @here', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.alerts = { send: async (d) => { sentData = d; } };
+
+    bot._postAlertEmbed('reflexion', {
+      description: 'Group reflexion triggered',
+      message: 'Skill adaptation needed',
+    });
+
+    assert.ok(sentData);
+    assert.equal(sentData.content, ''); // no @here for reflexion
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('Reflexion'));
+    assert.equal(embed.data.color, 0xffaa00);
+  });
+
+  it('should no-op when alerts channel is null', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.channels.alerts = null;
+
+    // Should not throw
+    bot._postAlertEmbed('threat', { description: 'test' });
+  });
+});
+
+describe('OctivDiscordBot — _resolveChannels', () => {
+  it('should resolve channels from mock guild cache', () => {
+    const bot = new OctivDiscordBot({
+      token: 'fake',
+      guildId: 'guild-123',
+      config: { statusChannel: 'ch-1', alertsChannel: 'ch-2', commandsChannel: 'ch-3' },
+    });
+
+    const mockChannels = new Map([
+      ['ch-1', { id: 'ch-1', name: 'octiv-status' }],
+      ['ch-2', { id: 'ch-2', name: 'octiv-alerts' }],
+      ['ch-3', { id: 'ch-3', name: 'octiv-commands' }],
+    ]);
+    const mockGuild = { channels: { cache: { get: (id) => mockChannels.get(id) } } };
+    bot.client = { guilds: { cache: { get: (id) => id === 'guild-123' ? mockGuild : null } } };
+
+    bot._resolveChannels();
+
+    assert.equal(bot.channels.status.name, 'octiv-status');
+    assert.equal(bot.channels.alerts.name, 'octiv-alerts');
+    assert.equal(bot.channels.commands.name, 'octiv-commands');
+  });
+
+  it('should handle missing guild gracefully', () => {
+    const bot = new OctivDiscordBot({
+      token: 'fake',
+      guildId: 'nonexistent',
+      config: { statusChannel: 'ch-1' },
+    });
+    bot.client = { guilds: { cache: { get: () => null } } };
+
+    // Should not throw
+    bot._resolveChannels();
+    // Channels remain unchanged (empty object from constructor)
+    assert.equal(bot.channels.status, undefined);
+  });
+});
+
+// ── Integration tests requiring Redis ──
+
+describe('OctivDiscordBot — _cmdStatus with populated registry', { skip: !process.env.CI && !isRedisAvailable() }, () => {
+  let bot;
+  let board;
+
+  beforeEach(async () => {
+    board = new Blackboard('redis://localhost:6380');
+    await board.connect();
+    // Populate registry and status
+    await board.setHashField('agents:registry', 'test-bot-01', { role: 'builder', ts: Date.now() });
+    await board.client.set(
+      `${Blackboard.PREFIX}agent:test-bot-01:status:latest`,
+      JSON.stringify({ agentId: 'test-bot-01', health: 15, task: 'mining', position: { x: 1, y: 2, z: 3 } })
+    );
+
+    bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = board;
+  });
+
+  afterEach(async () => {
+    // Clean up test keys
+    await board.client.del(`${Blackboard.PREFIX}agents:registry`);
+    await board.client.del(`${Blackboard.PREFIX}agent:test-bot-01:status:latest`);
+    await board.disconnect();
+  });
+
+  it('should return agent status from populated Blackboard', async () => {
+    const msg = mockMsg('!status');
+    await bot._cmdStatus(msg);
+    assert.equal(msg._replies.length, 1);
+    const reply = msg._replies[0];
+    // Should have embeds (not the "No agents" fallback)
+    assert.ok(reply.embeds, 'should reply with embeds when registry has agents');
+    const embed = reply.embeds[0];
+    assert.ok(embed.data.title.includes('Octiv Team Status'));
+  });
+});
+
+describe('OctivDiscordBot — Pub/Sub Bridge', { skip: !process.env.CI && !isRedisAvailable() }, () => {
+  let board;
+  let subscriber;
+
+  afterEach(async () => {
+    if (subscriber) {
+      try { await subscriber.disconnect(); } catch { /* ignore */ }
+    }
+    if (board) {
+      await board.disconnect();
+    }
+  });
+
+  it('should bridge status publish to embed send', async () => {
+    board = new Blackboard('redis://localhost:6380');
+    await board.connect();
+    subscriber = await board.createSubscriber();
+
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    // Subscribe like the real bot does
+    await subscriber.pSubscribe(Blackboard.PREFIX + '*:status', (message) => {
+      try {
+        const data = JSON.parse(message);
+        bot._postStatusEmbed('', data);
+      } catch { /* ignore */ }
+    });
+
+    // Small delay for subscribe to settle
+    await new Promise(r => setTimeout(r, 100));
+
+    // Publish a status update
+    await board.publish('builder-01:status', {
+      author: 'test',
+      agentId: 'builder-01',
+      health: 20,
+      position: { x: 5, y: 64, z: -10 },
+      task: 'exploring',
+    });
+
+    // Wait for pub/sub propagation
+    await new Promise(r => setTimeout(r, 200));
+
+    assert.ok(sentData, 'embed should have been sent');
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('builder-01'));
+  });
+
+  it('should bridge threat publish to alert send', async () => {
+    board = new Blackboard('redis://localhost:6380');
+    await board.connect();
+    subscriber = await board.createSubscriber();
+
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.alerts = { send: async (d) => { sentData = d; } };
+
+    // Subscribe to safety:threat like the real bot does
+    await subscriber.subscribe(Blackboard.PREFIX + 'safety:threat', (message) => {
+      try {
+        const data = JSON.parse(message);
+        bot._postAlertEmbed('threat', data);
+      } catch { /* ignore */ }
+    });
+
+    await new Promise(r => setTimeout(r, 100));
+
+    // Publish a threat
+    await board.publish('safety:threat', {
+      author: 'safety-agent',
+      description: 'Creeper detected nearby',
+      agentId: 'builder-02',
+      threatType: 'mob',
+    });
+
+    await new Promise(r => setTimeout(r, 200));
+
+    assert.ok(sentData, 'alert should have been sent');
+    assert.equal(sentData.content, '@here');
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('THREAT'));
+  });
+});
+
+// Helper: check if Redis is available (non-blocking)
+function isRedisAvailable() {
+  try {
+    const { execSync } = require('child_process');
+    execSync('redis-cli -p 6380 ping', { timeout: 1000, stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 describe('OctivDiscordBot — stop()', () => {
   it('should not throw when called with null connections', async () => {
