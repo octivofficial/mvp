@@ -217,11 +217,51 @@ describe('Logger', () => {
   });
 
   describe('getLogger singleton', () => {
+    const { getLogger } = require('../agent/logger');
+
+    beforeEach(() => {
+      getLogger.reset();
+    });
+
+    afterEach(() => {
+      getLogger.reset();
+    });
+
     it('returns a Logger instance', () => {
-      // Reset singleton for test isolation
-      const { getLogger } = require('../agent/logger');
-      const logger = getLogger({ persist: false });
+      const logger = getLogger();
       assert.ok(logger instanceof Logger);
+    });
+
+    it('returns the same instance on subsequent calls', () => {
+      const a = getLogger();
+      const b = getLogger();
+      assert.equal(a, b);
+    });
+
+    it('reset() causes next call to create a new instance', () => {
+      const a = getLogger();
+      getLogger.reset();
+      const b = getLogger();
+      assert.notEqual(a, b);
+    });
+
+    it('configure() replaces the singleton with custom options', () => {
+      const logger = getLogger.configure({ minLevel: 'error', persist: false });
+      assert.ok(logger instanceof Logger);
+      assert.equal(logger.minRank, 3); // error = rank 3
+      assert.equal(getLogger(), logger); // same instance returned
+    });
+
+    it('configure() overrides a previously created singleton', () => {
+      const first = getLogger();
+      const second = getLogger.configure({ minLevel: 'warn', persist: false });
+      assert.notEqual(first, second);
+      assert.equal(getLogger(), second);
+    });
+
+    it('getLogger() takes no options parameter', () => {
+      // Verify the function signature — length should be 0
+      assert.equal(getLogger.length, 0);
     });
   });
 });

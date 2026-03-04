@@ -21,6 +21,7 @@ const { readFileSync } = require('fs');
 const { join } = require('path');
 const { Blackboard, PREFIX } = require('./blackboard');
 const { SafetyAgent } = require('./safety');
+const T = require('../config/timeouts');
 
 // Load channel config
 function loadConfig() {
@@ -331,10 +332,10 @@ class OctivDiscordBot {
       });
 
       // Wait for response with timeout
-      const response = await this._waitForRcResponse(requestId, 30000);
+      const response = await this._waitForRcResponse(requestId, T.RC_RESPONSE_TIMEOUT_MS);
 
       if (!response) {
-        return msg.reply(`RC \`${subcmd}\`: no response (timeout 30s). Is the team running?`);
+        return msg.reply(`RC \`${subcmd}\`: no response (timeout ${T.RC_RESPONSE_TIMEOUT_MS / 1000}s). Is the team running?`);
       }
 
       const embed = new EmbedBuilder()

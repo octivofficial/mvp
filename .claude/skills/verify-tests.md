@@ -10,9 +10,9 @@ Verify that the Octiv test suite is healthy and all agent files have coverage.
    - Flag any test files that had failures
 
 2. Validate thresholds:
-   - Total tests ≥ 303
+   - Total tests ≥ 338
    - Failed = 0
-   - Test files ≥ 18
+   - Test files ≥ 20
 
 3. Coverage map — verify each agent file has a corresponding test:
 
@@ -27,10 +27,10 @@ Verify that the Octiv test suite is healthy and all agent files have coverage.
 | agent/builder-shelter.js | test/builder-modules.test.js |
 | agent/builder-adaptation.js | test/builder-modules.test.js |
 | agent/safety.js | test/safety.test.js |
-| agent/skill-pipeline.js | test/skill.test.js |
+| agent/skill-pipeline.js | test/pipeline.test.js |
 | agent/ReflexionEngine.js | test/reflexion.test.js |
 | agent/discord-bot.js | test/discord.test.js |
-| agent/memory-logger.js | test/memory-logger.test.js |
+| agent/memory-logger.js | test/memory.test.js |
 | agent/mcp-server.js | test/mcp.test.js |
 | agent/mcp-orchestrator.js | test/mcp.test.js |
 | agent/dashboard.js | test/dashboard.test.js |
@@ -43,7 +43,7 @@ Verify that the Octiv test suite is healthy and all agent files have coverage.
 
 4. Report:
 ```
-✅ Tests: 305 pass / 0 fail / 3 skip (18 files)
+✅ Tests: 338 pass / 0 fail / 3 skip (20 files)
 ✅ Coverage: 22/22 agent files have tests
 ⚠️  Missing: [list any uncovered files]
 ```

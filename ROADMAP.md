@@ -314,7 +314,7 @@ Explorer maps 200-block radius without dying
 
 ---
 
-## Phase 7 — Scale & Extend (7.4 Complete, others In Progress)
+## Phase 7 — Scale & Extend (7.4 Complete, others Not Started)
 > Goal: Build a long-term operations framework beyond first-night survival
 
 ### 7.1 Mission Expansion

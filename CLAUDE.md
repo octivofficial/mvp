@@ -127,7 +127,7 @@ Choose the right pattern for the task at hand:
 | MCP | Purpose | Access | Status |
 |-----|---------|--------|--------|
 | `context7` | Library docs (mineflayer, Redis, discord.js) | read-only | ✅ Active |
-| `sequentialthinking` | Extended multi-step reasoning | read-only | ✅ Active |
+| `sequentialthinking` | Extended multi-step reasoning | read-only | ⚠️ Not in global config (available via other path) |
 | `playwright` | Browser testing, E2E automation | read-only | 🔧 Setup Needed |
 
 **Project** (`.mcp.json`) — Octiv-specific:
@@ -142,7 +142,7 @@ Choose the right pattern for the task at hand:
 | `vercel` | Deploy, preview, environment vars | team-scoped token | ⚠️ Token Required |
 | `sentry` | Error tracking, performance monitoring | read scopes only | ⚠️ Token Required |
 
-**Summary**: 5 global + 4 project active, 4 project pending token setup
+**Summary**: 4 global active + 1 setup needed + 1 inconsistent, 4 project active, 4 project pending token setup
 
 ### MCP Security Policy
 

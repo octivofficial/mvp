@@ -83,13 +83,40 @@ class Logger {
   error(agentId, msg, data) { this._log('error', agentId, msg, data); }
 }
 
-// Singleton for shared use
+// Singleton for shared use — no options parameter to avoid
+// hidden dependency on module load order. Configure via
+// Logger.configure() before first getLogger() call if needed.
 let _defaultInstance;
-function getLogger(options) {
+
+/**
+ * Get the shared Logger singleton.
+ * Uses default options (LOG_LEVEL env, console=true, persist=true).
+ * Call Logger.configure() first if custom options are needed.
+ */
+function getLogger() {
   if (!_defaultInstance) {
-    _defaultInstance = new Logger(options);
+    _defaultInstance = new Logger();
   }
   return _defaultInstance;
 }
+
+/**
+ * Configure and replace the singleton instance.
+ * Must be called before any getLogger() calls for options to take effect.
+ * @param {object} options - Same options as Logger constructor
+ * @returns {Logger} The new singleton instance
+ */
+getLogger.configure = function(options) {
+  _defaultInstance = new Logger(options);
+  return _defaultInstance;
+};
+
+/**
+ * Reset the singleton (for testing only).
+ * Next getLogger() call will create a fresh instance.
+ */
+getLogger.reset = function() {
+  _defaultInstance = null;
+};
 
 module.exports = { Logger, getLogger };
