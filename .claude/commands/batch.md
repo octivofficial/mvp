@@ -14,7 +14,7 @@ Execute a batch of common operations. Argument: comma-separated operation names.
 | `ac` | Show AC progress from Redis |
 | `health` | redis + docker + git status combined |
 | `diff` | `git diff --stat` |
-| `push` | `git add -A && git commit && git push` (asks for message) |
+| `push` | Stage specific files, commit with message, then push (never `git add -A`) |
 | `memory` | Show MEMORY.md summary + session-log tail |
 
 ## Usage Examples

@@ -24,13 +24,13 @@ You do NOT implement code yourself. Instead, you:
 | `dev-agent` | Code implementation | Actually writing code |
 | `tdd-guide` | Tests before code | TDD approach, new AC coverage |
 | `code-reviewer` | Code quality check | After dev-agent completes |
-| `security-reviewer` | Security audit | External input, vm2, RCON code |
+| `security-reviewer` | Security audit | External input, node:vm, RCON code |
 | `debug-agent` | Bug investigation | Test fails, agent crash |
 | `github-agent` | Commit & sync | After each logical unit of work |
 | `skill-agent` | Skill maintenance | After introducing new patterns |
 | `notebooklm-agent` | Knowledge queries | Looking up Minecraft mechanics |
 | `obsidian-agent` | Vault notes | Session documentation |
-| `verify-implementation` | Full code audit | Before PRs |
+| `/verify-implementation` (skill) | Full code audit | Before PRs |
 
 ## 5 Orchestration Patterns (bkit-inspired)
 

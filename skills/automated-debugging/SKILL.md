@@ -11,7 +11,7 @@ Diagnoses and fixes errors in the Octiv agent system.
 - Bot crashes on spawn or during tasks
 - Redis connection errors (ECONNREFUSED)
 - Pathfinder navigation failures
-- vm2 sandbox validation failures
+- node:vm sandbox validation failures
 - ReAct loop infinite loops
 
 ## Instructions
@@ -24,7 +24,7 @@ Diagnoses and fixes errors in the Octiv agent system.
 2. **Common fixes**:
    - `ECONNREFUSED 6380`: Redis not running → `docker compose up -d redis`
    - Pathfinder stuck: Increase `maxDistance`, check `GoalNear` vs `GoalBlock`
-   - vm2 timeout: Code too complex, simplify the skill
+   - node:vm timeout: Code too complex, simplify the skill
    - Spawn timeout: Server not ready, increase `spawnTimeoutMs`
 
 3. **Run tests** to verify fix: `npm test`

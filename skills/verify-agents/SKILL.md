@@ -11,7 +11,7 @@ description: Verifies OctivBot base class patterns, heartbeat, reconnection logi
 2. **Heartbeat** — bots must have active heartbeat for health monitoring
 3. **Reconnection** — exponential backoff reconnect must be implemented
 4. **AC task coverage** — verify each implemented AC has the expected function
-5. **Safety** — no direct unsafe operations without vm2 sandbox
+5. **Safety** — no direct unsafe operations without node:vm sandbox
 
 ## When to Run
 - After modifying any file in `agent/`
@@ -28,7 +28,8 @@ description: Verifies OctivBot base class patterns, heartbeat, reconnection logi
 | `agent/team.js` | Multi-agent orchestrator |
 | `agent/leader.js` | Strategy, Training/Creative mode, voting |
 | `agent/builder.js` | AC-1 wood, AC-3 tools, ReAct loop |
-| `agent/safety.js` | AC-8 threat detection, vm2 sandbox |
+| `agent/safety.js` | AC-8 threat detection, node:vm sandbox |
+| `agent/vm-sandbox.js` | Shared sandbox module (node:vm) |
 
 ## Workflow
 
@@ -79,13 +80,13 @@ grep -n "detectThreat\|AC-8\|threat\|lava\|fall" agent/safety.js
 **PASS:** Each implemented AC has a named function.
 **FAIL:** AC marked as implemented but function not found.
 
-### Step 5: Verify vm2 Sandbox for Dynamic Code
+### Step 5: Verify node:vm Sandbox for Dynamic Code
 
 ```bash
-grep -n "vm2\|VM\|sandbox\|new VM" agent/safety.js
+grep -n "vm-sandbox\|createSandbox\|runInContext\|node:vm" agent/safety.js agent/skill-pipeline.js agent/vm-sandbox.js
 ```
 
-**PASS:** vm2 is used for executing dynamically generated skill code.
+**PASS:** `agent/vm-sandbox.js` provides shared sandbox using node:vm with timeout and context isolation.
 **FAIL:** Dynamic code executed without sandbox — security risk.
 
 ### Step 6: Verify Leader Voting Logic
@@ -119,7 +120,7 @@ grep -n "require.*blackboard\|Blackboard" agent/team.js agent/leader.js agent/bu
 | AC-1 collectWood | agent/builder.js | ✅ PASS | |
 | AC-3 craftBasicTools | agent/builder.js | ✅ PASS | |
 | AC-8 detectThreat | agent/safety.js | ✅ PASS | |
-| vm2 sandbox | agent/safety.js | ✅ PASS | |
+| node:vm sandbox | agent/vm-sandbox.js | ✅ PASS | |
 | Leader voting | agent/leader.js | ✅ PASS | |
 | Blackboard imports | agent/*.js | ✅ PASS | |
 ```

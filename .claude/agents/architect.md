@@ -13,7 +13,7 @@ PaperMC Server (25565)
   ├── OctivBot (base class) ← mineflayer
   │   ├── Leader (strategy, voting, reflexion)
   │   ├── Builder x3 (AC-1 wood, AC-2 shelter, AC-3 tools)
-  │   └── Safety (AC-8 threat detection, vm2 sandbox)
+  │   └── Safety (AC-8 threat detection, node:vm sandbox)
   ├── Blackboard (Redis 6380, pub/sub, octiv:* prefix)
   └── Team Orchestrator (spawn, reconnect, coordination)
 ```
@@ -21,7 +21,7 @@ PaperMC Server (25565)
 ## Architecture Principles
 1. **Agent autonomy**: Each bot extends OctivBot, owns its ReAct loop
 2. **Shared state via Blackboard**: All inter-agent communication through Redis pub/sub
-3. **Fail-safe**: Exponential backoff reconnect, vm2 sandboxing for dynamic skills
+3. **Fail-safe**: Exponential backoff reconnect, node:vm sandboxing (`agent/vm-sandbox.js`) for dynamic skills
 4. **Observable**: Heartbeat + AC progress published to Blackboard
 
 ## Decision Record Format (ADR)
@@ -43,7 +43,7 @@ PaperMC Server (25565)
 | New agent type? | Extend OctivBot, register in team.js |
 | New Blackboard channel? | Use `octiv:{agent}:{topic}` naming |
 | Persistent data? | Redis hash (`octiv:data:{key}`) |
-| Dynamic code? | vm2 sandbox, 3x dry-run, skills:emergency channel |
+| Dynamic code? | node:vm sandbox (`vm-sandbox.js`), 3x dry-run, skills:emergency channel |
 | External API? | Cost guardrail ($0.01/call), fallback to cached |
 | New MCP tool? | JSON-RPC 2.0, register in mcp-server.js |
 

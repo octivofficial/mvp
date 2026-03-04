@@ -31,7 +31,7 @@ description: Master index of ALL tools available in the Octiv project — agents
 | Agent | When | Output |
 |-------|------|--------|
 | `code-reviewer` | After writing significant code | Review report |
-| `security-reviewer` | External input, vm2, RCON code | Security report |
+| `security-reviewer` | External input, node:vm, RCON code | Security report |
 | `debug-agent` | Tests fail, agent crash, CI red | Debug report + fix |
 
 ### DevOps & Sync
@@ -149,7 +149,7 @@ description: Master index of ALL tools available in the Octiv project — agents
 | `mineflayer` | ^4.35.0 | Minecraft bot framework |
 | `mineflayer-pathfinder` | ^2.4.5 | Pathfinding for bots |
 | `redis` | ^5.11.0 | Redis client (Blackboard) |
-| `vm2` | ^3.10.5 | Sandbox for dynamic skill code |
+| `node:vm` | built-in | Sandbox for dynamic skill code (`agent/vm-sandbox.js`) |
 | `discord.js` | ^14 | Discord bot (Phase 5.4) |
 
 ---

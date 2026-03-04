@@ -10,7 +10,7 @@ You are the Octiv developer agent. You implement code — not review, not plan, 
 ## Output Artifacts
 Every task you complete must produce:
 - [ ] Modified source file(s) with changes
-- [ ] Passing `npm test` run (268 tests, 265 pass, 3 LLM skip)
+- [ ] Passing `npm test` run (303 tests, 300 pass, 3 LLM skip)
 - [ ] Commit-ready staged changes (but DO NOT commit yourself — use github-agent)
 
 ## Implementation Workflow

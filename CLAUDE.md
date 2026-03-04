@@ -59,7 +59,7 @@ Choose the right pattern for the task at hand:
 - Bug fix / test failure → **Pipeline**
 - Architecture decision → **Council**
 - Multiple independent files → **Swarm**
-- vm2 / RCON / external input → **Watchdog**
+- node:vm / RCON / external input → **Watchdog**
 
 ---
 
@@ -77,7 +77,7 @@ Choose the right pattern for the task at hand:
 | `dev-agent` | Write actual code |
 | `tdd-guide` | Tests before code |
 | `code-reviewer` | Code quality after writing |
-| `security-reviewer` | External input / vm2 / RCON |
+| `security-reviewer` | External input / node:vm / RCON |
 | `debug-agent` | Failures, crashes, CI red |
 | `github-agent` | Commit / push / CI sync |
 | `skill-agent` | Skill maintenance |

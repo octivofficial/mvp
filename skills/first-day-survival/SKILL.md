@@ -9,7 +9,7 @@ user-invocable: true
 requires:
   bins: [node, jq, redis-cli]
   env: [BLACKBOARD_REDIS_URL]
-  apis: [mineflayer, vm2-sandbox]
+  apis: [mineflayer, node:vm-sandbox]
 ---
 
 ## User Story (BMAD Format)
@@ -24,10 +24,10 @@ All items must be 100% satisfied for mission success:
 - **[AC-2]** Build a 3×3×3+ shelter with complete roof and automatic Y-level safety check  
 - **[AC-3]** Craft 1 Crafting Table and 1 Wooden Pickaxe  
 - **[AC-4]** All agents inside the shelter before 1200 ticks (verified via Blackboard)  
-- **[AC-5]** On any failure, immediately trigger Self-Improvement and save only after vm2 sandbox verification  
+- **[AC-5]** On any failure, immediately trigger Self-Improvement and save only after node:vm sandbox verification  
 - **[AC-6]** After Group Reflexion, inject "[Learned Skill v1.3]" into every agent's system prompt  
 - **[AC-7]** Record at least one permanent note in memory.md at mission end  
-- **[AC-8]** On any of the 3 fatal failures (lava, fall death, or infinite ReAct loop), execute precise detection → dynamic skill creation → vm2 verification → immediate Blackboard broadcast:  
+- **[AC-8]** On any of the 3 fatal failures (lava, fall death, or infinite ReAct loop), execute precise detection → dynamic skill creation → node:vm verification → immediate Blackboard broadcast:  
   - **AC-8.1 Trigger conditions**  
     • Lava: entity.position.y < 10 OR lava block within 3 blocks (using bot.findBlocks)  
     • Fall death: fall damage ≥ 10 hearts OR velocity.y < -20  
@@ -35,7 +35,7 @@ All items must be 100% satisfied for mission success:
   - **AC-8.2 Dynamic skill creation**  
     Generate skill name automatically based on failure type (e.g. evacuate_lava_v1). Inject failure_type and agent_id into the Self-Improvement prompt.  
   - **AC-8.3 Verification & broadcast**  
-    Pass vm2 dry-run 3 times (sandbox_verified must be true). Publish to Redis channel skills:emergency for instant system-prompt update on all agents.  
+    Pass node:vm dry-run 3 times (sandbox_verified must be true). Publish to Redis channel skills:emergency for instant system-prompt update on all agents.  
   - **AC-8.4 Tracking & escalation**  
     Initialize skill with success_rate: 0.0 and update live. Force Group Reflexion after any 3 consecutive failures.
 
@@ -74,7 +74,7 @@ On failure the agent MUST return this exact JSON structure (OpenClaw handles the
 - Simultaneous deaths (3+ agents): Blackboard mutex processes sequentially  
 - Low-spec agents: Detect only; creation delegated to leader  
 - Excessive skill generation: Daily limit 5 + discard if estimated_success_rate < 0.7  
-- LLM hallucination: Fall back to safe existing skill after 3 failed vm2 runs  
+- LLM hallucination: Fall back to safe existing skill after 3 failed node:vm runs  
 - **Cost guard**: If a single Self-Improvement attempt exceeds $0.01 in token cost, immediately pause, report to leader, and await commander approval before retrying
 
 ## Success Metrics (OpenClaw HEARTBEAT Dashboard)
