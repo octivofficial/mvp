@@ -48,7 +48,7 @@ description: Master index of ALL tools available in the Octiv project — agents
 
 ---
 
-## Skills (11 Slash Commands)
+## Skills (19 Slash Commands)
 
 ### Memory (Session Continuity)
 | Skill | When |
@@ -63,6 +63,9 @@ description: Master index of ALL tools available in the Octiv project — agents
 | `/verify-implementation` | Before PR — full audit |
 | `/verify-redis` | After Redis/Blackboard changes |
 | `/verify-agents` | After agent/*.js changes |
+| `/verify-tests` | Test count & coverage audit |
+| `/verify-dependencies` | Dependency health check |
+| `/verify-mcp` | MCP server status audit |
 | `/manage-skills` | After new code patterns |
 
 ### Development

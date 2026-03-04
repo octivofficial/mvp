@@ -26,6 +26,9 @@ Orchestrates all registered verify skills to produce a comprehensive validation 
 |---|-------|-------------|
 | 1 | `verify-redis` | Redis port, channels, error handling |
 | 2 | `verify-agents` | OctivBot patterns, heartbeat, reconnect |
+| 3 | `verify-tests` | Test count, coverage, stale assertions |
+| 4 | `verify-dependencies` | npm audit, outdated packages |
+| 5 | `verify-mcp` | MCP server config vs actual status |
 
 ## Workflow
 
