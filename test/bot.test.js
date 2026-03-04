@@ -216,6 +216,7 @@ describe('OctivBot — Single Bot Stability (Phase 1.2)', () => {
         }, {
             createBotFn: () => mockBotInstance,
             redisUrl: 'redis://localhost:19999',  // Non-existent port
+            blackboardOptions: { socket: { reconnectStrategy: false } },
         });
 
         let threw = false;

@@ -8,9 +8,18 @@ const REDIS_URL = process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380';
 const PREFIX = 'octiv:';
 
 class Blackboard {
-  constructor(redisUrl) {
+  constructor(redisUrl, options = {}) {
     const url = redisUrl || REDIS_URL;
-    this.client = createClient({ url });
+    this.client = createClient({
+      url,
+      socket: {
+        reconnectStrategy: (retries) => {
+          if (retries > 10) return false; // Stop after 10 retries
+          return Math.min(retries * 100, 3000);
+        },
+        ...options.socket,
+      },
+    });
     this.client.on('error', (err) => console.error('[Blackboard] Redis error:', err));
   }
 
@@ -20,8 +29,18 @@ class Blackboard {
   }
 
   async disconnect() {
-    if (this.client.isOpen) {
-      await this.client.quit();
+    try {
+      if (this.client.isOpen) {
+        await this.client.quit();
+      }
+    } catch {
+      // quit() failed — fall through to force disconnect
+    }
+    // Always force-destroy to stop pending reconnection attempts
+    try {
+      await this.client.disconnect();
+    } catch {
+      // Already disconnected or destroyed
     }
   }
 

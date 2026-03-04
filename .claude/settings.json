@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": "PROJ=/Users/octiv/Octiv_MVP; MEM=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory; COMMIT=$(git -C $PROJ log --oneline -1 2>/dev/null); BRANCH=$(git -C $PROJ branch --show-current 2>/dev/null); MOD=$(git -C $PROJ diff --name-only 2>/dev/null | wc -l | tr -d ' '); REDIS=$(redis-cli -p 6380 ping 2>/dev/null || echo 'DOWN'); DOCK=$(docker ps --format '{{.Names}}' 2>/dev/null | wc -l | tr -d ' '); ML=$([ -f $MEM/MEMORY.md ] && wc -l < $MEM/MEMORY.md | tr -d ' ' || echo '0'); SL=$([ -f $MEM/session-log.md ] && wc -l < $MEM/session-log.md | tr -d ' ' || echo '0'); echo \"[Octiv] $BRANCH:${COMMIT} | Δ${MOD} | redis:$REDIS | docker:${DOCK} | mem:${ML}L log:${SL}L\""
+          },
+          {
+            "type": "command",
+            "command": "MEM=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory; CF=$MEM/.prompt-counter; C=$(cat $CF 2>/dev/null || echo 0); C=$((C + 1)); echo $C > $CF; if [ $C -ge 5 ]; then echo 0 > $CF; PROJ=/Users/octiv/Octiv_MVP; TS=$(date '+%Y-%m-%d %H:%M'); COMMIT=$(git -C $PROJ log --oneline -1 2>/dev/null); MOD=$(git -C $PROJ diff --name-only 2>/dev/null | tr '\\n' ', '); echo \"- [$TS] auto-memory: $COMMIT | delta: ${MOD:-none}\" >> $MEM/session-log.md; echo '[AutoMemory] 5-prompt checkpoint saved'; fi"
           }
         ]
       }
