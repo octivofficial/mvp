@@ -21,6 +21,13 @@
 - `/remember` — anytime you discover something worth keeping
 - `/rc` — check remote control status
 
+### Lead Developer Protocol (every feature/fix — MANDATORY)
+1. **New code = new tests** (parallel creation, never 0% coverage)
+2. **Agent/skill audit**: After architecture changes, verify configs match reality
+3. **Parallel everything**: Independent reads, tests, file writes → concurrent
+4. **Auto-push**: Test pass + commit → push (no asking)
+5. **Stale kill**: Outdated refs in agents/skills → fix immediately inline
+
 ### END → `/simplify end` (one command)
 1. Syntax check all files + no secrets scan
 2. Auto-commit with generated message
