@@ -88,7 +88,7 @@ async function tryLearnedSkill(agent, error) {
 
   const matching = Object.entries(library)
     .filter(([, skill]) => skill.errorType === errorType)
-    .sort((a, b) => (b[1].success_rate || 0) - (a[1].success_rate || 0));
+    .sort((a, b) => (b[1].successRate || 0) - (a[1].successRate || 0));
 
   if (matching.length === 0) return false;
 

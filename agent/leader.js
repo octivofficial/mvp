@@ -151,15 +151,15 @@ class LeaderAgent {
   }
 
   // 4.4: Inject learned skill into team system prompt via Blackboard
-  // Task D: Quality filter — check success_rate, duplicates, max count
+  // Task D: Quality filter — check successRate, duplicates, max count
   async injectLearnedSkill(skillName, version = 'v1') {
-    // Quality gate: check skill success_rate from library
+    // Quality gate: check skill successRate from library
     if (this.skillPipeline) {
       try {
         const library = await this.skillPipeline.getLibrary();
         const skill = library[skillName];
-        if (skill && skill.uses >= 3 && skill.success_rate < 0.5) {
-          console.log(`[Leader] skipped low-quality skill: ${skillName} (rate: ${skill.success_rate.toFixed(2)})`);
+        if (skill && skill.uses >= 3 && skill.successRate < 0.5) {
+          console.log(`[Leader] skipped low-quality skill: ${skillName} (rate: ${skill.successRate.toFixed(2)})`);
           return { tag: null, totalSkills: 0, rejected: 'low_success_rate' };
         }
       } catch {

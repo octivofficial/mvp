@@ -72,7 +72,7 @@ describe('SkillPipeline — Generation & Deployment (Phase 4.1/4.2)', () => {
 
         const lib = await pipeline.getLibrary();
         assert.ok(lib.test_skill_v1);
-        assert.equal(lib.test_skill_v1.success_rate, 1.0);
+        assert.equal(lib.test_skill_v1.successRate, 1.0);
         assert.equal(lib.test_skill_v1.uses, 0);
 
         await pipeline.shutdown();
@@ -95,7 +95,7 @@ describe('SkillPipeline — Generation & Deployment (Phase 4.1/4.2)', () => {
         const lib = await pipeline.getLibrary();
         assert.equal(lib.rate_test.uses, 2);
         assert.equal(lib.rate_test.successes, 1);
-        assert.equal(lib.rate_test.success_rate, 0.5);
+        assert.equal(lib.rate_test.successRate, 0.5);
 
         await pipeline.shutdown();
     });

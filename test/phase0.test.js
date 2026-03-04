@@ -93,7 +93,7 @@ describe('BuilderAgent — Skill Feedback Loop (Task B)', () => {
 
     assert.equal(result, true, 'Should successfully apply matching skill');
 
-    // Verify success_rate was updated
+    // Verify successRate was updated
     const lib = await pipeline.getLibrary();
     assert.equal(lib.fix_inventory_v1.uses, 1);
     assert.equal(lib.fix_inventory_v1.successes, 1);
@@ -353,7 +353,7 @@ describe('LeaderAgent — Quality Filter (Task D)', () => {
     await pipeline.updateSuccessRate('bad_skill_v1', false);
     await pipeline.updateSuccessRate('bad_skill_v1', false);
 
-    // Re-deploy since it may have been discarded (success_rate < 0.7 triggers discard at 3 uses)
+    // Re-deploy since it may have been discarded (successRate < 0.7 triggers discard at 3 uses)
     await pipeline.deploySkill({
       name: 'bad_skill_v2',
       code: 'const x = 1;',
@@ -369,7 +369,7 @@ describe('LeaderAgent — Quality Filter (Task D)', () => {
       code: 'const x = 1;',
       uses: 5,
       successes: 1,
-      success_rate: 0.2,
+      successRate: 0.2,
     });
 
     const leader = new LeaderAgent(3);

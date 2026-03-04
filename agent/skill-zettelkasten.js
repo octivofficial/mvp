@@ -417,7 +417,7 @@ xp: ${note.xp}
 uses: ${note.uses}
 successes: ${note.successes}
 failures: ${note.failures}
-success_rate: ${note.successRate.toFixed(3)}
+successRate: ${note.successRate.toFixed(3)}
 status: "${note.status}"
 error_type: "${note.errorType}"
 created_by: "${note.createdBy}"

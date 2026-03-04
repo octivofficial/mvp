@@ -1,7 +1,7 @@
 /**
  * Octiv Skill Pipeline — Phase 4.1 + 4.2
  * Failure → LLM skill generation → sandbox validation → deploy to library
- * Dynamic skill library with success_rate tracking and daily limits.
+ * Dynamic skill library with successRate tracking and daily limits.
  *
  * Sandbox: node:vm with isolated context (replaces vm2 CVE-2023-37466).
  */
@@ -86,7 +86,7 @@ class SkillPipeline {
     const entry = {
       ...skillJson,
       deployedAt: Date.now(),
-      success_rate: 1.0,
+      successRate: 1.0,
       uses: 0,
       successes: 0,
     };
@@ -101,17 +101,17 @@ class SkillPipeline {
 
     skill.uses++;
     if (succeeded) skill.successes++;
-    skill.success_rate = skill.uses > 0 ? skill.successes / skill.uses : 0;
+    skill.successRate = skill.uses > 0 ? skill.successes / skill.uses : 0;
 
     // Discard if success rate drops below threshold
-    if (skill.uses >= 3 && skill.success_rate < MIN_SUCCESS_RATE) {
+    if (skill.uses >= 3 && skill.successRate < MIN_SUCCESS_RATE) {
       await this.board.deleteHashField('skills:library', skillName);
-      console.log(`[SkillPipeline] discarded: ${skillName} (rate: ${skill.success_rate.toFixed(2)})`);
-      return { discarded: true, skill: skillName, rate: skill.success_rate };
+      console.log(`[SkillPipeline] discarded: ${skillName} (rate: ${skill.successRate.toFixed(2)})`);
+      return { discarded: true, skill: skillName, rate: skill.successRate };
     }
 
     await this.board.saveSkill(skillName, skill);
-    return { discarded: false, skill: skillName, rate: skill.success_rate };
+    return { discarded: false, skill: skillName, rate: skill.successRate };
   }
 
   // 4.2: Get all skills from library

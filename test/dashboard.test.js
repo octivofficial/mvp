@@ -295,19 +295,19 @@ describe('Blackboard — Redis Pipeline (Phase 7.4)', () => {
 
         // Seed skill
         await board.saveSkill('atomic_test', {
-            name: 'atomic_test', uses: 0, successes: 0, success_rate: 1.0,
+            name: 'atomic_test', uses: 0, successes: 0, successRate: 1.0,
         });
 
         const updated = await board.atomicUpdateSkill('atomic_test', (skill) => {
             skill.uses++;
             skill.successes++;
-            skill.success_rate = skill.successes / skill.uses;
+            skill.successRate = skill.successes / skill.uses;
             return skill;
         });
 
         assert.equal(updated.uses, 1);
         assert.equal(updated.successes, 1);
-        assert.equal(updated.success_rate, 1.0);
+        assert.equal(updated.successRate, 1.0);
 
         await board.disconnect();
     });

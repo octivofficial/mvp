@@ -429,7 +429,7 @@ describe('builder-adaptation — tryLearnedSkill', () => {
       id: 'test-01',
       skillPipeline: {
         getLibrary: mock.fn(async () => ({
-          fix_path_v1: { errorType: 'pathfinding', code: 'fix()', success_rate: 0.8 },
+          fix_path_v1: { errorType: 'pathfinding', code: 'fix()', successRate: 0.8 },
         })),
         validateSkill: mock.fn(async () => true),
         updateSuccessRate: mock.fn(async () => {}),
@@ -449,7 +449,7 @@ describe('builder-adaptation — tryLearnedSkill', () => {
       id: 'test-01',
       skillPipeline: {
         getLibrary: mock.fn(async () => ({
-          fix_path_v1: { errorType: 'pathfinding', code: 'fix()', success_rate: 0.5 },
+          fix_path_v1: { errorType: 'pathfinding', code: 'fix()', successRate: 0.5 },
         })),
         validateSkill: mock.fn(async () => false),
         updateSuccessRate: mock.fn(async () => {}),
@@ -464,13 +464,13 @@ describe('builder-adaptation — tryLearnedSkill', () => {
     );
   });
 
-  it('should pick highest success_rate skill when multiple match', async () => {
+  it('should pick highest successRate skill when multiple match', async () => {
     const agent = {
       id: 'test-01',
       skillPipeline: {
         getLibrary: mock.fn(async () => ({
-          fix_path_v1: { errorType: 'pathfinding', code: 'v1()', success_rate: 0.3 },
-          fix_path_v2: { errorType: 'pathfinding', code: 'v2()', success_rate: 0.9 },
+          fix_path_v1: { errorType: 'pathfinding', code: 'v1()', successRate: 0.3 },
+          fix_path_v2: { errorType: 'pathfinding', code: 'v2()', successRate: 0.9 },
         })),
         validateSkill: mock.fn(async () => true),
         updateSuccessRate: mock.fn(async () => {}),
