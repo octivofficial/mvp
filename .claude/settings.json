@@ -32,6 +32,15 @@
             "command": "INPUT=$(cat); echo \"$INPUT\" | grep -q 'rcon' && echo \"$INPUT\" | grep -qE '(op |ban |stop |whitelist )' && { echo '[BLOCKED] Dangerous RCON command denied'; exit 1; } || true"
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "MEM=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory; CF=$MEM/.tool-counter; C=$(cat $CF 2>/dev/null || echo 0); C=$((C + 1)); echo $C > $CF; [ $((C % 50)) -eq 0 ] && echo \"[Hint] $C tool calls this session. Consider /compact if context is getting large.\" || true"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -41,6 +50,16 @@
           {
             "type": "command",
             "command": "INPUT=$(cat); echo \"$INPUT\" | grep -q 'git commit' && { MEM=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory; COMMIT=$(git -C /Users/octiv/Octiv_MVP log --oneline -1 2>/dev/null); echo \"- [$(date '+%H:%M')] committed: $COMMIT\" >> $MEM/session-log.md && echo '[AutoMemory] Commit logged to session-log'; } || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); FILE=$(echo $INPUT | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"tool_input\",{}).get(\"file_path\",\"\"))' 2>/dev/null); [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE '(agent/.*[.]js|test/.*[.]js)$' && npx prettier --write \"$FILE\" 2>/dev/null && echo \"[AutoFormat] $FILE\" || true",
+            "timeout": 10
           }
         ]
       }
@@ -80,6 +99,7 @@
       "Bash(head *)",
       "Bash(timeout *)",
       "Bash(cat *)",
+      "Bash(npx prettier *)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",

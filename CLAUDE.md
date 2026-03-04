@@ -34,11 +34,13 @@
 3. Save MEMORY.md + session-log
 4. Report: "Memory saved. Next session picks up from [X]"
 
-### Auto-Memory (runs without manual intervention)
+### Auto-Memory & Hooks (runs without manual intervention)
 - **UserPromptSubmit**: Shows git/redis/docker/memory status on every prompt
 - **PostToolUse(git commit)**: Logs commit to session-log automatically
+- **PostToolUse(Edit)**: Auto-formats `agent/*.js` and `test/*.js` with prettier
 - **PreCompact**: Saves full state before context compaction
 - **PreToolUse(git commit)**: Syntax checks all agent files
+- **PreToolUse(counter)**: Suggests `/compact` every 50 tool calls
 
 ---
 
@@ -84,7 +86,7 @@ Choose the right pattern for the task at hand:
 | `notebooklm-agent` | Knowledge base queries |
 | `obsidian-agent` | Vault notes |
 
-### Efficiency Commands (NEW — .claude/commands/)
+### Efficiency Commands (.claude/commands/)
 | Command | What it does |
 |---------|-------------|
 | `/simplify start` | One-command session startup (replaces 5 manual steps) |
@@ -98,10 +100,13 @@ Choose the right pattern for the task at hand:
 | `/loop fix <file>` | Auto-fix loop until clean (max 5 iter) |
 | `/loop refactor <file>` | Iterative improvement with verify |
 | `/loop deploy` | Build → test → deploy cycle |
-| `/rc` | Remote control status / Discord bridge (not yet implemented) |
+| `/rc` | Remote control status / Discord bridge |
 | `/auto-memory status` | Show all memory layer stats |
+| `/eval <target>` | Feature completeness evaluation (pass@1 metrics) |
+| `/learn [topic]` | Extract patterns from session → instincts |
+| `/checkpoint [name]` | Save session state snapshot for recovery |
 
-### Skills (19 Octiv project skills)
+### Skills (24 Octiv project skills)
 | Skill | When |
 |-------|------|
 | `/tool-index` | Find any tool |
@@ -123,6 +128,11 @@ Choose the right pattern for the task at hand:
 | `/weather` | Minecraft weather/time queries |
 | `/first-day-survival` | First night survival strategy |
 | `/automated-debugging` | Systematic bug investigation |
+| `cost-aware-llm-pipeline` | LLM model routing, cost optimization |
+| `verification-loop` | 6-phase verification before PR |
+| `search-first` | Search codebase before writing new code |
+| `docker-patterns` | Docker/PaperMC/Redis container best practices |
+| `autonomous-loops` | Loop pattern theory for `/loop` commands |
 
 ### Superpowers (14 global methodology skills)
 Installed from [obra/superpowers](https://github.com/obra/superpowers).
