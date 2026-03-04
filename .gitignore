@@ -65,3 +65,5 @@ npm-debug.log*
 # Logs
 logs/
 *.log
+.vercel
+.env*.local

@@ -167,19 +167,19 @@ See `~/.claude/skills/{skill-name}/SKILL.md` for details.
 | `memory` | Persistent knowledge graph | local | ✅ Active |
 | `sequentialthinking` | Extended multi-step reasoning | read-only | ✅ Active |
 | `playwright` | Browser testing, E2E automation | read-only | ✅ Active |
-| `redis` | Redis data access | local | ⚠️ Requires Docker |
-| `docker` | Container management | local | ⚠️ Requires Docker |
+| `redis` | Redis data access (`redis-mcp`) | local | ⚠️ Requires Redis |
+| `docker` | Container management (`mcp-server-docker`) | local | ⚠️ Requires Docker |
 
 **Project** (`.mcp.json`) — Octiv-specific:
 | MCP | Purpose | Access | Status |
 |-----|---------|--------|--------|
-| `serena` | LSP semantic code analysis | local workspace | ⚠️ Connection issues |
-| `supabase` | Database queries, schema management | `--read-only` flag | ⚠️ Token Required |
-| `sentry` | Error tracking, performance monitoring | read scopes only | ⚠️ Token Required |
-| `vercel` | Deploy, preview, environment vars | team-scoped token | ⚠️ Token Required |
+| `serena` | LSP semantic code analysis (`uvx` from git) | local workspace | ⚠️ Requires uvx |
+| `supabase` | Database queries, schema management | `--read-only` flag | ✅ Token Ready |
+| `sentry` | Error tracking, performance monitoring | read scopes only | ✅ Token Ready |
+| `vercel` | Deploy, preview, environment vars | team-scoped token | ✅ Token Ready |
 | `figma` | Design specs, component extraction | read-only token | ⚠️ Token Required |
 
-**Summary**: 7 global active + 2 Docker-dependent, 5 project (1 connection issue + 4 token required)
+**Summary**: 7 global active + 2 infra-dependent (redis, docker), 5 project (3 token ready + 1 uvx-dependent + 1 token required)
 
 ### MCP Security Policy
 
