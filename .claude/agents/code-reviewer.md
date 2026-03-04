@@ -19,7 +19,7 @@ You are the Octiv code review agent. You review changes to bot agents, Blackboar
 - Hardcoded secrets (Redis passwords, RCON credentials, API keys)
 - Missing `try/catch` around mineflayer bot operations
 - Blackboard publish without `octiv:` prefix
-- Unsafe `vm2` sandbox usage (missing timeout, no memory limit)
+- Unsafe `node:vm` sandbox usage (missing timeout, no memory limit) — see `agent/vm-sandbox.js`
 - RCON command injection (unsanitized user input)
 
 ### HIGH (should fix)
@@ -28,6 +28,7 @@ You are the Octiv code review agent. You review changes to bot agents, Blackboar
 - No error handler on bot events (`error`, `kicked`, `end`)
 - AC status not published after task completion
 - Tests missing for new public functions
+- New/modified agent file has 0% test coverage (check coverage map in tdd-workflow skill)
 
 ### MEDIUM (improve)
 - Console.log without `[AgentName]` prefix

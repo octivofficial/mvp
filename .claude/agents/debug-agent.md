@@ -77,10 +77,10 @@ After fixing, update `memory/debugging.md` with:
 - **Fix**: Use `GoalNear` with distance 2 instead of exact position
 - **Check**: Log `bot.entity.position` every 5s to detect loop
 
-### vm2 sandbox timeout
+### node:vm sandbox timeout
 - **Cause**: Generated skill code has infinite loops
 - **Fix**: 3 dry-run passes with 5s timeout each; kill on timeout
-- **Check**: `agent/safety.js` — vm2 options
+- **Check**: `agent/vm-sandbox.js` — node:vm options (vm2 was replaced due to CVE-2023-37466)
 
 ### npm test prerequisite
 - **Cause**: Tests require Redis on 6380 to be running

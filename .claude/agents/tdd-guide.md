@@ -50,8 +50,8 @@ const mockBoard = {
 
 ## Test Structure
 ```javascript
-import { describe, it, beforeEach } from 'node:test';
-import assert from 'node:assert/strict';
+const { describe, it, beforeEach, afterEach } = require('node:test');
+const assert = require('node:assert/strict');
 
 describe('Builder', () => {
   let builder, mockBot, mockBoard;
