@@ -318,7 +318,7 @@ Explorer maps 200-block radius without dying
 > Goal: Build a long-term operations framework beyond first-night survival
 
 ### 7.1 Mission Expansion
-- [ ] Week 2: Ore mining + stone tool upgrade
+- [x] Week 2: Ore mining + stone tool upgrade (MinerAgent: nav, session, inventory, smelt, quota)
 - [ ] Week 3: Farm automation + food self-sufficiency
 - [ ] Week 4: Ender Dragon strategy planning
 
