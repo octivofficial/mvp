@@ -739,7 +739,7 @@ describe('OctivDiscordBot — _postStatusEmbed', () => {
     assert.equal(sentData.embeds.length, 1);
     const embed = sentData.embeds[0];
     assert.ok(embed.data.title.includes('builder-01'));
-    assert.equal(embed.data.color, 0x00ff00); // health > 10
+    assert.equal(embed.data.color, 0x2ecc71); // health > 10
   });
 
   it('should no-op when status channel is null', () => {

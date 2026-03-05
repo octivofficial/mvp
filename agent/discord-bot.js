@@ -364,15 +364,19 @@ class OctivDiscordBot {
   _postStatusEmbed(channel, data) {
     if (!this.channels.status) return;
 
+    const hp = data.health;
+    const color = hp != null ? (hp > 10 ? 0x2ecc71 : hp > 5 ? 0xf39c12 : 0xe74c3c) : 0x3498db;
+    const fields = [];
+    if (data.status) fields.push({ name: 'Status', value: data.status, inline: true });
+    if (data.position) fields.push({ name: 'Position', value: formatPos(data.position), inline: true });
+    if (hp != null) fields.push({ name: 'Health', value: `${hp}/20`, inline: true });
+    if (data.task) fields.push({ name: 'Task', value: data.task, inline: true });
+
     const embed = new EmbedBuilder()
-      .setTitle(`Agent Status: ${data.agentId || 'unknown'}`)
-      .setColor(data.health > 10 ? 0x00ff00 : 0xff0000)
-      .addFields(
-        { name: 'Position', value: formatPos(data.position), inline: true },
-        { name: 'Health', value: `${data.health || '?'}/20`, inline: true },
-        { name: 'Task', value: data.task || 'idle', inline: true }
-      )
+      .setTitle(`Agent Status: ${_resolveAgentId(data)}`)
+      .setColor(color)
       .setTimestamp();
+    if (fields.length > 0) embed.addFields(fields);
 
     this.channels.status.send({ embeds: [embed] }).catch(logSendError);
   }
