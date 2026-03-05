@@ -23,6 +23,7 @@ export default [
         setImmediate: 'readonly',
         URL: 'readonly',
         fetch: 'readonly',
+        AbortSignal: 'readonly',
         TextDecoder: 'readonly',
         TextEncoder: 'readonly',
         // Test globals (node:test)

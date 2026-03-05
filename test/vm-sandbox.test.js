@@ -159,7 +159,7 @@ describe('vm-sandbox — context isolation', () => {
 
 describe('vm-sandbox — malicious code patterns', () => {
   it('should reject prototype pollution attempt', async () => {
-    const result = await validateCode('this.__proto__.polluted = true;');
+    await validateCode('this.__proto__.polluted = true;');
     // Object.create(null) context means __proto__ access differs
     // Either it errors (no __proto__) or silently does nothing — both are safe
     // The key assertion: our host prototype is not polluted
