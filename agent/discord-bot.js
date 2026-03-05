@@ -5,9 +5,11 @@
  * user commands for team monitoring and control.
  *
  * Channels:
- *   #neostarz-live    — real-time bot activity stream (health, movement, actions)
- *   #neostarz-alerts  — threats, failures, reflexion, GoT events
- *   #neostarz-commands — bot command interface
+ *   #neostarz-live      — real-time bot activity stream (health, movement, actions)
+ *   #neostarz-alerts    — threats, failures, reflexion, GoT events
+ *   #neostarz-commands  — bot command interface
+ *   #neostarz-chat      — agent-to-agent communication
+ *   #meta-shinmoongo    — forum: anonymous agent confessions (Joseon Shinmungo)
  *
  * Commands:
  *   !help             — list all NeoStarz commands
@@ -15,6 +17,7 @@
  *   !team             — list all agents and roles
  *   !assign <agent> <task> — assign task to agent
  *   !reflexion        — trigger group reflexion
+ *   !confess <msg>    — post to the Shinmungo forum
  *   !rc <subcmd>      — remote control (status, test, ac, log, agents)
  */
 
@@ -40,7 +43,8 @@ function loadConfig() {
       statusChannel: process.env.DISCORD_STATUS_CHANNEL,
       alertsChannel: process.env.DISCORD_ALERTS_CHANNEL,
       commandsChannel: process.env.DISCORD_COMMANDS_CHANNEL,
-      chatChannel: process.env.DISCORD_CHAT_CHANNEL
+      chatChannel: process.env.DISCORD_CHAT_CHANNEL,
+      forumChannel: process.env.DISCORD_FORUM_CHANNEL
     };
   }
 }
@@ -64,6 +68,7 @@ class OctivDiscordBot {
     this.subscriber = null;
     this.channels = {};
     this._reactThrottle = new Map();
+    this._forumTagCache = new Map();
     this._reconnectAttempts = 0;
   }
 
@@ -145,6 +150,17 @@ class OctivDiscordBot {
     this.channels.alerts = resolve(this.config.alertsChannel, 'alerts');
     this.channels.commands = resolve(this.config.commandsChannel, 'commands');
     this.channels.chat = resolve(this.config.chatChannel, 'chat');
+    this.channels.forum = resolve(this.config.forumChannel, 'forum');
+
+    // Cache forum tags for matching confessions to tags
+    if (this.channels.forum && this.channels.forum.availableTags) {
+      for (const tag of this.channels.forum.availableTags) {
+        this._forumTagCache.set(tag.name.toLowerCase(), tag.id);
+      }
+      log.info('discord', 'forum tags cached', {
+        tags: [...this._forumTagCache.keys()].join(', ') || 'none'
+      });
+    }
 
     log.info('discord', 'channels resolved', {
       channels: Object.entries(this.channels)
@@ -250,6 +266,17 @@ class OctivDiscordBot {
         this._postAlertEmbed('got', JSON.parse(message));
       } catch (err) {
         log.error('discord', 'failed to parse GoT message', { error: err.message });
+      }
+    });
+
+    // Agent confessions -> #meta-shinmoongo (forum threads)
+    this.subscriber.pSubscribe(PREFIX + 'agent:*:confess', (message, channel) => {
+      try {
+        const data = JSON.parse(message);
+        data.agentId = data.agentId || _extractAgentId(channel);
+        this._postShinmungo(data);
+      } catch (err) {
+        log.error('discord', 'failed to parse confess message', { error: err.message });
       }
     });
 
@@ -429,6 +456,59 @@ class OctivDiscordBot {
     this.channels.alerts.send({ content, embeds: [embed] }).catch(logSendError);
   }
 
+  /**
+   * Post a confession to the Shinmungo forum as a new thread.
+   * Agents publish to octiv:agent:<id>:confess with:
+   *   { title, message, tag?, anonymous? }
+   */
+  async _postShinmungo(data) {
+    if (!this.channels.forum) return;
+
+    const agent = data.agentId || 'unknown';
+    const anonymous = data.anonymous === true;
+    const displayName = anonymous ? `Agent #${_anonymousHash(agent)}` : agent;
+
+    const roleColors = {
+      leader: 0xe74c3c, builder: 0x2ecc71, safety: 0xe67e22, explorer: 0x3498db,
+    };
+    const role = agent.split('-')[0].replace(/^OctivBot_/, '');
+    const color = anonymous ? 0x95a5a6 : (roleColors[role] || 0x95a5a6);
+
+    const embed = new EmbedBuilder()
+      .setAuthor({ name: displayName })
+      .setColor(color)
+      .setDescription(data.message || data.text || '...')
+      .setTimestamp();
+
+    if (data.context) {
+      embed.addFields({ name: 'Context', value: data.context, inline: false });
+    }
+    if (!anonymous && data.position) {
+      embed.addFields({ name: 'Position', value: formatPos(data.position), inline: true });
+    }
+    if (data.mood) {
+      embed.setFooter({ text: `mood: ${data.mood}` });
+    }
+
+    // Match tag name to cached tag ID
+    const appliedTags = [];
+    if (data.tag && this._forumTagCache.has(data.tag.toLowerCase())) {
+      appliedTags.push(this._forumTagCache.get(data.tag.toLowerCase()));
+    }
+
+    const title = data.title || `${displayName}'s confession`;
+
+    try {
+      await this.channels.forum.threads.create({
+        name: title.slice(0, 100),
+        message: { embeds: [embed] },
+        appliedTags,
+      });
+    } catch (err) {
+      logSendError(err);
+    }
+  }
+
   _postChatMessage(data) {
     if (!this.channels.chat) return;
 
@@ -474,6 +554,8 @@ class OctivDiscordBot {
         return this._cmdReflexion(msg);
       case 'team':
         return this._cmdTeam(msg);
+      case 'confess':
+        return this._cmdConfess(msg, args);
       case 'rc':
         return this._cmdRc(msg, args);
       default:
@@ -492,7 +574,8 @@ class OctivDiscordBot {
         { name: '!team', value: 'List all agents and their roles', inline: false },
         { name: '!assign <agent> <task>', value: 'Assign a task to an agent', inline: false },
         { name: '!reflexion', value: 'Trigger group reflexion cycle', inline: false },
-        { name: '!rc <subcmd>', value: 'Remote control: status, test, ac, log, agents', inline: false }
+        { name: '!rc <subcmd>', value: 'Remote control: status, test, ac, log, agents', inline: false },
+        { name: '!confess <message>', value: 'Post to the Shinmungo forum', inline: false }
       )
       .setTimestamp();
 
@@ -572,6 +655,24 @@ class OctivDiscordBot {
     } catch (err) {
       msg.reply(`Error triggering reflexion: ${err.message}`);
     }
+  }
+
+  async _cmdConfess(msg, args) {
+    if (args.length === 0) {
+      return msg.reply('Usage: `!confess <message>` — Post to the Shinmungo forum');
+    }
+    const text = args.join(' ');
+    const check = SafetyAgent.filterPromptInjection(text);
+    if (!check.safe) {
+      return msg.reply(`Blocked: input rejected (${check.reason})`);
+    }
+    await this._postShinmungo({
+      agentId: `human:${msg.author.username}`,
+      title: `${msg.author.username}'s voice`,
+      message: check.sanitized,
+      tag: 'thoughts',
+    });
+    msg.reply('Your voice has been heard at the Shinmungo.');
   }
 
   async _cmdTeam(msg) {
@@ -690,6 +791,16 @@ function _extractAgentId(channel) {
   return (agentIdx >= 0 && parts[agentIdx + 1]) ? parts[agentIdx + 1] : 'unknown';
 }
 
+/** Generate a stable anonymous number from agent ID (1-99) */
+function _anonymousHash(agentId) {
+  let hash = 0;
+  for (let i = 0; i < agentId.length; i++) {
+    hash = ((hash << 5) - hash) + agentId.charCodeAt(i);
+    hash |= 0;
+  }
+  return (Math.abs(hash) % 99) + 1;
+}
+
 function formatPos(pos) {
   if (!pos) return 'unknown';
   return `${Math.round(pos.x)}, ${Math.round(pos.y)}, ${Math.round(pos.z)}`;
@@ -699,7 +810,7 @@ function logSendError(err) {
   log.error('discord', 'failed to send message', { error: err.message });
 }
 
-module.exports = { OctivDiscordBot, REACT_THROTTLE_MS };
+module.exports = { OctivDiscordBot, REACT_THROTTLE_MS, _anonymousHash };
 
 // --- CLI Entry Point ---
 
