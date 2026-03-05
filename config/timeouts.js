@@ -89,4 +89,18 @@ module.exports = {
 
   /** RC command response timeout */
   RC_RESPONSE_TIMEOUT_MS: 30000,
+
+  // -- Voice / TTS --
+
+  /** Max queued TTS messages */
+  TTS_QUEUE_MAX: 10,
+
+  /** Pause between TTS messages (ms) */
+  TTS_SILENCE_BETWEEN_MS: 500,
+
+  /** Voice channel reconnect delay (ms) */
+  VOICE_RECONNECT_DELAY_MS: 5000,
+
+  /** Max TTS text length (chars) before truncation */
+  TTS_MAX_TEXT_LENGTH: 500,
 };

@@ -24,11 +24,15 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.19.0",
     "minecraft-data": "^3.105.0",
     "mineflayer": "^4.35.0",
     "mineflayer-collectblock": "^1.6.0",
     "mineflayer-pathfinder": "^2.4.5",
+    "node-edge-tts": "^1.2.10",
     "redis": "^5.11.0",
+    "sodium-native": "^5.0.10",
     "vec3": "^0.1.10"
   },
   "optionalDependencies": {

@@ -26,6 +26,7 @@ const { readFileSync } = require('fs');
 const { join } = require('path');
 const { Blackboard, PREFIX } = require('./blackboard');
 const { SafetyAgent } = require('./safety');
+const { VoiceManager, Priority } = require('./voice-manager');
 const T = require('../config/timeouts');
 const { getLogger } = require('./logger');
 const log = getLogger();
@@ -79,13 +80,15 @@ class OctivDiscordBot {
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildVoiceStates
       ]
     });
 
     this.board = null;
     this.subscriber = null;
     this.channels = {};
+    this.voice = null;
     this._reactThrottle = new Map();
     this._forumTagCache = new Map();
     this._reconnectAttempts = 0;
@@ -118,6 +121,7 @@ class OctivDiscordBot {
   }
 
   async stop() {
+    if (this.voice) this.voice.leave();
     if (this.subscriber) await this.subscriber.disconnect();
     if (this.board) await this.board.disconnect();
     if (this.client) this.client.destroy();
@@ -170,6 +174,12 @@ class OctivDiscordBot {
     this.channels.commands = resolve(this.config.commandsChannel, 'commands');
     this.channels.chat = resolve(this.config.chatChannel, 'chat');
     this.channels.forum = resolve(this.config.forumChannel, 'forum');
+
+    // Voice channel — auto-join if configured
+    if (this.config.voiceChannel) {
+      this.voice = new VoiceManager(this.client, this.config.voiceChannel, this.guildId);
+      this.voice.join();
+    }
 
     // Cache forum tags for matching confessions to tags (clear stale entries on reconnect)
     if (this.channels.forum && this.channels.forum.availableTags) {
@@ -235,10 +245,15 @@ class OctivDiscordBot {
       }
     });
 
-    // Builder arrived at destination -> #neostarz-live
+    // Builder arrived at destination -> #neostarz-live + TTS (low priority)
     this.subscriber.subscribe(PREFIX + 'builder:arrived', (message) => {
       try {
-        this._postMilestoneEmbed(JSON.parse(message));
+        const data = JSON.parse(message);
+        this._postMilestoneEmbed(data);
+        this._ttsSpeak(
+          `${data.agentId || 'Builder'} arrived at shelter`,
+          { role: 'builder', priority: Priority.LOW }
+        );
       } catch (err) {
         log.error('discord', 'failed to parse arrived message', { error: err.message });
       }
@@ -253,28 +268,40 @@ class OctivDiscordBot {
       }
     });
 
-    // Safety threats -> #neostarz-alerts
+    // Safety threats -> #neostarz-alerts + TTS (high priority)
     this.subscriber.subscribe(PREFIX + 'safety:threat', (message) => {
       try {
-        this._postAlertEmbed('threat', JSON.parse(message));
+        const data = JSON.parse(message);
+        this._postAlertEmbed('threat', data);
+        this._ttsSpeak(
+          `Warning! ${data.threatType || 'Threat'} detected near ${data.agentId || 'unknown'}`,
+          { role: 'safety', priority: Priority.HIGH }
+        );
       } catch (err) {
         log.error('discord', 'failed to parse threat message', { error: err.message });
       }
     });
 
-    // Reflexion events -> #neostarz-alerts
+    // Reflexion events -> #neostarz-alerts + TTS
     this.subscriber.subscribe(PREFIX + 'leader:reflexion', (message) => {
       try {
-        this._postAlertEmbed('reflexion', JSON.parse(message));
+        const data = JSON.parse(message);
+        this._postAlertEmbed('reflexion', data);
+        this._ttsSpeak('Group reflexion triggered', { role: 'leader' });
       } catch (err) {
         log.error('discord', 'failed to parse reflexion message', { error: err.message });
       }
     });
 
-    // Emergency skill creation -> #neostarz-alerts
+    // Emergency skill creation -> #neostarz-alerts + TTS (high priority)
     this.subscriber.subscribe(PREFIX + 'skills:emergency', (message) => {
       try {
-        this._postSkillEmbed(JSON.parse(message));
+        const data = JSON.parse(message);
+        this._postSkillEmbed(data);
+        this._ttsSpeak(
+          `Emergency skill created: ${data.skillName || data.name || 'unknown'}`,
+          { priority: Priority.HIGH }
+        );
       } catch (err) {
         log.error('discord', 'failed to parse emergency skill message', { error: err.message });
       }
@@ -303,18 +330,33 @@ class OctivDiscordBot {
       }
     });
 
-    // Agent-to-agent chat -> #neostarz-chat
+    // Agent-to-agent chat -> #neostarz-chat + TTS
     this.subscriber.pSubscribe(PREFIX + 'agent:*:chat', (message, channel) => {
       try {
         const data = JSON.parse(message);
         data.agentId = data.agentId || _extractAgentId(channel);
         this._postChatMessage(data);
+        this._ttsSpeak(`${data.agentId} says: ${data.message || data.text || ''}`, {
+          role: _roleFromAgentId(data.agentId, data.role),
+        });
       } catch (err) {
         log.error('discord', 'failed to parse chat message', { error: err.message });
       }
     });
 
     log.info('discord', 'blackboard subscriptions active');
+  }
+
+  // --- TTS Helpers ---
+
+  /**
+   * Speak text via VoiceManager if available and not muted.
+   * @param {string} text - Text to speak
+   * @param {object} [options] - { role?, priority?, voice? }
+   */
+  _ttsSpeak(text, options = {}) {
+    if (!this.voice) return;
+    this.voice.speak(text, options);
   }
 
   // --- Embed Methods ---
@@ -569,6 +611,8 @@ class OctivDiscordBot {
         return this._cmdConfess(msg, args);
       case 'rc':
         return this._cmdRc(msg, args);
+      case 'voice':
+        return this._cmdVoice(msg, args);
       default:
         return; // ignore unknown commands
     }
@@ -586,7 +630,8 @@ class OctivDiscordBot {
         { name: '!assign <agent> <task>', value: 'Assign a task to an agent', inline: false },
         { name: '!reflexion', value: 'Trigger group reflexion cycle', inline: false },
         { name: '!rc <subcmd>', value: 'Remote control: status, test, ac, log, agents', inline: false },
-        { name: '!confess <message>', value: 'Post to the Shinmungo forum', inline: false }
+        { name: '!confess <message>', value: 'Post to the Shinmungo forum', inline: false },
+        { name: '!voice <subcmd>', value: 'Voice: join, leave, say, mute, status', inline: false }
       )
       .setTimestamp();
 
@@ -720,6 +765,76 @@ class OctivDiscordBot {
       msg.reply({ embeds: [embed] });
     } catch (err) {
       msg.reply(`Error fetching team: ${err.message}`);
+    }
+  }
+
+  // --- Voice Commands ---
+
+  async _cmdVoice(msg, args) {
+    const subcmd = (args[0] || '').toLowerCase();
+    const supported = ['join', 'leave', 'say', 'mute', 'status'];
+
+    if (!subcmd || !supported.includes(subcmd)) {
+      return msg.reply(`Usage: \`!voice <${supported.join('|')}>\``);
+    }
+
+    switch (subcmd) {
+      case 'join': {
+        if (!this.config.voiceChannel) {
+          return msg.reply('Voice channel not configured. Set `voiceChannel` in config/discord.json.');
+        }
+        if (!this.voice) {
+          this.voice = new VoiceManager(this.client, this.config.voiceChannel, this.guildId);
+        }
+        const conn = this.voice.join();
+        return msg.reply(conn ? 'Joined voice channel.' : 'Failed to join voice channel.');
+      }
+      case 'leave': {
+        if (!this.voice) return msg.reply('Not in a voice channel.');
+        this.voice.leave();
+        this.voice = null;
+        return msg.reply('Left voice channel.');
+      }
+      case 'say': {
+        const text = args.slice(1).join(' ');
+        if (!text) return msg.reply('Usage: `!voice say <text>`');
+
+        const check = SafetyAgent.filterPromptInjection(text);
+        if (!check.safe) {
+          return msg.reply(`Blocked: input rejected (${check.reason})`);
+        }
+
+        if (!this.voice) {
+          if (!this.config.voiceChannel) {
+            return msg.reply('Voice channel not configured.');
+          }
+          this.voice = new VoiceManager(this.client, this.config.voiceChannel, this.guildId);
+        }
+        const queued = this.voice.speak(check.sanitized);
+        return msg.reply(queued ? `Speaking: "${check.sanitized}"` : 'Failed to queue TTS message.');
+      }
+      case 'mute': {
+        if (!this.voice) return msg.reply('Not in a voice channel.');
+        const muted = this.voice.toggleMute();
+        return msg.reply(muted ? 'Auto-TTS muted.' : 'Auto-TTS unmuted.');
+      }
+      case 'status': {
+        const connected = this.voice?.isConnected() || false;
+        const muted = this.voice?.isMuted() || false;
+        const queueLen = this.voice?.queueLength() || 0;
+        const embed = new EmbedBuilder()
+          .setTitle('Voice Status')
+          .setColor(connected ? 0x2ecc71 : 0xe74c3c)
+          .addFields(
+            { name: 'Connected', value: connected ? 'Yes' : 'No', inline: true },
+            { name: 'Muted', value: muted ? 'Yes' : 'No', inline: true },
+            { name: 'Queue', value: `${queueLen}`, inline: true }
+          )
+          .setTimestamp();
+        return msg.reply({ embeds: [embed] });
+      }
+      default:
+        return;
     }
   }
 
