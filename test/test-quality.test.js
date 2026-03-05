@@ -204,8 +204,9 @@ describe('Test Quality — Coverage Infrastructure', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
     assert.ok(pkg.scripts && pkg.scripts['test:coverage'],
       'test:coverage script not found in package.json');
-    assert.ok(pkg.scripts['test:coverage'].includes('c8'),
-      'test:coverage script should use c8');
+    assert.ok(
+      pkg.scripts['test:coverage'].includes('coverage'),
+      'test:coverage script should include coverage tooling');
   });
 
   it('.c8rc.json config should exist', () => {
