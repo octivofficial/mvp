@@ -8,6 +8,7 @@ const { Blackboard } = require('./blackboard');
 const { validateCode } = require('./vm-sandbox');
 const T = require('../config/timeouts');
 const { getLogger } = require('./logger');
+const { AgentChat } = require('./agent-chat');
 const log = getLogger();
 
 const AC8_THRESHOLDS = {
@@ -34,6 +35,7 @@ class SafetyAgent {
     this.consecutiveFailures = 0;
     this.lastThreatTime = {};
     this.logger = null;
+    this.chat = new AgentChat(this.board, this.id, 'safety');
   }
 
   setLogger(logger) { this.logger = logger; }
@@ -59,10 +61,14 @@ class SafetyAgent {
           findBlock: () => null,
           registry: { blocksByName: {} },
         };
+        if ((data.health || 20) <= 5) {
+          this.chat.confess('near_death', { health: data.health, agentId: data.agentId || 'unknown' }).catch(() => {});
+        }
         const threat = this.detectThreat(mockBot);
         if (threat) {
           await this.handleThreat(threat, data.agentId || 'unknown');
         } else if (this.consecutiveFailures > 0) {
+          this.chat.chat('all_clear', {}).catch(() => {});
           this.consecutiveFailures = 0;
         }
       } catch (err) {
@@ -133,6 +139,10 @@ class SafetyAgent {
 
     log.warn(this.id, `threat detected: ${threat.type} — ${threat.reason}`);
     this.consecutiveFailures++;
+    this.chat.chat('threat_detected', { type: threat.type, reason: threat.reason }).catch(() => {});
+    if (this.consecutiveFailures >= 3) {
+      this.chat.confess('consecutive_failures', { failures: this.consecutiveFailures }).catch(() => {});
+    }
     if (this.logger) this.logger.logEvent(this.id, { type: 'threat', agentId, ...threat }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
 
     await this.board.publish('safety:threat', {

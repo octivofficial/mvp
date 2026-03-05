@@ -59,6 +59,12 @@ module.exports = {
   /** Safety threat cooldown */
   THREAT_COOLDOWN_MS: parseInt(process.env.SAFETY_THREAT_COOLDOWN_MS) || 2000,
 
+  /** Agent chat message cooldown */
+  CHAT_COOLDOWN_MS: parseInt(process.env.CHAT_COOLDOWN_MS) || 30000,
+
+  /** Agent confession cooldown */
+  CONFESS_COOLDOWN_MS: parseInt(process.env.CONFESS_COOLDOWN_MS) || 300000,
+
   // -- VM Sandbox --
 
   /** node:vm script execution timeout */

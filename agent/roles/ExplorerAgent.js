@@ -4,6 +4,7 @@
  * Shares discovered locations via Blackboard world map.
  */
 const { BaseRole } = require('./BaseRole');
+const { AgentChat } = require('../agent-chat');
 
 const DANGER_BLOCKS = ['lava', 'flowing_lava', 'fire', 'cactus', 'magma_block', 'sweet_berry_bush'];
 const SPIRAL_STEP = 10;
@@ -17,6 +18,7 @@ class ExplorerAgent extends BaseRole {
     this.worldMap = {};     // { "x,z": { biome, dangers, resources } }
     this.dangerZones = [];  // [{ x, y, z, type }]
     this.spiralIndex = 0;
+    this.chat = new AgentChat(this.board, this.id, 'explorer');
   }
 
   async execute(bot) {
@@ -50,6 +52,28 @@ class ExplorerAgent extends BaseRole {
       dangers: scanResult.dangers,
       resources: scanResult.resources,
     };
+
+    // Chat about discovery
+    this.chat.chat('discovery', {
+      radius: this.radius, resources: scanResult.resources.length,
+      dangers: scanResult.dangers.length, x: waypoint.x, z: waypoint.z,
+      safe: scanResult.dangers.length === 0 ? 'safe' : 'hostile',
+    }).catch(() => {});
+
+    // Report individual dangers
+    for (const d of scanResult.dangers) {
+      this.chat.chat('danger_spotted', { type: d.type, x: d.x, y: d.y, z: d.z }).catch(() => {});
+    }
+
+    // Confess on danger zone accumulation
+    if (this.dangerZones.length > 0 && this.dangerZones.length % 5 === 0) {
+      this.chat.confess('danger_zone', { dangerCount: this.dangerZones.length }).catch(() => {});
+    }
+
+    // Confess milestone every 10 discoveries
+    if (this.discovered.length > 0 && this.discovered.length % 10 === 0) {
+      this.chat.confess('milestone', { discoveries: this.discovered.length }).catch(() => {});
+    }
 
     // Publish to Blackboard
     await this.board.publish(`agent:${this.id}:explored`, { author: this.id, ...discovery });
