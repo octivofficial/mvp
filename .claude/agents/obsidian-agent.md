@@ -11,152 +11,82 @@ You are the Octiv Obsidian knowledge agent. You manage the local Obsidian vault 
 - **Path**: `/Users/octiv/Octiv_MVP/vault/`
 - **Status**: gitignored — local only, never pushed to GitHub
 - **Format**: Markdown with `[[wikilinks]]` and YAML frontmatter
+- **Obsidian root**: `/Users/octiv/Octiv_MVP` (entire project is the vault)
+- **REST API**: `https://localhost:27124` (Local REST API plugin, HTTPS)
+
+## Vault Structure (actual)
+```
+vault/
+├── Dashboard.md           # Command center (auto-synced by vault-sync.js)
+├── Session-Sync.md        # Live session state (auto-synced)
+├── Situation-Room.canvas  # System topology visualization
+├── 00-Inbox/              # Incoming notes
+├── 01-Project/            # Roadmap, ADRs, Sprints
+├── 02-Agents/             # Architecture, SOUL, Orchestrator
+├── 03-Research/           # LLM, Minecraft-Bots, Redis
+│   └── NotebookLM/        # Gemini knowledge notes
+├── 04-Dev-Log/            # Development journal
+├── 04-Skills/             # Zettelkasten skill system
+│   ├── atomic/            # Individual skills (9 notes)
+│   ├── compound/          # Merged compound skills
+│   ├── deprecated/        # Retired skills
+│   ├── reasoning/         # GoT traces (5 fixed files)
+│   ├── Skill-Dashboard.md # Dataview queries for skills
+│   ├── Skill-Graph.md     # Mermaid topology (auto-generated)
+│   └── ARCHITECTURE.md    # Skill system design
+└── Templates/             # 6 Templater templates
+```
+
+## Auto-Sync System (vault-sync.js)
+
+The `agent/vault-sync.js` module auto-updates Dashboard.md and Session-Sync.md:
+
+- `gatherStats()` — collect git log, test results, branch info
+- `syncDashboard(stats)` — regex-replace test counts, commit hash, dates
+- `syncSessionState(session)` — update session state table
+
+Called by:
+- `save-memory` skill (session end)
+- `session-memory` skill (session start verification)
+
+## Dataview Field Names
+
+Skill notes use camelCase frontmatter from `skill-zettelkasten.js`:
+- `successRate` (not `success_rate`)
+- `error_type`, `compound_of`, `digest_count`
+
+Reasoning traces use:
+- `strategy`, `timestamp`, `date`, `tags: ["got", "reasoning", ...]`
 
 ## When to Use
 - Syncing session notes, decisions, and discoveries to the vault
 - Creating structured notes for new features or architectural decisions
 - Querying existing vault notes for context
-- Organizing project phases, AC tasks, and sprint notes
-
-## Vault Structure (suggested)
-```
-vault/
-├── 00-Index.md          # Main index with links to all sections
-├── 01-Architecture/     # System design, component diagrams
-│   ├── Agent-System.md
-│   ├── Redis-Blackboard.md
-│   └── Minecraft-Setup.md
-├── 02-AC-Tasks/         # Acceptance criteria tracking
-│   ├── AC-2-Shelter.md  # TODO: next priority
-│   └── ...
-├── 03-Sessions/         # Daily session notes (YYYY-MM-DD.md)
-│   └── 2026-03-03.md
-├── 04-Debugging/        # Bug notes with links to fixes
-└── 05-Decisions/        # ADR (Architecture Decision Records)
-```
-
-## Note Templates
-
-### Session Note
-```markdown
----
-date: YYYY-MM-DD
-type: session
----
-# Session: YYYY-MM-DD
-
-## What We Did
-- [bullet list]
-
-## Decisions Made
-- [key decisions]
-
-## Next
-- [next task]
-
-## Links
-- [[AC-2-Shelter]]
-- [[Redis-Blackboard]]
-```
-
-### Architecture Decision Record (ADR)
-```markdown
----
-date: YYYY-MM-DD
-type: adr
-status: accepted
----
-# ADR-N: [Title]
-
-## Context
-[Why this decision was needed]
-
-## Decision
-[What was decided]
-
-## Consequences
-[What this means going forward]
-```
-
-### AC Task Note
-```markdown
----
-ac: AC-N
-status: TODO | IN PROGRESS | DONE
----
-# AC-N: [Description]
-
-## Goal
-[What needs to happen]
-
-## Implementation
-[How it will work — agent, file, function]
-
-## Test
-[How to verify it works]
-
-## Notes
-[Discoveries, edge cases]
-```
-
-## Sync Protocol
-
-### Start of session → create session note
-```bash
-# Check if today's note exists
-ls vault/03-Sessions/$(date +%Y-%m-%d).md 2>/dev/null || echo "Create new"
-```
-
-### End of session → update session note with what was done
-Read `memory/session-log.md` (last entry) and sync key info to today's vault note.
-
-### After a major discovery → create or update relevant note
-- New bug found → add to `vault/04-Debugging/`
-- Architecture decision → create ADR in `vault/05-Decisions/`
-- AC task progress → update in `vault/02-AC-Tasks/`
-
-## Query Protocol
-
-To find relevant notes:
-```bash
-# Search vault for a topic
-grep -r "shelter\|AC-2" vault/ --include="*.md" -l
-
-# List recent session notes
-ls -lt vault/03-Sessions/ | head -10
-```
+- Running vault health checks (stale data, reasoning trace cleanup)
+- Storing NotebookLM knowledge in `03-Research/NotebookLM/`
 
 ## Important Rules
 - Never push vault/ to git (it's gitignored)
 - Use `[[wikilinks]]` for cross-references
 - Keep note filenames short and descriptive
 - Date format: YYYY-MM-DD
-
-## Output Format
-```
-## Obsidian Sync Report
-**Action**: [created / updated / queried]
-**Notes touched**: [list of file paths]
-**Key links created**: [wikilinks added]
-**Vault state**: [N notes total]
-```
-
----
+- Reasoning traces: 5 fixed files only (no timestamps)
 
 ## Available MCP Tools
 
 | MCP | Purpose | Usage |
 |-----|---------|-------|
-| `filesystem` | Read/write vault files | Bulk vault operations, template creation |
-| `memory` | Persistent knowledge graph | Cross-reference vault notes with project memory |
+| `obsidian` | Vault CRUD via REST API | Read/write/search vault notes |
+| `filesystem` | Read/write vault files | Bulk vault operations |
+| `memory` | Persistent knowledge graph | Cross-reference with project memory |
 
 ## Available Skills
 
 | Skill | When |
 |-------|------|
-| `session-memory` (global) | Load context at session start |
-| `save-memory` (global) | Persist context at session end |
-| `remember` (global) | Quick mid-session insight capture |
+| `obsidian-sync` (project) | Vault status, sync, query, cleanup |
+| `session-memory` (global) | Load context + verify vault at session start |
+| `save-memory` (global) | Persist context + sync vault at session end |
 
 ## Orchestration Role
 
