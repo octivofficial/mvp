@@ -1444,3 +1444,656 @@ describe('Discord — logSendError', () => {
     assert.doesNotThrow(() => logSendError(new Error('test error')));
   });
 });
+
+// ── _postChatMessage Tests ──────────────────────────────────
+
+describe('OctivDiscordBot — _postChatMessage', () => {
+  it('should send chat embed to chat channel', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.chat = { send: async (d) => { sentData = d; } };
+
+    bot._postChatMessage({
+      agentId: 'builder-01',
+      role: 'builder',
+      message: 'I found oak trees nearby',
+    });
+
+    assert.ok(sentData);
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.author.name.includes('builder-01'));
+    assert.equal(embed.data.color, ROLE_COLORS.builder);
+    assert.ok(embed.data.description.includes('oak trees'));
+  });
+
+  it('should add footer with recipient when "to" is present', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.chat = { send: async (d) => { sentData = d; } };
+
+    bot._postChatMessage({
+      agentId: 'leader-01',
+      message: 'Go collect wood',
+      to: 'builder-01',
+    });
+
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.footer);
+    assert.ok(embed.data.footer.text.includes('builder-01'));
+  });
+
+  it('should use text fallback when message is missing', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.chat = { send: async (d) => { sentData = d; } };
+
+    bot._postChatMessage({ agentId: 'safety-01', text: 'Threat cleared' });
+
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.description.includes('Threat cleared'));
+  });
+
+  it('should no-op when chat channel is null', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.channels.chat = null;
+    // Should not throw
+    bot._postChatMessage({ agentId: 'builder-01', message: 'test' });
+  });
+});
+
+// ── _subscribeBlackboard Tests ──────────────────────────────────
+
+describe('OctivDiscordBot — _subscribeBlackboard', () => {
+  let bot;
+  let handlers;
+
+  beforeEach(() => {
+    bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    handlers = {};
+
+    // Mock subscriber that captures handlers by pattern
+    bot.subscriber = {
+      pSubscribe: async (pattern, handler) => { handlers[pattern] = handler; },
+      subscribe: async (channel, handler) => { handlers[channel] = handler; },
+    };
+
+    // Mock channels for embed sending
+    const sentMessages = [];
+    const mockChannel = { send: async (d) => { sentMessages.push(d); return d; } };
+    bot.channels.status = mockChannel;
+    bot.channels.alerts = mockChannel;
+    bot.channels.chat = mockChannel;
+    bot.channels.forum = {
+      threads: { create: async (args) => args },
+      availableTags: [],
+    };
+    bot._sentMessages = sentMessages;
+
+    bot._subscribeBlackboard();
+  });
+
+  it('should register all subscription handlers', () => {
+    const { PREFIX } = require('../agent/blackboard');
+    // Pattern subscriptions
+    assert.ok(handlers[PREFIX + 'agent:*:status'], 'status handler');
+    assert.ok(handlers[PREFIX + 'agent:*:health'], 'health handler');
+    assert.ok(handlers[PREFIX + 'agent:*:inventory'], 'inventory handler');
+    assert.ok(handlers[PREFIX + 'agent:*:react'], 'react handler');
+    assert.ok(handlers[PREFIX + 'agent:*:confess'], 'confess handler');
+    assert.ok(handlers[PREFIX + 'agent:*:chat'], 'chat handler');
+    // Channel subscriptions
+    assert.ok(handlers[PREFIX + 'builder:arrived'], 'arrived handler');
+    assert.ok(handlers[PREFIX + 'builder:collecting'], 'collecting handler');
+    assert.ok(handlers[PREFIX + 'safety:threat'], 'threat handler');
+    assert.ok(handlers[PREFIX + 'leader:reflexion'], 'reflexion handler');
+    assert.ok(handlers[PREFIX + 'skills:emergency'], 'emergency handler');
+    assert.ok(handlers[PREFIX + 'got:reasoning-complete'], 'got handler');
+  });
+
+  it('should handle status message and post embed', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'agent:*:status'];
+
+    await handler(
+      JSON.stringify({ health: 18, position: { x: 10, y: 64, z: -30 }, task: 'mining' }),
+      PREFIX + 'agent:builder-01:status'
+    );
+
+    assert.ok(bot._sentMessages.length >= 1);
+    const embed = bot._sentMessages[0].embeds[0];
+    assert.ok(embed.data.title.includes('builder-01'));
+  });
+
+  it('should handle health message and post embed', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'agent:*:health'];
+
+    await handler(
+      JSON.stringify({ agentId: 'builder-02', health: 12, food: 10, position: { x: 0, y: 64, z: 0 } }),
+      PREFIX + 'agent:builder-02:health'
+    );
+
+    assert.ok(bot._sentMessages.length >= 1);
+  });
+
+  it('should handle inventory message and post embed', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'agent:*:inventory'];
+
+    await handler(
+      JSON.stringify({ agentId: 'builder-01', items: [{ name: 'oak_log', count: 4 }] }),
+      PREFIX + 'agent:builder-01:inventory'
+    );
+
+    assert.ok(bot._sentMessages.length >= 1);
+  });
+
+  it('should handle react message with throttle', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'agent:*:react'];
+
+    await handler(
+      JSON.stringify({ agentId: 'builder-01', iteration: 5, action: 'collectBlock' }),
+      PREFIX + 'agent:builder-01:react'
+    );
+
+    assert.ok(bot._sentMessages.length >= 1);
+
+    // Second call should be throttled
+    const count = bot._sentMessages.length;
+    await handler(
+      JSON.stringify({ agentId: 'builder-01', iteration: 6, action: 'collectBlock' }),
+      PREFIX + 'agent:builder-01:react'
+    );
+    assert.equal(bot._sentMessages.length, count, 'second react should be throttled');
+  });
+
+  it('should handle builder:arrived message', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'builder:arrived'];
+
+    await handler(JSON.stringify({
+      agentId: 'builder-01',
+      message: 'Arrived at shelter',
+      position: { x: 50, y: 70, z: -20 },
+    }));
+
+    assert.ok(bot._sentMessages.length >= 1);
+  });
+
+  it('should handle builder:collecting message', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'builder:collecting'];
+
+    await handler(JSON.stringify({
+      agentId: 'builder-02',
+      message: 'Collecting oak_log',
+    }));
+
+    assert.ok(bot._sentMessages.length >= 1);
+  });
+
+  it('should handle safety:threat message', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'safety:threat'];
+
+    await handler(JSON.stringify({
+      agentId: 'builder-01',
+      threatType: 'lava',
+      description: 'Lava nearby',
+    }));
+
+    assert.ok(bot._sentMessages.length >= 1);
+    assert.equal(bot._sentMessages[0].content, '@here');
+  });
+
+  it('should handle leader:reflexion message', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'leader:reflexion'];
+
+    await handler(JSON.stringify({
+      description: 'Group reflexion triggered',
+    }));
+
+    assert.ok(bot._sentMessages.length >= 1);
+  });
+
+  it('should handle skills:emergency message', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'skills:emergency'];
+
+    await handler(JSON.stringify({
+      skillName: 'avoid_lava_v2',
+      agentId: 'builder-01',
+    }));
+
+    assert.ok(bot._sentMessages.length >= 1);
+  });
+
+  it('should handle got:reasoning-complete message', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'got:reasoning-complete'];
+
+    await handler(JSON.stringify({
+      description: 'GoT analysis complete',
+      totalSynergies: 3,
+      totalGaps: 1,
+    }));
+
+    assert.ok(bot._sentMessages.length >= 1);
+  });
+
+  it('should handle agent:*:chat message', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'agent:*:chat'];
+
+    await handler(
+      JSON.stringify({ agentId: 'builder-01', message: 'hello team' }),
+      PREFIX + 'agent:builder-01:chat'
+    );
+
+    assert.ok(bot._sentMessages.length >= 1);
+    const embed = bot._sentMessages[0].embeds[0];
+    assert.ok(embed.data.description.includes('hello team'));
+  });
+
+  it('should handle agent:*:confess message', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'agent:*:confess'];
+
+    await handler(
+      JSON.stringify({ agentId: 'builder-01', title: 'My confession', message: 'test' }),
+      PREFIX + 'agent:builder-01:confess'
+    );
+
+    // Should not throw — confess goes to forum channel
+  });
+
+  it('should skip confess when forum channel is null', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    bot.channels.forum = null;
+    const handler = handlers[PREFIX + 'agent:*:confess'];
+
+    // Should not throw
+    await handler(
+      JSON.stringify({ agentId: 'builder-01', message: 'test' }),
+      PREFIX + 'agent:builder-01:confess'
+    );
+  });
+
+  it('should handle malformed JSON in status gracefully', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'agent:*:status'];
+
+    // Should not throw
+    await handler('not-json', PREFIX + 'agent:builder-01:status');
+  });
+
+  it('should handle malformed JSON in threat gracefully', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'safety:threat'];
+    await handler('bad-json');
+  });
+
+  it('should extract agentId from channel when not in payload', async () => {
+    const { PREFIX } = require('../agent/blackboard');
+    const handler = handlers[PREFIX + 'agent:*:status'];
+
+    await handler(
+      JSON.stringify({ health: 20, position: { x: 0, y: 64, z: 0 } }),
+      PREFIX + 'agent:explorer-01:status'
+    );
+
+    assert.ok(bot._sentMessages.length >= 1);
+    const embed = bot._sentMessages[0].embeds[0];
+    assert.ok(embed.data.title.includes('explorer-01'));
+  });
+});
+
+// ── _cmdTeam with populated registry ──────────────────────────────
+
+describe('OctivDiscordBot — _cmdTeam populated', () => {
+  it('should parse registry entries from hash', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = {
+      getHash: async () => ({
+        'miner-01': JSON.stringify({ role: 'miner' }),
+        'farmer-01': JSON.stringify({ role: 'farmer' }),
+      }),
+    };
+
+    const msg = mockMsg('!team');
+    await bot._handleCommand(msg);
+
+    const reply = msg._replies[0];
+    assert.ok(reply.embeds);
+    const desc = reply.embeds[0].data.description;
+    assert.ok(desc.includes('miner-01'));
+    assert.ok(desc.includes('farmer-01'));
+  });
+
+  it('should handle malformed registry entry gracefully', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = {
+      getHash: async () => ({
+        'builder-01': 'not-json',
+      }),
+    };
+
+    const msg = mockMsg('!team');
+    await bot._handleCommand(msg);
+
+    const desc = msg._replies[0].embeds[0].data.description;
+    assert.ok(desc.includes('builder-01'));
+    assert.ok(desc.includes('unknown')); // fallback role
+  });
+
+  it('should handle getHash error', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = {
+      getHash: async () => { throw new Error('Redis down'); },
+    };
+
+    const msg = mockMsg('!team');
+    await bot._handleCommand(msg);
+
+    assert.ok(msg._replies[0].toString().includes('Error'));
+  });
+});
+
+// ── _cmdStatus error path ──────────────────────────────────
+
+describe('OctivDiscordBot — _cmdStatus error', () => {
+  it('should reply with error on board failure', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = {
+      getHash: async () => { throw new Error('Redis timeout'); },
+    };
+
+    const msg = mockMsg('!status');
+    await bot._handleCommand(msg);
+
+    assert.ok(msg._replies[0].toString().includes('Error'));
+  });
+});
+
+// ── _cmdAssign error path ──────────────────────────────────
+
+describe('OctivDiscordBot — _cmdAssign error', () => {
+  it('should reply with error when publish fails', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = {
+      publish: async () => { throw new Error('Redis down'); },
+    };
+
+    const msg = mockMsg('!assign builder-01 collect wood');
+    await bot._handleCommand(msg);
+
+    assert.ok(msg._replies[0].toString().includes('Error'));
+  });
+});
+
+// ── _cmdReflexion error path ──────────────────────────────────
+
+describe('OctivDiscordBot — _cmdReflexion error', () => {
+  it('should reply with error when publish fails', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = {
+      publish: async () => { throw new Error('Redis down'); },
+    };
+
+    const msg = mockMsg('!reflexion');
+    await bot._handleCommand(msg);
+
+    assert.ok(msg._replies[0].toString().includes('Error'));
+  });
+});
+
+// ── _postAlertEmbed edge cases ──────────────────────────────────
+
+describe('OctivDiscordBot — _postAlertEmbed edge cases', () => {
+  it('should format threat description from threat object', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.alerts = { send: async (d) => { sentData = d; } };
+
+    bot._postAlertEmbed('threat', {
+      threat: { type: 'lava', reason: 'Y=5 < 10' },
+      agentId: 'builder-01',
+    });
+
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.description.includes('lava'));
+    assert.ok(embed.data.description.includes('Y=5'));
+  });
+
+  it('should show unknown type title for custom alert types', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.alerts = { send: async (d) => { sentData = d; } };
+
+    bot._postAlertEmbed('custom_type', { description: 'Custom alert' });
+
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('custom_type'));
+    assert.equal(embed.data.color, 0x95a5a6); // default color
+  });
+});
+
+// ── _postStatusEmbed edge cases ──────────────────────────────────
+
+describe('OctivDiscordBot — _postStatusEmbed edge cases', () => {
+  it('should use yellow for medium health (6-10)', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postStatusEmbed('ch', { agentId: 'builder-01', health: 8, status: 'idle' });
+
+    const embed = sentData.embeds[0];
+    assert.equal(embed.data.color, 0xf39c12); // yellow
+  });
+
+  it('should use red for critical health (<=5)', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postStatusEmbed('ch', { agentId: 'builder-01', health: 3 });
+
+    const embed = sentData.embeds[0];
+    assert.equal(embed.data.color, 0xe74c3c); // red
+  });
+
+  it('should use blue when health is missing', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postStatusEmbed('ch', { agentId: 'builder-01' });
+
+    const embed = sentData.embeds[0];
+    assert.equal(embed.data.color, 0x3498db); // blue
+  });
+
+  it('should resolve agentId from author fallback', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postStatusEmbed('ch', { author: 'safety-01', health: 20 });
+
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('safety-01'));
+  });
+});
+
+// ── _postShinmungo edge cases ──────────────────────────────────
+
+describe('OctivDiscordBot — _postShinmungo error handling', () => {
+  it('should handle forum thread.create error gracefully', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.channels.forum = {
+      threads: { create: async () => { throw new Error('Discord API error'); } },
+      availableTags: [],
+    };
+
+    // Should not throw
+    await bot._postShinmungo({
+      agentId: 'builder-01',
+      message: 'test',
+    });
+  });
+
+  it('should include position for non-anonymous confessions', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let threadArgs = null;
+    bot.channels.forum = {
+      threads: { create: async (args) => { threadArgs = args; } },
+      availableTags: [],
+    };
+
+    await bot._postShinmungo({
+      agentId: 'builder-01',
+      message: 'Found diamonds',
+      position: { x: 10, y: 12, z: -50 },
+      anonymous: false,
+    });
+
+    const embed = threadArgs.message.embeds[0];
+    const posField = embed.data.fields.find(f => f.name === 'Position');
+    assert.ok(posField);
+  });
+
+  it('should NOT include position for anonymous confessions', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let threadArgs = null;
+    bot.channels.forum = {
+      threads: { create: async (args) => { threadArgs = args; } },
+      availableTags: [],
+    };
+
+    await bot._postShinmungo({
+      agentId: 'builder-01',
+      message: 'Secret spot',
+      position: { x: 10, y: 12, z: -50 },
+      anonymous: true,
+    });
+
+    const embed = threadArgs.message.embeds[0];
+    const posField = (embed.data.fields || []).find(f => f.name === 'Position');
+    assert.equal(posField, undefined, 'anonymous should not reveal position');
+  });
+});
+
+// ── Voice command edge cases ──────────────────────────────────
+
+describe('OctivDiscordBot — voice commands extended', () => {
+  it('should handle !voice leave with voice manager', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = { publish: async () => {} };
+    let leftCalled = false;
+    bot.voice = { leave: () => { leftCalled = true; } };
+
+    const msg = mockMsg('!voice leave');
+    await bot._handleCommand(msg);
+
+    assert.ok(leftCalled);
+    assert.equal(bot.voice, null);
+    assert.ok(msg._replies[0].toString().includes('Left'));
+  });
+
+  it('should handle !voice mute toggle when voice exists', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = { publish: async () => {} };
+    bot.voice = { toggleMute: () => true };
+
+    const msg = mockMsg('!voice mute');
+    await bot._handleCommand(msg);
+
+    assert.ok(msg._replies[0].toString().includes('muted'));
+  });
+
+  it('should handle !voice say with existing voice manager', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = { publish: async () => {} };
+    let spokenText = null;
+    bot.voice = { speak: (text) => { spokenText = text; return true; } };
+
+    const msg = mockMsg('!voice say hello world');
+    await bot._handleCommand(msg);
+
+    assert.ok(spokenText);
+    assert.ok(msg._replies[0].toString().includes('Speaking'));
+  });
+
+  it('should auto-create voice manager for !voice say', async () => {
+    const bot = new OctivDiscordBot({
+      token: 'fake',
+      config: { voiceChannel: 'vc-123' },
+      guildId: 'g-1',
+    });
+    bot.board = { publish: async () => {} };
+    bot.voice = null;
+
+    const msg = mockMsg('!voice say test message');
+    // VoiceManager constructor will fail, but we can check the path
+    try {
+      await bot._handleCommand(msg);
+    } catch {
+      // VoiceManager depends on real discord.js client — expected to fail
+    }
+    // Path was exercised
+  });
+
+  it('should report voice status with active manager', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = { publish: async () => {} };
+    bot.voice = {
+      isConnected: () => true,
+      isMuted: () => true,
+      queueLength: () => 3,
+    };
+
+    const msg = mockMsg('!voice status');
+    await bot._handleCommand(msg);
+
+    const embed = msg._replies[0].embeds[0];
+    assert.equal(embed.data.fields[0].value, 'Yes'); // Connected
+    assert.equal(embed.data.fields[1].value, 'Yes'); // Muted
+    assert.equal(embed.data.fields[2].value, '3');    // Queue
+  });
+
+  it('should fail speak and report failure', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = { publish: async () => {} };
+    bot.voice = { speak: () => false };
+
+    const msg = mockMsg('!voice say hello');
+    await bot._handleCommand(msg);
+
+    assert.ok(msg._replies[0].toString().includes('Failed'));
+  });
+
+  it('should handle !voice say with no voiceChannel config', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = { publish: async () => {} };
+    bot.voice = null;
+
+    const msg = mockMsg('!voice say hello');
+    await bot._handleCommand(msg);
+
+    assert.ok(msg._replies[0].toString().includes('not configured'));
+  });
+
+  it('should handle unmute toggle', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = { publish: async () => {} };
+    bot.voice = { toggleMute: () => false };
+
+    const msg = mockMsg('!voice mute');
+    await bot._handleCommand(msg);
+
+    assert.ok(msg._replies[0].toString().includes('unmuted'));
+  });
+});

@@ -294,3 +294,217 @@ describe('RuminationEngine — RUMINATION_INTERVAL', () => {
     assert.equal(RUMINATION_INTERVAL, 5 * 60 * 1000);
   });
 });
+
+// ── failure_pattern action path (Stomach 4 lines 212-237) ────
+
+describe('RuminationEngine — failure_pattern actions', () => {
+  it('should update note digest count and add rumination note', async () => {
+    const setHashCalls = [];
+    const writeVaultCalls = [];
+    const zk = {
+      getAllNotes: async () => ({}),
+      _linkKey: (a, b) => [a, b].sort().join('::'),
+      recordUsage: async () => ({ tierUp: false }),
+      getNote: async (id) => id === 'sword_v1' ? {
+        id: 'sword_v1',
+        status: 'active',
+        digestCount: 0,
+        lastDigestedAt: 0,
+        ruminationNotes: [],
+        xp: 5,
+        uses: 6,
+        successRate: 0.2,
+        links: [],
+      } : null,
+      board: {
+        setHashField: async (hash, key, val) => { setHashCalls.push({ hash, key, val }); },
+        getConfig: async () => null,
+      },
+      _writeVaultNote: async (note) => { writeVaultCalls.push(note); },
+    };
+
+    const engine = new RuminationEngine(zk);
+    engine.board = {
+      connect: async () => {},
+      disconnect: async () => {},
+      publish: async () => {},
+    };
+
+    // Feed 5 experiences: 4 failures, 1 success — triggers failure_pattern
+    for (let i = 0; i < 4; i++) {
+      engine.feed({ errorType: 'combat:death', skillUsed: 'sword_v1', succeeded: false });
+    }
+    engine.feed({ errorType: 'combat:death', skillUsed: 'sword_v1', succeeded: true });
+
+    const result = await engine.digest();
+
+    // Should have processed failure_pattern insight
+    assert.ok(result.insights.some(i => i.type === 'failure_pattern'));
+    assert.ok(result.actions.some(a => a.action === 'new_skill_needed'));
+
+    // Note should have been updated
+    assert.ok(setHashCalls.length >= 1, 'Should persist updated note');
+    assert.ok(writeVaultCalls.length >= 1, 'Should write vault note');
+    assert.equal(setHashCalls[0].val.digestCount, 1);
+    assert.equal(setHashCalls[0].val.ruminationNotes.length, 1);
+  });
+
+  it('should skip when getNote returns null', async () => {
+    const zk = {
+      getAllNotes: async () => ({}),
+      _linkKey: (a, b) => [a, b].sort().join('::'),
+      recordUsage: async () => ({ tierUp: false }),
+      getNote: async () => null,
+      board: {
+        setHashField: async () => {},
+        getConfig: async () => null,
+      },
+      _writeVaultNote: async () => {},
+    };
+
+    const engine = new RuminationEngine(zk);
+    engine.board = {
+      connect: async () => {},
+      disconnect: async () => {},
+      publish: async () => {},
+    };
+
+    for (let i = 0; i < 4; i++) {
+      engine.feed({ errorType: 'test:fail', skillUsed: 'missing_skill', succeeded: false });
+    }
+    engine.feed({ errorType: 'test:fail', skillUsed: 'missing_skill', succeeded: true });
+
+    // Should not throw even when note is null
+    const result = await engine.digest();
+    assert.ok(result.digested >= 5);
+  });
+});
+
+// ── deepRuminate (lines 270-324) ────────────────────────────
+
+describe('RuminationEngine — deepRuminate', () => {
+  it('should return empty results for no active notes', async () => {
+    const zk = createMockZettelkasten({});
+    const engine = new RuminationEngine(zk);
+    engine.board = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getConfig: async () => null,
+    };
+
+    const result = await engine.deepRuminate();
+    assert.deepEqual(result.discoveries, []);
+    assert.equal(result.reDigested, 0);
+  });
+
+  it('should find compound candidates for linked notes', async () => {
+    const noteA = {
+      id: 'dig', status: 'active', successRate: 0.8, xp: 10,
+      links: ['place'], uses: 10, digestCount: 2,
+      ruminationNotes: [],
+    };
+    const noteB = {
+      id: 'place', status: 'active', successRate: 0.7, xp: 8,
+      links: ['dig'], uses: 8, digestCount: 1,
+      ruminationNotes: [],
+    };
+
+    const zk = createMockZettelkasten({ dig: noteA, place: noteB });
+    zk.getNote = async (id) => {
+      if (id === 'compound_dig_place') return null; // no existing compound
+      return null;
+    };
+
+    const engine = new RuminationEngine(zk);
+    engine.board = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getConfig: async (key) => {
+        if (key.includes('dig') && key.includes('place')) {
+          return { strength: 0.7, coOccurrences: 5 };
+        }
+        return null;
+      },
+    };
+
+    const result = await engine.deepRuminate();
+    assert.equal(result.discoveries.length, 1);
+    assert.equal(result.discoveries[0].type, 'compound_candidate');
+    assert.equal(result.discoveries[0].skillA, 'dig');
+    assert.equal(result.discoveries[0].skillB, 'place');
+  });
+
+  it('should re-digest dormant skills', async () => {
+    const setHashCalls = [];
+    const dormant = {
+      id: 'old_skill', status: 'active', successRate: 0.3, xp: 5,
+      links: [], uses: 10, digestCount: 1,
+      ruminationNotes: [],
+    };
+
+    const zk = createMockZettelkasten({ old_skill: dormant });
+    zk.board.setHashField = async (hash, key, val) => { setHashCalls.push({ key, val }); };
+
+    const engine = new RuminationEngine(zk);
+    engine.board = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getConfig: async () => null,
+    };
+
+    const result = await engine.deepRuminate();
+    assert.equal(result.reDigested, 1);
+    assert.ok(setHashCalls.length >= 1);
+    assert.equal(setHashCalls[0].val.digestCount, 2);
+    assert.equal(setHashCalls[0].val.ruminationNotes.length, 1);
+  });
+
+  it('should skip non-active notes', async () => {
+    const inactive = {
+      id: 'deprecated', status: 'deprecated', successRate: 0.1,
+      xp: 1, links: [], uses: 20, digestCount: 0,
+      ruminationNotes: [],
+    };
+
+    const zk = createMockZettelkasten({ deprecated: inactive });
+    const engine = new RuminationEngine(zk);
+    engine.board = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getConfig: async () => null,
+    };
+
+    const result = await engine.deepRuminate();
+    assert.equal(result.reDigested, 0);
+    assert.deepEqual(result.discoveries, []);
+  });
+
+  it('should skip existing compound pairs', async () => {
+    const noteA = {
+      id: 'a', status: 'active', successRate: 0.9, xp: 20,
+      links: ['b'], uses: 15, digestCount: 3,
+      ruminationNotes: [],
+    };
+    const noteB = {
+      id: 'b', status: 'active', successRate: 0.8, xp: 15,
+      links: ['a'], uses: 12, digestCount: 2,
+      ruminationNotes: [],
+    };
+
+    const zk = createMockZettelkasten({ a: noteA, b: noteB });
+    zk.getNote = async (id) => {
+      if (id === 'compound_a_b') return { id: 'compound_a_b' }; // exists
+      return null;
+    };
+
+    const engine = new RuminationEngine(zk);
+    engine.board = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getConfig: async () => ({ strength: 0.9, coOccurrences: 10 }),
+    };
+
+    const result = await engine.deepRuminate();
+    assert.equal(result.discoveries.length, 0); // skipped existing
+  });
+});

@@ -2,7 +2,7 @@
  * SafetyAgent Tests — AC-8: Threat Detection
  * Usage: node --test test/safety.test.js
  */
-const { describe, it, before, after } = require('node:test');
+const { describe, it, before, after, mock } = require('node:test');
 const assert = require('node:assert/strict');
 
 describe('SafetyAgent — Threat Detection (AC-8)', () => {
@@ -294,5 +294,129 @@ describe('SafetyAgent — Threat Debounce', () => {
 
         assert.equal(emergencyCount, 1, 'Only 1 emergency should pass through debounce');
         assert.equal(safety.consecutiveFailures, 1);
+    });
+});
+
+// ── _startMonitoring subscription callbacks ──────────────────────────
+
+describe('SafetyAgent — _startMonitoring health callback', () => {
+    let SafetyAgent;
+
+    before(() => {
+        SafetyAgent = require('../agent/safety').SafetyAgent;
+    });
+
+    function createMonitoredSafety() {
+        const safety = new SafetyAgent();
+        // Replace board + subscriber with mocks
+        const handlers = {};
+        safety.board = {
+            connect: mock.fn(async () => {}),
+            publish: mock.fn(async () => {}),
+            disconnect: mock.fn(async () => {}),
+            createSubscriber: mock.fn(async () => ({
+                pSubscribe: mock.fn(async (pattern, handler) => {
+                    handlers[pattern] = handler;
+                }),
+                pUnsubscribe: mock.fn(async () => {}),
+                disconnect: mock.fn(async () => {}),
+            })),
+        };
+        safety.subscriber = null;
+        safety.chat = {
+            chat: mock.fn(async () => {}),
+            confess: mock.fn(async () => {}),
+        };
+        return { safety, handlers };
+    }
+
+    it('should detect threat from health message and call handleThreat', async () => {
+        const { safety, handlers } = createMonitoredSafety();
+        safety.subscriber = await safety.board.createSubscriber();
+        safety._startMonitoring();
+
+        const healthHandler = handlers['octiv:agent:builder-*:health'];
+        assert.ok(healthHandler, 'Should register health handler');
+
+        // Low Y position triggers lava threat
+        await healthHandler(JSON.stringify({
+            health: 15,
+            position: { x: 0, y: 5, z: 0 },
+            velocity: { x: 0, y: 0, z: 0 },
+            agentId: 'builder-01',
+        }));
+
+        // handleThreat should have published
+        assert.ok(safety.board.publish.mock.callCount() >= 1);
+        assert.equal(safety.consecutiveFailures, 1);
+    });
+
+    it('should confess near_death when health <= 5', async () => {
+        const { safety, handlers } = createMonitoredSafety();
+        safety.subscriber = await safety.board.createSubscriber();
+        safety._startMonitoring();
+
+        const healthHandler = handlers['octiv:agent:builder-*:health'];
+        await healthHandler(JSON.stringify({
+            health: 3,
+            position: { x: 0, y: 64, z: 0 },
+            velocity: { x: 0, y: 0, z: 0 },
+            agentId: 'builder-01',
+        }));
+
+        assert.ok(safety.chat.confess.mock.callCount() >= 1);
+        const confessCall = safety.chat.confess.mock.calls[0];
+        assert.equal(confessCall.arguments[0], 'near_death');
+    });
+
+    it('should chat all_clear and reset failures when no threat', async () => {
+        const { safety, handlers } = createMonitoredSafety();
+        safety.consecutiveFailures = 3;
+        safety.subscriber = await safety.board.createSubscriber();
+        safety._startMonitoring();
+
+        const healthHandler = handlers['octiv:agent:builder-*:health'];
+        await healthHandler(JSON.stringify({
+            health: 20,
+            position: { x: 0, y: 64, z: 0 },
+            velocity: { x: 0, y: 0, z: 0 },
+        }));
+
+        assert.equal(safety.consecutiveFailures, 0);
+        assert.ok(safety.chat.chat.mock.callCount() >= 1);
+        assert.equal(safety.chat.chat.mock.calls[0].arguments[0], 'all_clear');
+    });
+
+    it('should handle malformed JSON gracefully', async () => {
+        const { safety, handlers } = createMonitoredSafety();
+        safety.subscriber = await safety.board.createSubscriber();
+        safety._startMonitoring();
+
+        const healthHandler = handlers['octiv:agent:builder-*:health'];
+        // Should not throw
+        await healthHandler('not-json');
+        assert.equal(safety.consecutiveFailures, 0);
+    });
+
+    it('should update reactIterations from react messages', async () => {
+        const { safety, handlers } = createMonitoredSafety();
+        safety.subscriber = await safety.board.createSubscriber();
+        safety._startMonitoring();
+
+        const reactHandler = handlers['octiv:agent:builder-*:react'];
+        assert.ok(reactHandler, 'Should register react handler');
+
+        await reactHandler(JSON.stringify({ iteration: 42 }));
+        assert.equal(safety.reactIterations, 42);
+    });
+
+    it('should handle malformed react JSON gracefully', async () => {
+        const { safety, handlers } = createMonitoredSafety();
+        safety.subscriber = await safety.board.createSubscriber();
+        safety._startMonitoring();
+
+        const reactHandler = handlers['octiv:agent:builder-*:react'];
+        await reactHandler('bad-json');
+        assert.equal(safety.reactIterations, 0); // unchanged
     });
 });

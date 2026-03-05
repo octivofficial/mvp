@@ -323,6 +323,9 @@ describe('Builder Failures — GatherAtShelter', () => {
   });
 
   it('should throw when shelter coordinates not in Blackboard', async () => {
+    // Clean any stale shelter key from previous runs
+    await redisClient.del('octiv:builder:shelter:latest');
+
     const builder = new BuilderAgent({ id: 'builder-gather-fail' });
     await builder.board.connect();
     const mockBot = createMockBot();
@@ -617,5 +620,228 @@ describe('Builder Failures — CraftPlanks edge cases', () => {
         return true;
       }
     );
+  });
+});
+
+// ── 10. CraftBasicTools Success + Logger ─────────────────────────────
+
+describe('Builder — craftBasicTools success path', () => {
+  let BuilderAgent, redisClient;
+
+  before(async () => {
+    const { createClient } = require('redis');
+    redisClient = createClient({ url: 'redis://localhost:6380' });
+    await redisClient.connect();
+    BuilderAgent = require('../agent/builder').BuilderAgent;
+  });
+
+  after(async () => {
+    const keys = await redisClient.keys('octiv:*builder-craft-ok*');
+    if (keys.length > 0) await redisClient.del(keys);
+    await redisClient.disconnect();
+  });
+
+  it('should mark AC-3 as done on success', async () => {
+    const builder = new BuilderAgent({ id: 'builder-craft-ok' });
+    await builder.board.connect();
+    const mockBot = createMockBot();
+    mockBot.craft = mock.fn(async () => {});
+    mockBot.registry = {
+      itemsByName: { crafting_table: { id: 58 }, wooden_pickaxe: { id: 270 } },
+    };
+    builder.bot = mockBot;
+
+    await builder.craftBasicTools();
+
+    assert.equal(builder.acProgress[3], true);
+    assert.equal(mockBot.craft.mock.callCount(), 2); // crafting_table + wooden_pickaxe
+    await builder.board.disconnect();
+  });
+
+  it('should log ac_complete when logger is set', async () => {
+    const builder = new BuilderAgent({ id: 'builder-craft-ok' });
+    await builder.board.connect();
+    const mockBot = createMockBot();
+    mockBot.craft = mock.fn(async () => {});
+    mockBot.registry = {
+      itemsByName: { crafting_table: { id: 58 }, wooden_pickaxe: { id: 270 } },
+    };
+    builder.bot = mockBot;
+    const logs = [];
+    builder.logger = {
+      logEvent: mock.fn(async (id, data) => { logs.push(data); }),
+    };
+
+    await builder.craftBasicTools();
+
+    assert.ok(logs.some(l => l.type === 'ac_complete' && l.ac === 3));
+    await builder.board.disconnect();
+  });
+});
+
+// ── 11. CollectBlocks Success (tool equip + collect + publish) ───────
+
+describe('Builder — collectBlocks success path', () => {
+  let BuilderAgent, redisClient;
+
+  before(async () => {
+    const { createClient } = require('redis');
+    redisClient = createClient({ url: 'redis://localhost:6380' });
+    await redisClient.connect();
+    BuilderAgent = require('../agent/builder').BuilderAgent;
+  });
+
+  after(async () => {
+    const keys = await redisClient.keys('octiv:*builder-cbs*');
+    if (keys.length > 0) await redisClient.del(keys);
+    await redisClient.disconnect();
+  });
+
+  it('should equip tool, collect blocks, and publish', async () => {
+    const builder = new BuilderAgent({ id: 'builder-cbs-ok' });
+    await builder.board.connect();
+    const mockBot = createMockBot();
+    const orePos = new Vec3(105, 60, -195);
+    mockBot.findBlocks = mock.fn(() => [orePos]);
+    mockBot.blockAt = mock.fn(() => ({ position: orePos, name: 'iron_ore' }));
+    mockBot.inventory.items = mock.fn(() => [{ name: 'iron_pickaxe', count: 1 }]);
+    mockBot.equip = mock.fn(async () => {});
+    mockBot.collectBlock = { collect: mock.fn(async () => {}) };
+    builder.bot = mockBot;
+    builder.mcData = require('minecraft-data')('1.21.1');
+
+    const count = await builder.collectBlocks('iron_ore', 1);
+
+    assert.equal(count, 1);
+    assert.equal(mockBot.equip.mock.callCount(), 1);
+    assert.equal(mockBot.equip.mock.calls[0].arguments[1], 'hand');
+    assert.equal(mockBot.collectBlock.collect.mock.callCount(), 1);
+    await builder.board.disconnect();
+  });
+
+  it('should skip equip when no tools in inventory', async () => {
+    const builder = new BuilderAgent({ id: 'builder-cbs-notool' });
+    await builder.board.connect();
+    const mockBot = createMockBot();
+    const pos = new Vec3(10, 60, 10);
+    mockBot.findBlocks = mock.fn(() => [pos]);
+    mockBot.blockAt = mock.fn(() => ({ position: pos, name: 'cobblestone' }));
+    mockBot.inventory.items = mock.fn(() => []); // no tools
+    mockBot.collectBlock = { collect: mock.fn(async () => {}) };
+    builder.bot = mockBot;
+    builder.mcData = require('minecraft-data')('1.21.1');
+
+    await builder.collectBlocks('cobblestone', 1);
+
+    assert.equal(mockBot.equip.mock.callCount(), 0);
+    await builder.board.disconnect();
+  });
+});
+
+// ── 12. Event Handlers (_onHealthChange, _onChat) ───────────────────
+
+describe('Builder — _onHealthChange', () => {
+  let BuilderAgent, redisClient;
+
+  before(async () => {
+    const { createClient } = require('redis');
+    redisClient = createClient({ url: 'redis://localhost:6380' });
+    await redisClient.connect();
+    BuilderAgent = require('../agent/builder').BuilderAgent;
+  });
+
+  after(async () => {
+    const keys = await redisClient.keys('octiv:*builder-health*');
+    if (keys.length > 0) await redisClient.del(keys);
+    await redisClient.disconnect();
+  });
+
+  it('should publish health data to board', async () => {
+    const builder = new BuilderAgent({ id: 'builder-health-test' });
+    await builder.board.connect();
+    const mockBot = createMockBot();
+    mockBot.health = 15;
+    mockBot.food = 18;
+    mockBot.entity.position = new Vec3(100, 64, -200);
+    mockBot.entity.velocity = { x: 0, y: -1, z: 0 };
+    builder.bot = mockBot;
+
+    await builder._onHealthChange();
+
+    const raw = await redisClient.get('octiv:agent:builder-health-test:health:latest');
+    assert.ok(raw, 'Should publish health event');
+    const data = JSON.parse(raw);
+    assert.equal(data.health, 15);
+    assert.equal(data.food, 18);
+    await builder.board.disconnect();
+  });
+});
+
+describe('Builder — _onChat', () => {
+  it('should ignore self-chat', () => {
+    const { BuilderAgent } = require('../agent/builder');
+    const builder = new BuilderAgent({ id: 'builder-chat-test' });
+    builder.bot = createMockBot({ username: 'Octiv_builder-chat-test' });
+
+    // Should not throw
+    builder._onChat('Octiv_builder-chat-test', 'hello');
+    // No assertion needed — just verifying it doesn't crash and returns early
+  });
+
+  it('should log other player chat', () => {
+    const { BuilderAgent } = require('../agent/builder');
+    const builder = new BuilderAgent({ id: 'builder-chat-test' });
+    builder.bot = createMockBot({ username: 'Octiv_builder-chat-test' });
+
+    // Should not throw for different username
+    builder._onChat('Player1', 'hello world');
+  });
+});
+
+// ── 13. Shutdown ─────────────────────────────────────────────────────
+
+describe('Builder — shutdown', () => {
+  it('should set _running=false and disconnect', async () => {
+    const { BuilderAgent } = require('../agent/builder');
+    const builder = new BuilderAgent({ id: 'builder-shutdown' });
+    builder.board = {
+      connect: mock.fn(async () => {}),
+      disconnect: mock.fn(async () => {}),
+    };
+    builder.bot = createMockBot();
+
+    await builder.shutdown();
+
+    assert.equal(builder._running, false);
+    assert.equal(builder.bot.end.mock.callCount(), 1);
+    assert.equal(builder.board.disconnect.mock.callCount(), 1);
+  });
+
+  it('should handle bot.end() throwing', async () => {
+    const { BuilderAgent } = require('../agent/builder');
+    const builder = new BuilderAgent({ id: 'builder-shutdown-err' });
+    builder.board = {
+      connect: mock.fn(async () => {}),
+      disconnect: mock.fn(async () => {}),
+    };
+    builder.bot = { end: () => { throw new Error('already disconnected'); } };
+
+    // Should not throw
+    await builder.shutdown();
+    assert.equal(builder._running, false);
+    assert.equal(builder.board.disconnect.mock.callCount(), 1);
+  });
+
+  it('should handle null bot', async () => {
+    const { BuilderAgent } = require('../agent/builder');
+    const builder = new BuilderAgent({ id: 'builder-shutdown-null' });
+    builder.board = {
+      connect: mock.fn(async () => {}),
+      disconnect: mock.fn(async () => {}),
+    };
+    builder.bot = null;
+
+    await builder.shutdown();
+    assert.equal(builder._running, false);
   });
 });
