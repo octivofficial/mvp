@@ -39,7 +39,8 @@ function loadConfig() {
     return {
       statusChannel: process.env.DISCORD_STATUS_CHANNEL,
       alertsChannel: process.env.DISCORD_ALERTS_CHANNEL,
-      commandsChannel: process.env.DISCORD_COMMANDS_CHANNEL
+      commandsChannel: process.env.DISCORD_COMMANDS_CHANNEL,
+      chatChannel: process.env.DISCORD_CHAT_CHANNEL
     };
   }
 }
@@ -143,6 +144,7 @@ class OctivDiscordBot {
     this.channels.status = resolve(this.config.statusChannel, 'status');
     this.channels.alerts = resolve(this.config.alertsChannel, 'alerts');
     this.channels.commands = resolve(this.config.commandsChannel, 'commands');
+    this.channels.chat = resolve(this.config.chatChannel, 'chat');
 
     log.info('discord', 'channels resolved', {
       channels: Object.entries(this.channels)
@@ -248,6 +250,17 @@ class OctivDiscordBot {
         this._postAlertEmbed('got', JSON.parse(message));
       } catch (err) {
         log.error('discord', 'failed to parse GoT message', { error: err.message });
+      }
+    });
+
+    // Agent-to-agent chat -> #neostarz-chat
+    this.subscriber.pSubscribe(PREFIX + 'agent:*:chat', (message, channel) => {
+      try {
+        const data = JSON.parse(message);
+        data.agentId = data.agentId || _extractAgentId(channel);
+        this._postChatMessage(data);
+      } catch (err) {
+        log.error('discord', 'failed to parse chat message', { error: err.message });
       }
     });
 
@@ -414,6 +427,32 @@ class OctivDiscordBot {
 
     const content = isUrgent ? '@here' : '';
     this.channels.alerts.send({ content, embeds: [embed] }).catch(logSendError);
+  }
+
+  _postChatMessage(data) {
+    if (!this.channels.chat) return;
+
+    const agent = data.agentId || 'unknown';
+    const roleColors = {
+      leader: 0xe74c3c,
+      builder: 0x2ecc71,
+      safety: 0xe67e22,
+      explorer: 0x3498db,
+    };
+    const role = data.role || agent.split('-')[0].replace(/^OctivBot_/, '');
+    const color = roleColors[role] || 0x95a5a6;
+
+    const embed = new EmbedBuilder()
+      .setAuthor({ name: agent })
+      .setColor(color)
+      .setDescription(data.message || data.text || '...')
+      .setTimestamp();
+
+    if (data.to) {
+      embed.setFooter({ text: `to ${data.to}` });
+    }
+
+    this.channels.chat.send({ embeds: [embed] }).catch(logSendError);
   }
 
   // --- Discord Commands ---

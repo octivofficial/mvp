@@ -2,5 +2,6 @@
   "statusChannel": "1479003785845149736",
   "alertsChannel": "1479003851246796883",
   "commandsChannel": "1479003893588557894",
+  "chatChannel": "1479008798344745096",
   "_note": "Fill in Discord channel IDs. Token and Guild ID go in .env as DISCORD_TOKEN and DISCORD_GUILD_ID."
 }
