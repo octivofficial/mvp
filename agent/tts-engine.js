@@ -5,6 +5,11 @@
  * Returns readable streams that can be piped into @discordjs/voice AudioResource.
  */
 
+const { createReadStream } = require('fs');
+const { unlink } = require('fs/promises');
+const { join } = require('path');
+const { randomBytes } = require('crypto');
+const os = require('os');
 const { getLogger } = require('./logger');
 const T = require('../config/timeouts');
 
@@ -30,17 +35,25 @@ const VOICES = {
 const DEFAULT_VOICE = VOICES.english.female;
 
 /**
- * Internal: override for testing. Set to a factory function
- * that returns { synthesize(text, voice, opts), toReadable() }.
+ * Internal: override for testing. Set to a function matching
+ *   async (text, voice) => ReadableStream | null
  */
 let _ttsFactory = null;
 
 /**
  * Set a custom TTS factory (for testing).
- * @param {Function|null} factory - () => { synthesize, toReadable }
+ * @param {Function|null} factory - async (text, voice) => ReadableStream | null
  */
 function _setTtsFactory(factory) {
   _ttsFactory = factory;
+}
+
+/**
+ * Generate a temp file path for TTS audio.
+ */
+function _tmpPath() {
+  const id = randomBytes(8).toString('hex');
+  return join(os.tmpdir(), `octiv-tts-${id}.mp3`);
 }
 
 /**
@@ -61,19 +74,28 @@ async function synthesize(text, voice) {
 
   const selectedVoice = voice || DEFAULT_VOICE;
 
-  try {
-    let tts;
-    if (_ttsFactory) {
-      tts = _ttsFactory();
-    } else {
-      const { EdgeTTS } = require('node-edge-tts');
-      tts = new EdgeTTS();
+  // Test override
+  if (_ttsFactory) {
+    try {
+      return await _ttsFactory(truncated, selectedVoice);
+    } catch (err) {
+      log.error('tts-engine', 'test factory failed', { error: err.message });
+      return null;
     }
-    await tts.synthesize(truncated, selectedVoice, { rate: '+0%', pitch: '+0Hz' });
-    const stream = tts.toReadable();
+  }
+
+  const tmpFile = _tmpPath();
+  try {
+    const { EdgeTTS } = require('node-edge-tts');
+    const tts = new EdgeTTS({ voice: selectedVoice, rate: '+0%', pitch: '+0Hz' });
+    await tts.ttsPromise(truncated, tmpFile);
+    const stream = createReadStream(tmpFile);
+    // Clean up temp file after stream is consumed
+    stream.on('close', () => unlink(tmpFile).catch(() => {}));
     return stream;
   } catch (err) {
     log.error('tts-engine', 'synthesis failed', { error: err.message, voice: selectedVoice });
+    unlink(tmpFile).catch(() => {});
     return null;
   }
 }
