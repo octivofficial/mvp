@@ -2,8 +2,7 @@
   "statusChannel": "1479003785845149736",
   "alertsChannel": "1479003851246796883",
   "commandsChannel": "1479003893588557894",
-  "chatChannel": "1479008798344745096",
   "forumChannel": "1479014209126924368",
   "voiceChannel": "1479130953451311186",
-  "_note": "Fill in Discord channel IDs. Token and Guild ID go in .env as DISCORD_TOKEN and DISCORD_GUILD_ID. voiceChannel requires bot CONNECT+SPEAK permissions."
+  "_note": "Fill in Discord channel IDs. Token and Guild ID go in .env as DISCORD_TOKEN and DISCORD_GUILD_ID. voiceChannel requires bot CONNECT+SPEAK permissions. Chat messages go to voiceChannel's built-in text chat."
 }

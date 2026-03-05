@@ -8,7 +8,7 @@
  *   #neostarz-live      — real-time bot activity stream (health, movement, actions)
  *   #neostarz-alerts    — threats, failures, reflexion, GoT events
  *   #neostarz-commands  — bot command interface
- *   #neostarz-chat      — agent-to-agent communication
+ *   #neostarz-voice     — agent-to-agent communication (voice channel built-in text chat + TTS)
  *   #meta-shinmoongo    — forum: anonymous agent confessions (Joseon Shinmungo)
  *
  * Commands:
@@ -63,7 +63,6 @@ function loadConfig() {
       statusChannel: process.env.DISCORD_STATUS_CHANNEL,
       alertsChannel: process.env.DISCORD_ALERTS_CHANNEL,
       commandsChannel: process.env.DISCORD_COMMANDS_CHANNEL,
-      chatChannel: process.env.DISCORD_CHAT_CHANNEL,
       forumChannel: process.env.DISCORD_FORUM_CHANNEL
     };
   }
@@ -172,11 +171,11 @@ class OctivDiscordBot {
     this.channels.status = resolve(this.config.statusChannel, 'status');
     this.channels.alerts = resolve(this.config.alertsChannel, 'alerts');
     this.channels.commands = resolve(this.config.commandsChannel, 'commands');
-    this.channels.chat = resolve(this.config.chatChannel, 'chat');
     this.channels.forum = resolve(this.config.forumChannel, 'forum');
 
-    // Voice channel — auto-join if configured
+    // Voice channel — auto-join if configured; also used as chat channel
     if (this.config.voiceChannel) {
+      this.channels.chat = resolve(this.config.voiceChannel, 'voice-chat');
       this.voice = new VoiceManager(this.client, this.config.voiceChannel, this.guildId);
       this.voice.join();
     }
@@ -330,7 +329,7 @@ class OctivDiscordBot {
       }
     });
 
-    // Agent-to-agent chat -> #neostarz-chat + TTS
+    // Agent-to-agent chat -> voice channel text chat + TTS
     this.subscriber.pSubscribe(PREFIX + 'agent:*:chat', (message, channel) => {
       try {
         const data = JSON.parse(message);
