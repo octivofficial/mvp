@@ -27,12 +27,14 @@
 3. **Parallel everything**: Independent reads, tests, file writes → concurrent
 4. **Auto-push**: Test pass + commit → push (no asking)
 5. **Stale kill**: Outdated refs in agents/skills → fix immediately inline
+6. **NotebookLM sync**: Major milestone → update 1기+2기 sources (parallel via `add_source.py --all`)
 
 ### END → `/simplify end` (one command)
 1. Syntax check all files + no secrets scan
 2. Auto-commit with generated message
 3. Save MEMORY.md + session-log
-4. Report: "Memory saved. Next session picks up from [X]"
+4. **NotebookLM sync**: Generate status report → `add_source.py --all` (1기+2기 parallel)
+5. Report: "Memory saved. Next session picks up from [X]"
 
 ### Auto-Memory & Hooks (runs without manual intervention)
 - **UserPromptSubmit**: Shows git/redis/docker/memory status on every prompt
@@ -374,3 +376,16 @@ See `~/.claude/skills/{skill-name}/SKILL.md` for details.
 - **RCON**: `localhost:25575` / pw in `.env`
 - **CI**: `.github/workflows/ci.yml`
 - **Repo**: https://github.com/octivofficial/mvp (main)
+
+## NotebookLM Notebooks
+| Name | ID | URL | Role |
+|------|-----|-----|------|
+| **1기** Octiv Project Roadmap | `ae1281fe...` | `notebook/ae1281fe-6370-493f-a1bd-afed03263a88` | Director (총괄 감독) — blueprints, roadmap |
+| **2기** OpenClaw Phase 2 | `4f8bd626...` | `notebook/4f8bd626-c548-454a-b36b-fb080d335530` | Field deployment planning |
+
+### NotebookLM Workflow
+- **Source update** (session end / major milestone): `add_source.py --all --source-file report.txt`
+- **Query** (get Gemini analysis): `ask_question.py --notebook-id ID --question "..."`
+- **Sources = knowledge base** (persistent), **Chat = query interface** (ephemeral)
+- **Always parallel**: 1기+2기 source updates run concurrently
+- **Patchright auth**: `~/.claude/skills/notebooklm/.venv/bin/python` (Google login persisted)
