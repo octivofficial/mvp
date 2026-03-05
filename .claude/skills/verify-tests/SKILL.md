@@ -15,9 +15,9 @@ Verify that the Octiv test suite is healthy and all agent files have coverage.
    - Flag any test files that had failures
 
 2. Validate thresholds:
-   - Total tests ≥ 338
+   - Total tests >= 900
    - Failed = 0
-   - Test files ≥ 20
+   - Test files >= 27
 
 3. Coverage map — verify each agent file has a corresponding test:
 
@@ -45,10 +45,20 @@ Verify that the Octiv test suite is healthy and all agent files have coverage.
 | agent/zettelkasten-hooks.js | test/zettelkasten.test.js |
 | agent/vm-sandbox.js | test/safety.test.js |
 | agent/logger.js | test/logger.test.js |
+| agent/agent-chat.js | test/agent-chat.test.js |
+| agent/api-clients.js | test/api-clients.test.js |
+| agent/tts-engine.js | test/tts.test.js |
+| agent/voice-manager.js | test/tts.test.js |
+| agent/vault-sync.js | test/vault-sync.test.js |
+| agent/roles/BaseRole.js | test/base-role.test.js |
+| agent/roles/ExplorerAgent.js | test/dashboard.test.js |
+| agent/roles/WoodcutterAgent.js | test/dashboard.test.js |
+| agent/roles/MinerAgent.js | test/miner-agent.test.js |
+| agent/roles/FarmerAgent.js | test/farmer-agent.test.js |
 
 4. Report:
 ```
-✅ Tests: 338 pass / 0 fail / 3 skip (20 files)
-✅ Coverage: 22/22 agent files have tests
-⚠️  Missing: [list any uncovered files]
+Tests: 913 pass / 0 fail / 3 skip (29 files)
+Coverage: 32/32 agent files have tests
+Missing: [list any uncovered files]
 ```

@@ -339,6 +339,11 @@ describe('LeaderAgent — Skill Injection (Phase 4.4)', () => {
         const { createClient } = require('redis');
         redisClient = createClient({ url: 'redis://localhost:6380' });
         await redisClient.connect();
+        // Clean stale keys from prior test suites (Redis test isolation)
+        const keys = await redisClient.keys('octiv:leader:*');
+        if (keys.length > 0) await redisClient.del(keys);
+        const keys2 = await redisClient.keys('octiv:command:*');
+        if (keys2.length > 0) await redisClient.del(keys2);
         ({ LeaderAgent } = require('../agent/leader'));
     });
 

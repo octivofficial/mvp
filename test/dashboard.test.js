@@ -418,10 +418,13 @@ describe('DashboardServer — Skill Lab API (Phase 6.2)', () => {
         const res = await fetch(`http://localhost:${port}/events`);
         const reader = res.body.getReader();
 
-        await reader.read();
+        await reader.read(); // consume initial "connected" message
 
         await redisClient.publish('octiv:zettelkasten:tier-up',
             JSON.stringify({ skill: 'test', oldTier: 'Novice', newTier: 'Apprentice' }));
+
+        // Allow Redis pub/sub propagation before reading SSE stream
+        await new Promise(r => setTimeout(r, 100));
 
         const { value } = await reader.read();
         const text = new TextDecoder().decode(value);
