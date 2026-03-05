@@ -13,8 +13,13 @@ const T = require('../config/timeouts');
 const { getLogger } = require('./logger');
 const log = getLogger();
 
-const { GoalNear, GoalBlock } = goals;
+const { GoalNear, GoalBlock, GoalXZ } = goals;
 const collectBlock = require('mineflayer-collectblock');
+
+const MAX_WANDER_ATTEMPTS = 10;
+const WANDER_DISTANCE = 25; // blocks
+const SEARCH_RADIUS_INCREMENT = 16;
+const MAX_SEARCH_RADIUS = 128;
 
 class BuilderAgent {
   constructor(config = {}) {
@@ -26,7 +31,7 @@ class BuilderAgent {
     this.actionHistory = [];
     this.acProgress = { 1: false, 2: false, 3: false, 4: false, 5: false };
     this.adaptations = {
-      searchRadius: 32,
+      searchRadius: 64,
       buildSiteRadius: 16,
       waitTicks: 20,
       retries: {},
@@ -102,14 +107,36 @@ class BuilderAgent {
   // ── AC-1: Collect wood ──────────────────────────────────────────
   async collectWood(count = 16) {
     log.info(this.id, `starting wood collection (target: ${count})`);
-    const logIds = ['oak_log', 'spruce_log', 'birch_log'].map(n => this.mcData.blocksByName[n]?.id).filter(Boolean);
+    const LOG_TYPES = [
+      'oak_log', 'spruce_log', 'birch_log', 'jungle_log',
+      'acacia_log', 'dark_oak_log', 'mangrove_log', 'cherry_log',
+    ];
+    const logIds = LOG_TYPES.map(n => this.mcData.blocksByName[n]?.id).filter(Boolean);
 
     this._setupPathfinder();
 
     let collected = 0;
+    let wanderFailures = 0;
     while (collected < count) {
       const woodLog = this.bot.findBlock({ matching: logIds, maxDistance: this.adaptations.searchRadius });
-      if (!woodLog) { await this.bot.waitForTicks(20); continue; }
+      if (!woodLog) {
+        wanderFailures++;
+        log.warn(this.id, `no wood within ${this.adaptations.searchRadius} blocks (attempt ${wanderFailures}/${MAX_WANDER_ATTEMPTS})`);
+
+        if (wanderFailures >= MAX_WANDER_ATTEMPTS) {
+          throw new Error(`no wood found after ${MAX_WANDER_ATTEMPTS} wander attempts`);
+        }
+
+        // Auto-expand search radius every 5 failures
+        if (wanderFailures % 5 === 0 && this.adaptations.searchRadius < MAX_SEARCH_RADIUS) {
+          this.adaptations.searchRadius = Math.min(MAX_SEARCH_RADIUS, this.adaptations.searchRadius + SEARCH_RADIUS_INCREMENT);
+          log.info(this.id, `expanded searchRadius to ${this.adaptations.searchRadius}`);
+        }
+
+        await this._wander();
+        continue;
+      }
+      wanderFailures = 0; // reset on success
 
       await this._goto(new GoalBlock(woodLog.position.x, woodLog.position.y, woodLog.position.z));
       await this.bot.dig(woodLog);
@@ -213,6 +240,25 @@ class BuilderAgent {
     return goto(this.bot, goal, timeoutMs);
   }
 
+  // ── Wander: random exploration when no resources found ────────
+  async _wander() {
+    const pos = this.bot.entity.position;
+    const angle = Math.random() * 2 * Math.PI;
+    const dx = Math.round(Math.cos(angle) * WANDER_DISTANCE);
+    const dz = Math.round(Math.sin(angle) * WANDER_DISTANCE);
+
+    log.info(this.id, `wandering to (${pos.x + dx}, ${pos.z + dz})`);
+    this._setupPathfinder();
+
+    try {
+      await this._goto(new GoalXZ(pos.x + dx, pos.z + dz));
+    } catch (err) {
+      log.warn(this.id, `wander navigation failed: ${err.message}`);
+      // Even if pathfinding fails, we tried — continue searching
+      try { await this.bot.waitForTicks(10); } catch { /* disconnected */ }
+    }
+  }
+
   // ── AC-5 + Skill feedback (delegates to builder-adaptation) ────
   _classifyError(message) { return classifyError(message); }
   async _selfImprove(error) { return selfImprove(this, error); }
@@ -274,7 +320,7 @@ class BuilderAgent {
         if (!shouldRetry) {
           log.warn(this.id, 'max retries reached, skipping action');
         }
-        await this.bot.waitForTicks(this.adaptations.waitTicks);
+        try { await this.bot.waitForTicks(this.adaptations.waitTicks); } catch { /* bot disconnected */ }
       }
     }
   }

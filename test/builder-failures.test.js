@@ -9,6 +9,7 @@
  * - collectWood with no trees nearby
  * - buildShelter with no flat site
  * - gatherAtShelter with no shelter coords
+ * - wandering autonomy (wander, radius expansion, selfImprove chain)
  */
 const { describe, it, before, after, mock } = require('node:test');
 const assert = require('node:assert/strict');
@@ -446,7 +447,138 @@ describe('Builder Failures — CollectBlocks', () => {
   });
 });
 
-// ── 8. CraftPlanks — Edge Cases ─────────────────────────────────────
+// ── 8. Wandering & Autonomous Wood Search ──────────────────────────
+
+describe('Builder — Wandering autonomy', () => {
+  let BuilderAgent, redisClient;
+
+  before(async () => {
+    const { createClient } = require('redis');
+    redisClient = createClient({ url: 'redis://localhost:6380' });
+    await redisClient.connect();
+    BuilderAgent = require('../agent/builder').BuilderAgent;
+  });
+
+  after(async () => {
+    const keys = await redisClient.keys('octiv:*builder-wander*');
+    if (keys.length > 0) await redisClient.del(keys);
+    await redisClient.disconnect();
+  });
+
+  async function createWanderBuilder() {
+    const builder = new BuilderAgent({ id: 'builder-wander-test' });
+    await builder.board.connect();
+    const mockBot = createMockBot();
+    mockBot.entity.position = new Vec3(100, 64, -200);
+    builder.bot = mockBot;
+    builder.mcData = require('minecraft-data')('1.21.1');
+    builder._setupPathfinder = () => {};
+    builder._goto = mock.fn(async () => {});
+    return { builder, mockBot };
+  }
+
+  it('should wander when no wood found instead of waiting in place', async () => {
+    const { builder, mockBot } = await createWanderBuilder();
+
+    // findBlock always null — forces wandering, then throw after MAX attempts
+    mockBot.findBlock = mock.fn(() => null);
+
+    await assert.rejects(
+      () => builder.collectWood(1),
+      (err) => {
+        assert.ok(err.message.includes('no wood found after'), `Expected wander exhaustion, got: ${err.message}`);
+        return true;
+      }
+    );
+
+    // Should have called _goto for wandering (9 times — 10th attempt throws before wander)
+    assert.ok(builder._goto.mock.calls.length >= 9, `Expected >=9 wander calls, got ${builder._goto.mock.calls.length}`);
+    await builder.board.disconnect();
+  });
+
+  it('should auto-expand searchRadius after 5 consecutive failures', async () => {
+    const { builder, mockBot } = await createWanderBuilder();
+    const initialRadius = builder.adaptations.searchRadius; // 64
+
+    mockBot.findBlock = mock.fn(() => null);
+
+    await assert.rejects(() => builder.collectWood(1));
+
+    // After 5 failures, should have expanded
+    assert.ok(builder.adaptations.searchRadius > initialRadius,
+      `searchRadius should expand from ${initialRadius}, got ${builder.adaptations.searchRadius}`);
+    await builder.board.disconnect();
+  });
+
+  it('should reset failure counter when wood is found', async () => {
+    const { builder, mockBot } = await createWanderBuilder();
+    let callCount = 0;
+
+    // First 3 calls: no wood. 4th call: wood found.
+    const fakeLog = { position: new Vec3(110, 64, -200), name: 'oak_log' };
+    mockBot.findBlock = mock.fn(() => {
+      callCount++;
+      return callCount <= 3 ? null : fakeLog;
+    });
+    mockBot.dig = mock.fn(async () => {});
+
+    await builder.collectWood(1);
+
+    // Should have wandered 3 times, then found wood
+    assert.equal(builder._goto.mock.calls.length, 4, '3 wander + 1 goto wood');
+    await builder.board.disconnect();
+  });
+
+  it('should search all 8 wood types', async () => {
+    const { builder, mockBot } = await createWanderBuilder();
+
+    // Track what matching IDs are passed
+    let matchingIds;
+    mockBot.findBlock = mock.fn((opts) => {
+      matchingIds = opts.matching;
+      return null;
+    });
+
+    await assert.rejects(() => builder.collectWood(1));
+
+    // Should include more than just 3 types
+    assert.ok(matchingIds.length >= 6, `Expected >=6 wood types, got ${matchingIds.length}`);
+    await builder.board.disconnect();
+  });
+
+  it('_wander should handle pathfinder failure gracefully', async () => {
+    const { builder } = await createWanderBuilder();
+    // Make _goto throw (simulating pathfinder failure during wander)
+    builder._goto = mock.fn(async () => { throw new Error('stuck in ravine'); });
+
+    // _wander should NOT throw — it catches internally
+    await builder._wander();
+    // Should have attempted navigation
+    assert.equal(builder._goto.mock.calls.length, 1);
+    await builder.board.disconnect();
+  });
+
+  it('selfImprove chain activates after max wander attempts', async () => {
+    const { builder, mockBot } = await createWanderBuilder();
+    mockBot.findBlock = mock.fn(() => null);
+
+    // Run collectWood inside _reactLoop-like try/catch
+    let caughtError = null;
+    try {
+      await builder.collectWood(1);
+    } catch (err) {
+      caughtError = err;
+    }
+
+    assert.ok(caughtError, 'Should have thrown an error');
+    assert.ok(caughtError.message.includes('no wood found'),
+      `Error should trigger selfImprove chain: ${caughtError.message}`);
+    assert.ok(caughtError.message.includes('wander'), 'Error message should mention wander');
+    await builder.board.disconnect();
+  });
+});
+
+// ── 9. CraftPlanks — Edge Cases ─────────────────────────────────────
 
 describe('Builder Failures — CraftPlanks edge cases', () => {
   const { craftPlanks } = require('../agent/builder-shelter');

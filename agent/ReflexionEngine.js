@@ -9,7 +9,7 @@ const log = getLogger();
 
 const DEFAULT_CONFIG = {
   model: 'claude-haiku-4-5-20251001',
-  escalationModel: 'claude-sonnet-4-5-20241022',
+  escalationModel: 'claude-sonnet-4-6',
   fallbackModel: 'local:qwen/qwen3.5-9b',
   temperature: 0.7,
   maxTokens: 1024,
