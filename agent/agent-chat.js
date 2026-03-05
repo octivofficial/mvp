@@ -74,6 +74,28 @@ const CHAT_TEMPLATES = {
       'Found {type} nearby. Avoid this area.',
     ],
   },
+  miner: {
+    ore_mined: [
+      'Mined {type} at ({x}, {y}, {z}). Total: {total}.',
+      'Got {type}. {total} ores collected so far.',
+    ],
+    searching: [
+      'Scanning for ores... radius {radius}.',
+      'Looking for ore deposits nearby.',
+    ],
+    navigating: [
+      'Heading to {type} ore at ({x}, {y}, {z}).',
+      'Moving toward {type} deposit.',
+    ],
+    smelting: [
+      'Smelting {count} {type} in furnace.',
+      'Firing up the furnace — {count} {type} to smelt.',
+    ],
+    inventory_full: [
+      'Inventory full ({total} items). Heading to furnace.',
+      'Bags are full — {total} items. Time to offload.',
+    ],
+  },
 };
 
 // ── Confess templates by role ───────────────────────────────────────
@@ -151,6 +173,32 @@ const CONFESS_TEMPLATES = {
         message: '{discoveries} areas scouted. The map is taking shape. Every step reveals something new.',
         tag: 'wonder',
         mood: 'inspired',
+      },
+    ],
+  },
+  miner: {
+    mining_milestone: [
+      {
+        title: 'Deep earth diary',
+        message: '{total} ores pulled from the ground. The pickaxe grows heavy but the haul grows heavier.',
+        tag: 'pride',
+        mood: 'satisfied',
+      },
+    ],
+    rare_find: [
+      {
+        title: 'Diamond!',
+        message: 'Found {type} at Y={y}. Heart skipped a beat.',
+        tag: 'excitement',
+        mood: 'ecstatic',
+      },
+    ],
+    empty_shaft: [
+      {
+        title: 'Nothing down here',
+        message: 'Searched {radius} blocks in every direction. Just stone and silence.',
+        tag: 'frustration',
+        mood: 'restless',
       },
     ],
   },

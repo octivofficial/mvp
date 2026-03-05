@@ -233,6 +233,55 @@ describe('AgentChat', () => {
     });
   });
 
+  // ── Miner templates ──────────────────────────────────────────
+
+  describe('CHAT_TEMPLATES — miner', () => {
+    it('miner has all expected chat events', () => {
+      const events = ['ore_mined', 'searching', 'navigating', 'smelting', 'inventory_full'];
+      for (const e of events) {
+        assert.ok(CHAT_TEMPLATES.miner[e]?.length > 0, `missing miner.${e}`);
+      }
+    });
+  });
+
+  describe('CONFESS_TEMPLATES — miner', () => {
+    it('miner has all expected confess events', () => {
+      const events = ['mining_milestone', 'rare_find', 'empty_shaft'];
+      for (const e of events) {
+        assert.ok(CONFESS_TEMPLATES.miner[e]?.length > 0, `missing miner.${e}`);
+        for (const tpl of CONFESS_TEMPLATES.miner[e]) {
+          assert.ok(tpl.title, `${e} missing title`);
+          assert.ok(tpl.message, `${e} missing message`);
+          assert.ok(tpl.tag, `${e} missing tag`);
+          assert.ok(tpl.mood, `${e} missing mood`);
+        }
+      }
+    });
+  });
+
+  describe('miner chat integration', () => {
+    it('miner chat works with miner templates', async () => {
+      const minerChat = new AgentChat(board, 'miner-01', 'miner');
+      const result = await minerChat.chat('ore_mined', { type: 'iron', total: 5, x: 10, y: 20, z: 30 });
+      assert.equal(result, true);
+      assert.equal(board.calls[0].data.role, 'miner');
+    });
+
+    it('miner confess works with miner templates', async () => {
+      const minerChat = new AgentChat(board, 'miner-01', 'miner');
+      const result = await minerChat.confess('rare_find', { type: 'diamond', y: 12 });
+      assert.equal(result, true);
+      assert.equal(board.calls[0].data.mood, 'ecstatic');
+    });
+
+    it('miner inventory_full chat fills template vars', async () => {
+      const minerChat = new AgentChat(board, 'miner-01', 'miner');
+      await minerChat.chat('inventory_full', { total: 32 });
+      const msg = board.calls[0].data.message;
+      assert.ok(msg.includes('32'), `should contain total: ${msg}`);
+    });
+  });
+
   // ── Cross-role ────────────────────────────────────────────────
 
   describe('cross-role', () => {

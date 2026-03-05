@@ -96,6 +96,40 @@ module.exports = {
   /** RC command response timeout */
   RC_RESPONSE_TIMEOUT_MS: 30000,
 
+  // -- Mining --
+
+  /** Mining session total timeout */
+  MINING_SESSION_TIMEOUT_MS: parseInt(process.env.MINING_SESSION_TIMEOUT_MS) || 120000,
+
+  /** Single block dig timeout */
+  MINING_DIG_TIMEOUT_MS: parseInt(process.env.MINING_DIG_TIMEOUT_MS) || 5000,
+
+  /** Navigation to ore timeout */
+  MINING_NAV_TIMEOUT_MS: parseInt(process.env.MINING_NAV_TIMEOUT_MS) || 15000,
+
+  /** Smelting operation timeout */
+  MINING_SMELT_TIMEOUT_MS: parseInt(process.env.MINING_SMELT_TIMEOUT_MS) || 30000,
+
+  /** Inventory item count threshold to consider "full" */
+  MINING_INVENTORY_THRESHOLD: parseInt(process.env.MINING_INVENTORY_THRESHOLD) || 32,
+
+  // -- Obsidian Bridge --
+
+  /** Throttle window for per-agent vault file writes */
+  OBSIDIAN_AGENT_DEBOUNCE_MS: parseInt(process.env.OBSIDIAN_AGENT_DEBOUNCE_MS) || 3000,
+
+  /** Event buffer flush interval */
+  OBSIDIAN_EVENT_FLUSH_MS: parseInt(process.env.OBSIDIAN_EVENT_FLUSH_MS) || 2000,
+
+  /** System vitals heartbeat refresh interval */
+  OBSIDIAN_HEARTBEAT_MS: parseInt(process.env.OBSIDIAN_HEARTBEAT_MS) || 10000,
+
+  /** Max events kept in rolling event log */
+  OBSIDIAN_MAX_EVENTS: parseInt(process.env.OBSIDIAN_MAX_EVENTS) || 50,
+
+  /** Obsidian REST API request timeout */
+  OBSIDIAN_API_TIMEOUT_MS: parseInt(process.env.OBSIDIAN_API_TIMEOUT_MS) || 5000,
+
   // -- Voice / TTS --
 
   /** Max queued TTS messages */
