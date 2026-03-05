@@ -3,7 +3,7 @@
  * Failure → LLM skill generation → sandbox validation → deploy to library
  * Dynamic skill library with successRate tracking and daily limits.
  *
- * Sandbox: node:vm with isolated context (replaces vm2 CVE-2023-37466).
+ * Sandbox: node:vm with isolated context.
  */
 const { Blackboard } = require('./blackboard');
 const { validateCode } = require('./vm-sandbox');

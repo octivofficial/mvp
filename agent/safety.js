@@ -2,7 +2,7 @@
  * Octiv Safety Agent — health-monitor + automated-debugging role
  * AC-8 threat detection (lava/fall/infinite-loop), sandbox code validation
  *
- * Sandbox: node:vm with isolated context (replaces vm2 CVE-2023-37466).
+ * Sandbox: node:vm with isolated context.
  */
 const { Blackboard } = require('./blackboard');
 const { validateCode } = require('./vm-sandbox');
