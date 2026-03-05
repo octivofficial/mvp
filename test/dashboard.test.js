@@ -2,7 +2,7 @@
  * Phase 5/6/7 Tests — Dashboard, Explorer, Redis Pipeline
  * Usage: node --test test/dashboard.test.js
  */
-const { describe, it, before, after } = require('node:test');
+const { describe, it, before, after, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 // ── 6.1: Dashboard Server ───────────────────────────────────────
@@ -332,5 +332,143 @@ describe('Blackboard — Redis Pipeline (Phase 7.4)', () => {
         assert.equal(result.count, 0);
 
         await board.disconnect();
+    });
+});
+
+// ── 6.2: Skill Lab API ──────────────────────────────────────────
+describe('DashboardServer — Skill Lab API (Phase 6.2)', () => {
+    let DashboardServer, SkillZettelkasten, TIERS;
+    let redisClient;
+    let dash;
+
+    before(async () => {
+        const { createClient } = require('redis');
+        redisClient = createClient({ url: 'redis://localhost:6380' });
+        await redisClient.connect();
+        ({ DashboardServer } = require('../agent/dashboard'));
+        ({ SkillZettelkasten, TIERS } = require('../agent/skill-zettelkasten'));
+    });
+
+    afterEach(async () => {
+        if (dash) { await dash.stop(); dash = null; }
+    });
+
+    after(async () => {
+        // Clean up zettelkasten test data
+        const keys = await redisClient.keys('octiv:zettelkasten:*');
+        if (keys.length > 0) await redisClient.del(keys);
+        await redisClient.disconnect();
+    });
+
+    it('GET /api/skills returns stats + skills array + tiers', async () => {
+        dash = new DashboardServer(0);
+        await dash.start();
+        const port = dash.server.address().port;
+
+        const res = await fetch(`http://localhost:${port}/api/skills`);
+        assert.equal(res.status, 200);
+        const data = await res.json();
+        assert.ok(data.stats !== undefined, 'should have stats');
+        assert.ok(Array.isArray(data.skills), 'skills should be array');
+        assert.ok(Array.isArray(data.tiers), 'tiers should be array');
+    });
+
+    it('GET /api/skills stats has expected fields', async () => {
+        dash = new DashboardServer(0);
+        await dash.start();
+        const port = dash.server.address().port;
+
+        const res = await fetch(`http://localhost:${port}/api/skills`);
+        const data = await res.json();
+        assert.ok('totalNotes' in data.stats);
+        assert.ok('activeSkills' in data.stats);
+        assert.ok('totalXP' in data.stats);
+        assert.ok('tierDistribution' in data.stats);
+    });
+
+    it('GET /api/skills/:id returns skill detail', async () => {
+        dash = new DashboardServer(0);
+        await dash.start();
+
+        // Create a test skill via the dashboard's skillZk
+        await dash.skillZk.createNote({
+            name: 'test-skill-detail',
+            code: 'return true;',
+            description: 'test',
+            agentId: 'test',
+        });
+
+        const port = dash.server.address().port;
+        const res = await fetch(`http://localhost:${port}/api/skills/test-skill-detail`);
+        assert.equal(res.status, 200);
+        const data = await res.json();
+        assert.equal(data.name, 'test-skill-detail');
+        assert.equal(data.tier, 'Novice');
+    });
+
+    it('GET /api/skills/:nonexistent returns 404', async () => {
+        dash = new DashboardServer(0);
+        await dash.start();
+        const port = dash.server.address().port;
+
+        const res = await fetch(`http://localhost:${port}/api/skills/does-not-exist-xyz`);
+        assert.equal(res.status, 404);
+    });
+
+    it('Dashboard HTML includes Skill Lab tab', async () => {
+        dash = new DashboardServer(0);
+        await dash.start();
+        const port = dash.server.address().port;
+
+        const res = await fetch(`http://localhost:${port}/`);
+        const html = await res.text();
+        assert.ok(html.includes('Skill Lab'), 'HTML should contain Skill Lab');
+    });
+
+    it('Dashboard HTML includes skill-table element', async () => {
+        dash = new DashboardServer(0);
+        await dash.start();
+        const port = dash.server.address().port;
+
+        const res = await fetch(`http://localhost:${port}/`);
+        const html = await res.text();
+        assert.ok(html.includes('skill-table'), 'HTML should contain skill-table');
+    });
+
+    it('SSE broadcasts zettelkasten events', async () => {
+        dash = new DashboardServer(0);
+        await dash.start();
+        const port = dash.server.address().port;
+
+        // Connect SSE client
+        const res = await fetch(`http://localhost:${port}/events`);
+        const reader = res.body.getReader();
+
+        // Read initial "connected" message
+        await reader.read();
+
+        // Publish a zettelkasten event
+        await redisClient.publish('octiv:zettelkasten:tier-up',
+            JSON.stringify({ skill: 'test', oldTier: 'Novice', newTier: 'Apprentice' }));
+
+        // Read the skill event
+        const { value } = await reader.read();
+        const text = new TextDecoder().decode(value);
+        assert.ok(text.includes('"type":"skill"'), 'SSE should contain skill event type');
+        assert.ok(text.includes('tier-up'), 'SSE should contain tier-up subtype');
+
+        reader.cancel();
+    });
+
+    it('Skills API returns tiers constant with 6 entries', async () => {
+        dash = new DashboardServer(0);
+        await dash.start();
+        const port = dash.server.address().port;
+
+        const res = await fetch(`http://localhost:${port}/api/skills`);
+        const data = await res.json();
+        assert.equal(data.tiers.length, 6, 'Should have 6 tiers');
+        assert.equal(data.tiers[0].name, 'Novice');
+        assert.equal(data.tiers[5].name, 'Grandmaster');
     });
 });

@@ -5,6 +5,7 @@
  */
 const http = require('http');
 const { Blackboard } = require('./blackboard');
+const { SkillZettelkasten, TIERS } = require('./skill-zettelkasten');
 const { getLogger } = require('./logger');
 const log = getLogger();
 
@@ -18,10 +19,13 @@ class DashboardServer {
     this.sseClients = [];
     this.subscriber = null;
     this.agentState = {};
+    this.skillZk = null;
   }
 
   async start() {
     await this.board.connect();
+    this.skillZk = new SkillZettelkasten();
+    await this.skillZk.init();
     this.subscriber = await this.board.createSubscriber();
     this._subscribeUpdates();
 
@@ -47,6 +51,7 @@ class DashboardServer {
       this.server.closeAllConnections();
       await new Promise((resolve) => this.server.close(resolve));
     }
+    if (this.skillZk) await this.skillZk.shutdown();
     await this.board.disconnect();
   }
 
@@ -81,6 +86,14 @@ class DashboardServer {
         this._broadcast({ type: 'leader', channel, data });
       } catch {}
     });
+
+    this.subscriber.pSubscribe('octiv:zettelkasten:*', (message, channel) => {
+      try {
+        const data = JSON.parse(message);
+        const eventType = channel.split(':').slice(2).join(':');
+        this._broadcast({ type: 'skill', subtype: eventType, data });
+      } catch {}
+    });
   }
 
   _broadcast(event) {
@@ -101,6 +114,12 @@ class DashboardServer {
     }
     if (req.url === '/api/state') {
       return this._handleAPIState(req, res);
+    }
+    if (req.url === '/api/skills') {
+      return this._handleAPISkills(req, res);
+    }
+    if (req.url.startsWith('/api/skills/')) {
+      return this._handleAPISkillDetail(req, res);
     }
     if (req.url === '/' || req.url === '/index.html') {
       return this._serveDashboard(req, res);
@@ -133,6 +152,47 @@ class DashboardServer {
     res.end(DASHBOARD_HTML);
   }
 
+  async _handleAPISkills(req, res) {
+    try {
+      const [stats, notes] = await Promise.all([
+        this.skillZk.getStats(),
+        this.skillZk.getAllNotes(),
+      ]);
+      const skills = Object.values(notes).map((n) => ({
+        id: n.id,
+        name: n.name,
+        tier: n.tier,
+        xp: n.xp,
+        uses: n.uses,
+        successRate: n.successRate,
+        status: n.status,
+        links: n.links.length,
+      }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ stats, skills, tiers: TIERS }));
+    } catch (err) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  }
+
+  async _handleAPISkillDetail(req, res) {
+    const skillId = decodeURIComponent(req.url.split('/api/skills/')[1]);
+    try {
+      const note = await this.skillZk.getNote(skillId);
+      if (!note) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(note));
+    } catch (err) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  }
+
   getState() {
     return { ...this.agentState };
   }
@@ -158,22 +218,69 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   .danger { color: #f85149; }
   #events { margin-top: 16px; max-height: 300px; overflow-y: auto; font-size: 12px; }
   .event { padding: 2px 0; border-bottom: 1px solid #21262d; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; background: #161b22; padding: 4px; border-radius: 8px; }
+  .tab { font-family: monospace; background: none; border: 1px solid #30363d; color: #8b949e; padding: 6px 16px; border-radius: 6px; cursor: pointer; }
+  .tab.active { color: #58a6ff; border-color: #58a6ff; background: #0d1117; }
+  .stats-bar { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 16px; min-width: 120px; }
+  .stat-card .label { color: #8b949e; font-size: 11px; }
+  .stat-card .value { color: #58a6ff; font-size: 18px; font-weight: bold; }
+  .tier-bar { display: flex; height: 20px; border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+  .tier-seg { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #0d1117; font-weight: bold; min-width: 2px; }
+  .skill-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .skill-table th { text-align: left; color: #8b949e; padding: 6px 8px; border-bottom: 1px solid #30363d; }
+  .skill-table td { padding: 6px 8px; border-bottom: 1px solid #21262d; }
+  .skill-table tr:hover { background: #161b22; }
+  #skill-events { max-height: 200px; overflow-y: auto; font-size: 12px; }
 </style>
 </head>
 <body>
 <h1>Octiv Dashboard</h1>
-<div id="agents" class="grid"></div>
-<h2 style="color:#58a6ff;margin-top:16px">Live Events</h2>
-<div id="events"></div>
+<nav class="tabs">
+  <button class="tab active" data-tab="agents">Agents</button>
+  <button class="tab" data-tab="skills">Skill Lab</button>
+</nav>
+<div id="agents-panel">
+  <div id="agents" class="grid"></div>
+  <h2 style="color:#58a6ff;margin-top:16px">Live Events</h2>
+  <div id="events"></div>
+</div>
+<div id="skills-panel" style="display:none">
+  <div class="stats-bar" id="skill-stats"></div>
+  <div class="tier-bar" id="tier-dist"></div>
+  <table class="skill-table" id="skill-table">
+    <thead><tr><th>Skill</th><th>Tier</th><th>XP</th><th>Uses</th><th>Success</th><th>Links</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <h3 style="color:#58a6ff;margin-top:12px">Skill Events</h3>
+  <div id="skill-events"></div>
+</div>
 <script>
 const agentsDiv = document.getElementById('agents');
 const eventsDiv = document.getElementById('events');
+const skillEventsDiv = document.getElementById('skill-events');
 const state = {};
+
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-tab="' + tab + '"]').classList.add('active');
+  document.getElementById('agents-panel').style.display = tab === 'agents' ? '' : 'none';
+  document.getElementById('skills-panel').style.display = tab === 'skills' ? '' : 'none';
+  if (tab === 'skills') loadSkills();
+}
 
 const es = new EventSource('/events');
 es.onmessage = (e) => {
   const evt = JSON.parse(e.data);
   if (evt.type === 'connected') return;
+  if (evt.type === 'skill') {
+    addSkillEvent(evt);
+    return;
+  }
   if (evt.agentId) {
     state[evt.agentId] = { ...state[evt.agentId], [evt.type]: evt.data, lastUpdate: Date.now() };
     renderAgents();
@@ -202,6 +309,40 @@ function addEvent(evt) {
   div.textContent = new Date().toLocaleTimeString() + ' [' + (evt.agentId||evt.type) + '] ' + JSON.stringify(evt.data).slice(0,120);
   eventsDiv.prepend(div);
   while (eventsDiv.children.length > 100) eventsDiv.lastChild.remove();
+}
+
+const tierColors = { Novice:'#3fb950', Apprentice:'#2ea043', Journeyman:'#1f6feb', Expert:'#8957e5', Master:'#f0883e', Grandmaster:'#d29922' };
+
+function loadSkills() {
+  fetch('/api/skills').then(r=>r.json()).then(d => {
+    const ss = document.getElementById('skill-stats');
+    const ht = d.stats.highestTier;
+    ss.innerHTML = statCard('Total Skills', d.stats.totalNotes)
+      + statCard('Active', d.stats.activeSkills)
+      + statCard('Total XP', d.stats.totalXP)
+      + statCard('Highest', ht ? ht.tier : '-');
+    const td = document.getElementById('tier-dist');
+    const total = Math.max(d.skills.length, 1);
+    td.innerHTML = d.tiers.map(t => {
+      const c = d.stats.tierDistribution[t.name] || 0;
+      const pct = (c / total * 100);
+      return c > 0 ? '<div class="tier-seg" style="width:' + pct + '%;background:' + (tierColors[t.name]||'#666') + '">' + t.emoji + c + '</div>' : '';
+    }).join('');
+    const tb = document.querySelector('#skill-table tbody');
+    tb.innerHTML = d.skills.map(s =>
+      '<tr><td>' + s.name + '</td><td style="color:' + (tierColors[s.tier]||'#ccc') + '">' + s.tier + '</td><td>' + s.xp + '</td><td>' + s.uses + '</td><td>' + (s.successRate * 100).toFixed(0) + '%</td><td>' + s.links + '</td></tr>'
+    ).join('');
+  }).catch(() => {});
+}
+
+function statCard(l, v) { return '<div class="stat-card"><div class="label">' + l + '</div><div class="value">' + v + '</div></div>'; }
+
+function addSkillEvent(evt) {
+  const div = document.createElement('div');
+  div.className = 'event';
+  div.textContent = new Date().toLocaleTimeString() + ' [' + (evt.subtype||'skill') + '] ' + JSON.stringify(evt.data).slice(0,120);
+  skillEventsDiv.prepend(div);
+  while (skillEventsDiv.children.length > 50) skillEventsDiv.lastChild.remove();
 }
 
 fetch('/api/state').then(r=>r.json()).then(d => { Object.assign(state, d.agents); renderAgents(); });
