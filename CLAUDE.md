@@ -69,7 +69,7 @@ Choose the right pattern for the task at hand:
 
 ### When unsure → `octiv-orchestrator`
 
-### Agents (13 logical modules, 24 source files)
+### Agents (13 logical modules, 24 core + 3 role files)
 | Agent | One-liner |
 |-------|-----------|
 | `octiv-orchestrator` | **START HERE** for complex tasks |
