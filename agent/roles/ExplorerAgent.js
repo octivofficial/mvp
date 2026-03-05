@@ -60,9 +60,13 @@ class ExplorerAgent extends BaseRole {
       safe: scanResult.dangers.length === 0 ? 'safe' : 'hostile',
     }).catch(() => {});
 
-    // Report individual dangers
+    // Report one danger per type (throttle only allows first per 30s anyway)
+    const reportedTypes = new Set();
     for (const d of scanResult.dangers) {
-      this.chat.chat('danger_spotted', { type: d.type, x: d.x, y: d.y, z: d.z }).catch(() => {});
+      if (!reportedTypes.has(d.type)) {
+        reportedTypes.add(d.type);
+        this.chat.chat('danger_spotted', { type: d.type, x: d.x, y: d.y, z: d.z }).catch(() => {});
+      }
     }
 
     // Confess on danger zone accumulation

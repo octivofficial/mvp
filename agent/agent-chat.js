@@ -31,10 +31,6 @@ const CHAT_TEMPLATES = {
       'Arrived at shelter. AC-4 done.',
       'Made it to base. Reporting in.',
     ],
-    adaptation: [
-      'Adapted: {change}. Learning from mistakes.',
-      'Self-improved — {change}.',
-    ],
   },
   leader: {
     mission_assigned: [
@@ -183,7 +179,6 @@ class AgentChat {
     const template = templates[Math.floor(Math.random() * templates.length)];
     const message = this._fillTemplate(template, vars);
 
-    this._lastChat[event] = now;
     await this.board.publish(`agent:${this.agentId}:chat`, {
       author: this.agentId,
       role: this.role,
@@ -191,6 +186,7 @@ class AgentChat {
       message,
       ts: now,
     });
+    this._lastChat[event] = now;
 
     log.info(this.agentId, `chat: ${message}`);
     return true;
@@ -215,7 +211,6 @@ class AgentChat {
       mood: template.mood,
     };
 
-    this._lastConfess[event] = now;
     await this.board.publish(`agent:${this.agentId}:confess`, {
       author: this.agentId,
       role: this.role,
@@ -223,6 +218,7 @@ class AgentChat {
       ...confession,
       ts: now,
     });
+    this._lastConfess[event] = now;
 
     log.info(this.agentId, `confess [${confession.mood}]: ${confession.title}`);
     return true;

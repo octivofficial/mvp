@@ -25,7 +25,7 @@ describe('AgentChat', () => {
 
   describe('CHAT_TEMPLATES', () => {
     it('builder has all expected events', () => {
-      const events = ['wood_found', 'wood_complete', 'wandering', 'shelter_complete', 'arrived_shelter', 'adaptation'];
+      const events = ['wood_found', 'wood_complete', 'wandering', 'shelter_complete', 'arrived_shelter'];
       for (const e of events) {
         assert.ok(CHAT_TEMPLATES.builder[e]?.length > 0, `missing builder.${e}`);
       }
@@ -270,6 +270,21 @@ describe('AgentChat', () => {
         () => failChat.chat('wood_found', { blockType: 'oak_log', x: 0, z: 0 }),
         /Redis down/,
       );
+    });
+
+    it('does not poison throttle on publish failure', async () => {
+      let callCount = 0;
+      const flakyBoard = {
+        publish: mock.fn(async () => {
+          callCount++;
+          if (callCount === 1) throw new Error('Redis down');
+        }),
+      };
+      const flakyChat = new AgentChat(flakyBoard, 'builder-01', 'builder');
+      await assert.rejects(() => flakyChat.chat('wood_found', { blockType: 'oak', x: 0, z: 0 }));
+      // Second call should succeed (throttle not poisoned by first failure)
+      const result = await flakyChat.chat('wood_found', { blockType: 'oak', x: 0, z: 0 });
+      assert.equal(result, true);
     });
 
     it('chat and confess throttles are independent', async () => {
