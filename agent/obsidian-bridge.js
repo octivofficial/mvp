@@ -337,13 +337,13 @@ class ObsidianBridge {
       clearTimeout(this._agentTimers.get(agentId));
     }
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       this._agentTimers.delete(agentId);
       const pending = this._agentPending.get(agentId);
       if (pending) {
         this._agentPending.delete(agentId);
         const md = _generateAgentFrontmatter(agentId, pending);
-        this._obsidianPut(`${VAULT_LIVE_BASE}/agents/${agentId}.md`, md);
+        await this._obsidianPut(`${VAULT_LIVE_BASE}/agents/${agentId}.md`, md);
       }
     }, T.OBSIDIAN_AGENT_DEBOUNCE_MS);
 
@@ -374,8 +374,8 @@ class ObsidianBridge {
   }
 
   _startEventFlush() {
-    this._eventFlushTimer = setInterval(() => {
-      this._flushEvents();
+    this._eventFlushTimer = setInterval(async () => {
+      await this._flushEvents();
     }, T.OBSIDIAN_EVENT_FLUSH_MS);
   }
 
