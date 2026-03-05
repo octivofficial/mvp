@@ -243,7 +243,7 @@ async function main() {
   emergencySubscriber.subscribe('octiv:skills:emergency', async (message) => {
     try {
       const data = JSON.parse(message);
-      logger.logEvent('team', { type: 'emergency', ...data }).catch(e => console.error('[Log]', e.message));
+      logger.logEvent('team', { type: 'emergency', ...data }).catch(e => log.error('team', 'log persist error', { error: e.message }));
       log.warn('team', `Emergency: ${data.failureType || data.newSkill || 'unknown'}`);
 
       // Task C: Increment leader failure counter on safety threats (deduped)
@@ -263,7 +263,7 @@ async function main() {
         });
         if (result.success) {
           await leader.injectLearnedSkill(result.skill);
-          logger.logEvent('team', { type: 'skill_created', skill: result.skill }).catch(e => console.error('[Log]', e.message));
+          logger.logEvent('team', { type: 'skill_created', skill: result.skill }).catch(e => log.error('team', 'log persist error', { error: e.message }));
         }
       }
     } catch (err) {
@@ -278,7 +278,7 @@ async function main() {
     startedAt: new Date().toISOString(),
   });
 
-  logger.logEvent('team', { type: 'started', members: TEAM_SIZE + 2 }).catch(e => console.error('[Log]', e.message));
+  logger.logEvent('team', { type: 'started', members: TEAM_SIZE + 2 }).catch(e => log.error('team', 'log persist error', { error: e.message }));
 
   log.info('team', 'Full team running. Press Ctrl+C to stop.');
 
@@ -295,7 +295,7 @@ async function main() {
 
     try {
       clearInterval(explorerInterval);
-      logger.logEvent('team', { type: 'shutdown' }).catch(e => console.error('[Log]', e.message));
+      logger.logEvent('team', { type: 'shutdown' }).catch(e => log.error('team', 'log persist error', { error: e.message }));
       await leader.shutdown();
       await safety.shutdown();
       await explorer.shutdown();
@@ -330,7 +330,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(console.error);
+  main().catch(err => log.error('team', 'Fatal error', { error: err.message }));
 }
 
 module.exports = { monitorGathering, main, shouldProcessEmergency, setupRemoteControl };

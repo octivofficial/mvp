@@ -4,6 +4,8 @@
  * Default: Claude Sonnet 4.6 → escalate to Opus 4.6 → fallback Groq.
  */
 const { Blackboard } = require('./blackboard');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const DEFAULT_CONFIG = {
   model: 'claude-sonnet-4-6-20250514',
@@ -29,7 +31,7 @@ class ReflexionEngine {
     await this.board.connect();
     // Load config from Redis
     await this.reloadConfig();
-    console.log(`[ReflexionEngine] initialized, model: ${this.config.model}`);
+    log.info('reflexion', `initialized, model: ${this.config.model}`);
   }
 
   // 4.5: Reload config from Redis (hot reload)
@@ -69,7 +71,7 @@ class ReflexionEngine {
   async callLLM(prompt, severity = 'normal') {
     // Cost guardrail
     if (this.dailyCost >= this.config.maxCostPerDay) {
-      console.warn('[ReflexionEngine] daily cost limit reached');
+      log.warn('reflexion', 'daily cost limit reached');
       return null;
     }
 
@@ -86,7 +88,7 @@ class ReflexionEngine {
       this._trackUsage(model);
       return result;
     } catch (primaryErr) {
-      console.warn(`[ReflexionEngine] primary (${model}) failed: ${primaryErr.message}`);
+      log.warn('reflexion', `primary (${model}) failed`, { error: primaryErr.message });
     }
 
     // Fallback to Groq
@@ -95,7 +97,7 @@ class ReflexionEngine {
       this._trackUsage(this.config.fallbackModel);
       return result;
     } catch (fallbackErr) {
-      console.error(`[ReflexionEngine] fallback failed: ${fallbackErr.message}`);
+      log.error('reflexion', 'fallback failed', { error: fallbackErr.message });
     }
 
     return null;

@@ -4,6 +4,8 @@
  */
 const { goals } = require('mineflayer-pathfinder');
 const { Vec3 } = require('vec3');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const { GoalNear } = goals;
 
@@ -82,7 +84,7 @@ async function placeBlockAt(bot, pos, blockName, gotoFn) {
  */
 async function buildShelter(ctx) {
   const { bot, mcData, board, id, logger, adaptations, gotoFn, setupPathfinderFn } = ctx;
-  console.log(`[${id}] starting shelter construction`);
+  log.info(id, 'starting shelter construction');
 
   await craftPlanks(bot, mcData);
 
@@ -116,8 +118,8 @@ async function buildShelter(ctx) {
     position: { x: origin.x, y: origin.y, z: origin.z },
     size: { x: 3, y: 4, z: 3 },
   });
-  if (logger) logger.logEvent(id, { type: 'ac_complete', ac: 2, position: { x: origin.x, y: origin.y, z: origin.z } }).catch(e => console.error('[Log]', e.message));
-  console.log(`[${id}] AC-2 done: shelter at ${origin}`);
+  if (logger) logger.logEvent(id, { type: 'ac_complete', ac: 2, position: { x: origin.x, y: origin.y, z: origin.z } }).catch(e => log.error(id, 'log persist error', { error: e.message }));
+  log.info(id, `AC-2 done: shelter at ${origin}`);
 
   return origin;
 }

@@ -5,6 +5,8 @@
  */
 const http = require('http');
 const { Blackboard } = require('./blackboard');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const PORT = process.env.MCP_PORT || 3001;
 
@@ -31,7 +33,7 @@ class MCPServer {
     this.server = http.createServer((req, res) => this._handleRequest(req, res));
     return new Promise((resolve) => {
       this.server.listen(this.port, () => {
-        console.log(`[MCP] Server listening on port ${this.port}`);
+        log.info('mcp-server', `listening on port ${this.port}`);
         resolve();
       });
     });
@@ -206,7 +208,7 @@ module.exports = { MCPServer };
 // Run standalone
 if (require.main === module) {
   const server = new MCPServer();
-  server.start().catch(console.error);
+  server.start().catch(err => log.error('mcp-server', 'start failed', { error: err.message }));
   process.on('SIGINT', async () => {
     await server.stop();
     process.exit(0);

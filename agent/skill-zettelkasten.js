@@ -21,6 +21,8 @@
 const fsp = require('fs').promises;
 const path = require('path');
 const { Blackboard } = require('./blackboard');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const VAULT_DIR = path.join(__dirname, '..', 'vault', '04-Skills');
 const ZK_PREFIX = 'zettelkasten';
@@ -51,7 +53,7 @@ class SkillZettelkasten {
       await fsp.mkdir(dir, { recursive: true });
     }
 
-    console.log('[Zettelkasten] initialized, vault:', this.vaultDir);
+    log.info('zettelkasten', `initialized, vault: ${this.vaultDir}`);
   }
 
   // ── Atomic Note CRUD ──────────────────────────────────────
@@ -113,7 +115,7 @@ class SkillZettelkasten {
       });
     }
 
-    console.log(`[Zettelkasten] 🌱 created: ${note.id}`);
+    log.info('zettelkasten', `created: ${note.id}`);
     return note;
   }
 
@@ -143,8 +145,7 @@ class SkillZettelkasten {
     await this._writeVaultNote(note);
 
     if (tieredUp) {
-      const tierInfo = TIERS.find(t => t.name === note.tier);
-      console.log(`[Zettelkasten] ${tierInfo.emoji} TIER UP: ${note.id} → ${note.tier} (XP: ${note.xp})`);
+      log.info('zettelkasten', `TIER UP: ${note.id} → ${note.tier} (XP: ${note.xp})`);
       await this.board.publish(`${ZK_PREFIX}:tier-up`, {
         author: 'zettelkasten',
         skill: note.id,
@@ -294,7 +295,7 @@ class SkillZettelkasten {
       linkStrength: link.strength,
     });
 
-    console.log(`[Zettelkasten] ⚔️ COMPOUND: ${compound.id} (${noteA.name} + ${noteB.name}, XP: ${compound.xp})`);
+    log.info('zettelkasten', `COMPOUND: ${compound.id} (${noteA.name} + ${noteB.name}, XP: ${compound.xp})`);
     return compound;
   }
 
@@ -326,7 +327,7 @@ class SkillZettelkasten {
     }
     await this._writeVaultNote(note, 'deprecated');
 
-    console.log(`[Zettelkasten] 💀 deprecated: ${skillId} (${reason})`);
+    log.info('zettelkasten', `deprecated: ${skillId} (${reason})`);
     return note;
   }
 

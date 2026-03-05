@@ -7,6 +7,8 @@
 const { Blackboard } = require('./blackboard');
 const { validateCode } = require('./vm-sandbox');
 const T = require('../config/timeouts');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const AC8_THRESHOLDS = {
   lava: {
@@ -40,7 +42,7 @@ class SafetyAgent {
     await this.board.connect();
     this.subscriber = await this.board.createSubscriber();
     this._startMonitoring();
-    console.log('[Safety] initialized, AC-8 monitoring started');
+    log.info(this.id, 'initialized, AC-8 monitoring started');
   }
 
   // 3.2: Subscribe to all builder health/status channels
@@ -64,7 +66,7 @@ class SafetyAgent {
           this.consecutiveFailures = 0;
         }
       } catch (err) {
-        console.error('[Safety] health monitor error:', err.message);
+        log.error(this.id, 'health monitor error', { error: err.message });
       }
     });
 
@@ -116,10 +118,10 @@ class SafetyAgent {
   async verifySkillCode(code, maxAttempts = 3) {
     const result = await validateCode(code, maxAttempts);
     if (!result.valid) {
-      console.error(`[Safety] sandbox validation failed (${result.attempt}/${maxAttempts}):`, result.error);
+      log.error(this.id, `sandbox validation failed (${result.attempt}/${maxAttempts})`, { error: result.error });
       return false;
     }
-    console.log(`[Safety] sandbox validation passed (${maxAttempts}/${maxAttempts})`);
+    log.info(this.id, `sandbox validation passed (${maxAttempts}/${maxAttempts})`);
     return true;
   }
 
@@ -129,9 +131,9 @@ class SafetyAgent {
     if (now - (this.lastThreatTime[threat.type] || 0) < T.THREAT_COOLDOWN_MS) return;
     this.lastThreatTime[threat.type] = now;
 
-    console.warn(`[Safety] ⚠️  threat detected: ${threat.type} — ${threat.reason}`);
+    log.warn(this.id, `threat detected: ${threat.type} — ${threat.reason}`);
     this.consecutiveFailures++;
-    if (this.logger) this.logger.logEvent(this.id, { type: 'threat', agentId, ...threat }).catch(e => console.error('[Log]', e.message));
+    if (this.logger) this.logger.logEvent(this.id, { type: 'threat', agentId, ...threat }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
 
     await this.board.publish('safety:threat', {
       author: 'safety',

@@ -1,5 +1,7 @@
 const { OctivBot } = require('./OctivBot');
 const T = require('../config/timeouts');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 /**
  * Octiv Bot Entry Point
@@ -20,10 +22,9 @@ const BOT_OPTIONS = {
 };
 
 async function main() {
-  console.log('🤖 Starting Octiv Bot...');
-  console.log(`   Target Server: ${BOT_CONFIG.host}:${BOT_CONFIG.port}`);
-  console.log(`   Username: ${BOT_CONFIG.username}`);
-  console.log('');
+  log.info('bot', 'Starting Octiv Bot...');
+  log.info('bot', `Target Server: ${BOT_CONFIG.host}:${BOT_CONFIG.port}`);
+  log.info('bot', `Username: ${BOT_CONFIG.username}`);
 
   const bot = new OctivBot(BOT_CONFIG, BOT_OPTIONS);
 
@@ -31,7 +32,7 @@ async function main() {
 
   // Graceful Shutdown
   const cleanup = async () => {
-    console.log('\n🛑 Shutdown signal received...');
+    log.info('bot', 'shutdown signal received');
     await bot.shutdown();
     process.exit(0);
   };
@@ -41,6 +42,6 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('❌ Fatal Error:', err);
+  log.error('bot', 'Fatal error', { error: err.message });
   process.exit(1);
 });

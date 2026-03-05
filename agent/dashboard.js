@@ -5,6 +5,8 @@
  */
 const http = require('http');
 const { Blackboard } = require('./blackboard');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const PORT = process.env.DASHBOARD_PORT || 3000;
 
@@ -26,7 +28,7 @@ class DashboardServer {
     this.server = http.createServer((req, res) => this._handleRequest(req, res));
     return new Promise((resolve) => {
       this.server.listen(this.port, () => {
-        console.log(`[Dashboard] http://localhost:${this.port}`);
+        log.info('dashboard', `http://localhost:${this.port}`);
         resolve();
       });
     });
@@ -212,7 +214,7 @@ module.exports = { DashboardServer };
 // Run standalone
 if (require.main === module) {
   const dash = new DashboardServer();
-  dash.start().catch(console.error);
+  dash.start().catch(err => log.error('dashboard', 'start failed', { error: err.message }));
   process.on('SIGINT', async () => {
     await dash.stop();
     process.exit(0);

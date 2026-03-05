@@ -4,6 +4,8 @@
  */
 const { createClient } = require('redis');
 const T = require('../config/timeouts');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const REDIS_URL = process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380';
 const PREFIX = 'octiv:';
@@ -21,12 +23,12 @@ class Blackboard {
         ...options.socket,
       },
     });
-    this.client.on('error', (err) => console.error('[Blackboard] Redis error:', err));
+    this.client.on('error', (err) => log.error('blackboard', 'Redis error', { error: err.message }));
   }
 
   async connect() {
     await this.client.connect();
-    console.log('[Blackboard] Connected:', REDIS_URL);
+    log.info('blackboard', `Connected: ${REDIS_URL}`);
   }
 
   async disconnect() {
@@ -68,7 +70,7 @@ class Blackboard {
    */
   async saveSkill(name, skillData) {
     await this.client.hSet(PREFIX + 'skills:library', name, JSON.stringify(skillData));
-    console.log(`[Blackboard] Skill saved: ${name}`);
+    log.info('blackboard', `Skill saved: ${name}`);
   }
 
   /**

@@ -19,6 +19,8 @@
  */
 const { Blackboard } = require('./blackboard');
 const T = require('../config/timeouts');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const RUMINATION_INTERVAL = T.RUMINATION_INTERVAL_MS;
 const MIN_EXPERIENCES_TO_DIGEST = 3;
@@ -38,7 +40,7 @@ class RuminationEngine {
   async init() {
     await this.board.connect();
     this._startDigestionCycle();
-    console.log('[Rumination] 🐄 initialized, cycle:', RUMINATION_INTERVAL / 1000, 's');
+    log.info('rumination', `initialized, cycle: ${RUMINATION_INTERVAL / 1000}s`);
   }
 
   // ── Stomach 1: 반추위 (Rumen) — Raw Experience Intake ─────
@@ -174,7 +176,7 @@ class RuminationEngine {
     const batch = this.rawBuffer.splice(0); // drain buffer
     const actions = [];
 
-    console.log(`[Rumination] 🐄 digestion #${this.totalDigestions}: ${batch.length} experiences`);
+    log.info('rumination', `digestion #${this.totalDigestions}: ${batch.length} experiences`);
 
     // Stomach 2: Filter patterns
     const patterns = this._filterPatterns(batch);
@@ -265,7 +267,7 @@ class RuminationEngine {
    * Like boiling bones overnight for the richest gomguk
    */
   async deepRuminate() {
-    console.log('[Rumination] 🍖 deep rumination (gomguk mode)...');
+    log.info('rumination', 'deep rumination (gomguk mode)...');
 
     const allNotes = await this.zk.getAllNotes();
     const notes = Object.values(allNotes).filter(n => n.status === 'active');
@@ -317,7 +319,7 @@ class RuminationEngine {
       await this.zk._writeVaultNote(note);
     }
 
-    console.log(`[Rumination] 🍖 deep rumination: ${discoveries.length} compound candidates, ${dormant.length} re-digested`);
+    log.info('rumination', `deep rumination: ${discoveries.length} compound candidates, ${dormant.length} re-digested`);
     return { discoveries, reDigested: dormant.length };
   }
 
@@ -328,7 +330,7 @@ class RuminationEngine {
       try {
         await this.digest();
       } catch (err) {
-        console.error('[Rumination] digestion error:', err.message);
+        log.error('rumination', 'digestion error', { error: err.message });
       }
     }, RUMINATION_INTERVAL);
   }

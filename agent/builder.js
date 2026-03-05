@@ -10,6 +10,8 @@ const { setupPathfinder, goto } = require('./builder-navigation');
 const { buildShelter: buildShelterImpl } = require('./builder-shelter');
 const { classifyError, selfImprove, tryLearnedSkill } = require('./builder-adaptation');
 const T = require('../config/timeouts');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const { GoalNear, GoalBlock } = goals;
 const collectBlock = require('mineflayer-collectblock');
@@ -72,13 +74,13 @@ class BuilderAgent {
 
     this.bot.on('chat', (user, msg) => this._onChat(user, msg));
     this.bot.on('health', () => this._onHealthChange());
-    this.bot.on('error', (err) => console.error(`[${this.id}] error:`, err.message));
+    this.bot.on('error', (err) => log.error(this.id, 'bot error', { error: err.message }));
 
     await this._onSpawn();
   }
 
   async _onSpawn() {
-    console.log(`[${this.id}] spawned`);
+    log.info(this.id, 'spawned');
     await this._waitForGround();
     await this.board.publish(`agent:${this.id}:status`, {
       author: this.id,
@@ -99,18 +101,18 @@ class BuilderAgent {
 
   // ── AC-1: Collect wood ──────────────────────────────────────────
   async collectWood(count = 16) {
-    console.log(`[${this.id}] starting wood collection (target: ${count})`);
+    log.info(this.id, `starting wood collection (target: ${count})`);
     const logIds = ['oak_log', 'spruce_log', 'birch_log'].map(n => this.mcData.blocksByName[n]?.id).filter(Boolean);
 
     this._setupPathfinder();
 
     let collected = 0;
     while (collected < count) {
-      const log = this.bot.findBlock({ matching: logIds, maxDistance: this.adaptations.searchRadius });
-      if (!log) { await this.bot.waitForTicks(20); continue; }
+      const woodLog = this.bot.findBlock({ matching: logIds, maxDistance: this.adaptations.searchRadius });
+      if (!woodLog) { await this.bot.waitForTicks(20); continue; }
 
-      await this._goto(new GoalBlock(log.position.x, log.position.y, log.position.z));
-      await this.bot.dig(log);
+      await this._goto(new GoalBlock(woodLog.position.x, woodLog.position.y, woodLog.position.z));
+      await this.bot.dig(woodLog);
       collected++;
 
       await this.board.updateAC(this.id, 1, collected >= count ? 'done' : 'in_progress');
@@ -118,8 +120,8 @@ class BuilderAgent {
     }
 
     this.acProgress[1] = true;
-    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 1, collected }).catch(e => console.error('[Log]', e.message));
-    console.log(`[${this.id}] ✅ AC-1 done: collected ${collected} wood`);
+    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 1, collected }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
+    log.info(this.id, `AC-1 done: collected ${collected} wood`);
   }
 
   // ── AC-3: Craft tools ──────────────────────────────────────────
@@ -128,8 +130,8 @@ class BuilderAgent {
     await this.bot.craft(this.bot.registry.itemsByName.wooden_pickaxe, 1, null);
     this.acProgress[3] = true;
     await this.board.updateAC(this.id, 3, 'done');
-    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 3 }).catch(e => console.error('[Log]', e.message));
-    console.log(`[${this.id}] ✅ AC-3 done: basic tools crafted`);
+    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 3 }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
+    log.info(this.id, 'AC-3 done: basic tools crafted');
   }
 
   // ── AC-2: Build shelter (delegates to builder-shelter) ─────────
@@ -149,7 +151,7 @@ class BuilderAgent {
 
   // ── AC-4: Navigate to shelter ──────────────────────────────────
   async gatherAtShelter() {
-    console.log(`[${this.id}] heading to shelter`);
+    log.info(this.id, 'heading to shelter');
     const shelterData = await this.board.get('builder:shelter');
     if (!shelterData?.position) throw new Error('No shelter coordinates found');
 
@@ -164,13 +166,13 @@ class BuilderAgent {
       agentId: this.id,
       position: { x, y, z },
     });
-    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 4, position: { x, y, z } }).catch(e => console.error('[Log]', e.message));
-    console.log(`[${this.id}] AC-4 done: arrived at shelter`);
+    if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 4, position: { x, y, z } }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
+    log.info(this.id, 'AC-4 done: arrived at shelter');
   }
 
   // ── Phase 2.7: Collect blocks ──────────────────────────────────
   async collectBlocks(blockName, count = 1) {
-    console.log(`[${this.id}] collecting ${count}x ${blockName}`);
+    log.info(this.id, `collecting ${count}x ${blockName}`);
     const blockType = this.mcData.blocksByName[blockName];
     if (!blockType) throw new Error(`Unknown block: ${blockName}`);
 
@@ -198,7 +200,7 @@ class BuilderAgent {
       block: blockName,
       collected: blocks.length,
     });
-    console.log(`[${this.id}] collected ${blocks.length}x ${blockName}`);
+    log.info(this.id, `collected ${blocks.length}x ${blockName}`);
     return blocks.length;
   }
 
@@ -229,7 +231,7 @@ class BuilderAgent {
 
   _onChat(username, message) {
     if (username === this.bot.username) return;
-    console.log(`[${this.id}] chat [${username}]: ${message}`);
+    log.info(this.id, `chat [${username}]: ${message}`);
   }
 
   // ── ReAct loop ─────────────────────────────────────────────────
@@ -240,7 +242,7 @@ class BuilderAgent {
         await this.board.publish(`agent:${this.id}:react`, { author: this.id, iteration: this.reactIterations });
       } catch (err) {
         if (!this._running) return; // shutdown in progress
-        console.error(`[${this.id}] react publish error:`, err.message);
+        log.error(this.id, 'react publish error', { error: err.message });
       }
       if (!this._running) return;
 
@@ -257,8 +259,8 @@ class BuilderAgent {
           await this.bot.waitForTicks(40);
         }
       } catch (err) {
-        console.error(`[${this.id}] ReAct error:`, err.message);
-        if (this.logger) this.logger.logEvent(this.id, { type: 'error', error: err.message, iteration: this.reactIterations }).catch(e => console.error('[Log]', e.message));
+        log.error(this.id, 'ReAct error', { error: err.message });
+        if (this.logger) this.logger.logEvent(this.id, { type: 'error', error: err.message, iteration: this.reactIterations }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
 
         let shouldRetry = true;
         try {
@@ -266,11 +268,11 @@ class BuilderAgent {
           shouldRetry = await this._selfImprove(err);
           await this._tryLearnedSkill(err);
         } catch (recoveryErr) {
-          console.error(`[${this.id}] recovery failed (Redis down?):`, recoveryErr.message);
+          log.error(this.id, 'recovery failed (Redis down?)', { error: recoveryErr.message });
         }
 
         if (!shouldRetry) {
-          console.warn(`[${this.id}] max retries reached, skipping action`);
+          log.warn(this.id, 'max retries reached, skipping action');
         }
         await this.bot.waitForTicks(this.adaptations.waitTicks);
       }
@@ -282,7 +284,7 @@ class BuilderAgent {
     try {
       if (this.bot) this.bot.end();
     } catch (err) {
-      console.error(`[${this.id}] shutdown bot error:`, err.message);
+      log.error(this.id, 'shutdown bot error', { error: err.message });
     }
     await this.board.disconnect();
   }

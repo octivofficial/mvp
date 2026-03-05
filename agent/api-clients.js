@@ -5,6 +5,8 @@
  * Clients implement: { call(model, prompt) → Promise<string> }
  * Gracefully degrades when SDK/API key is unavailable.
  */
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 function createApiClients() {
   const clients = {};
@@ -24,12 +26,12 @@ function createApiClients() {
           return response.content[0]?.text || '';
         },
       };
-      console.log('[ApiClients] Anthropic client ready');
+      log.info('api-clients', 'Anthropic client ready');
     } catch (err) {
-      console.warn('[ApiClients] Anthropic SDK load failed:', err.message);
+      log.warn('api-clients', 'Anthropic SDK load failed', { error: err.message });
     }
   } else {
-    console.warn('[ApiClients] ANTHROPIC_API_KEY not set — LLM generation disabled');
+    log.warn('api-clients', 'ANTHROPIC_API_KEY not set — LLM generation disabled');
   }
 
   // Groq client (optional fallback)
@@ -46,7 +48,7 @@ function createApiClients() {
           return response.choices[0]?.message?.content || '';
         },
       };
-      console.log('[ApiClients] Groq client ready');
+      log.info('api-clients', 'Groq client ready');
     } catch {
       // Groq is optional — silently skip
     }

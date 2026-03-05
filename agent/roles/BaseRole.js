@@ -4,6 +4,8 @@
  * Subclasses implement execute() with role-specific behavior.
  */
 const { Blackboard } = require('../blackboard');
+const { getLogger } = require('../logger');
+const log = getLogger();
 
 class BaseRole {
   constructor(config = {}) {
@@ -18,7 +20,7 @@ class BaseRole {
     await this.board.setHashField('agents:registry', this.id, {
       role: this.role, status: 'active', registeredAt: Date.now(),
     });
-    console.log(`[${this.role}:${this.id}] initialized`);
+    log.info(this.id, `${this.role} initialized`);
   }
 
   async execute() {

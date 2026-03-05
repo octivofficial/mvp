@@ -19,6 +19,8 @@
  */
 const { Blackboard } = require('./blackboard');
 const T = require('../config/timeouts');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 class ZettelkastenHooks {
   constructor(zettelkasten, rumination, gotReasoner, options = {}) {
@@ -49,7 +51,7 @@ class ZettelkastenHooks {
         const data = JSON.parse(message);
         await this._onSkillDeployed(data);
       } catch (err) {
-        console.error('[ZK-Hooks] skills:emergency handler error:', err.message);
+        log.error('zk-hooks', 'skills:emergency handler error', { error: err.message });
       }
     });
 
@@ -59,7 +61,7 @@ class ZettelkastenHooks {
         const data = JSON.parse(message);
         await this._onDigestionComplete(data);
       } catch (err) {
-        console.error('[ZK-Hooks] rumination:digested handler error:', err.message);
+        log.error('zk-hooks', 'rumination:digested handler error', { error: err.message });
       }
     });
 
@@ -69,7 +71,7 @@ class ZettelkastenHooks {
         const data = JSON.parse(message);
         await this._onTierUp(data);
       } catch (err) {
-        console.error('[ZK-Hooks] zettelkasten:tier-up handler error:', err.message);
+        log.error('zk-hooks', 'zettelkasten:tier-up handler error', { error: err.message });
       }
     });
 
@@ -79,14 +81,14 @@ class ZettelkastenHooks {
         const data = JSON.parse(message);
         await this._onCompoundCreated(data);
       } catch (err) {
-        console.error('[ZK-Hooks] zettelkasten:compound-created handler error:', err.message);
+        log.error('zk-hooks', 'zettelkasten:compound-created handler error', { error: err.message });
       }
     });
 
     // Start deep rumination cycle
     this._startDeepRumination();
 
-    console.log('[ZK-Hooks] initialized, listening for skill events');
+    log.info('zk-hooks', 'initialized, listening for skill events');
   }
 
   // ── Builder Wiring ────────────────────────────────────────
@@ -98,7 +100,7 @@ class ZettelkastenHooks {
   wireToBuilder(builder) {
     const originalTrySkill = builder._tryLearnedSkill?.bind(builder);
     if (!originalTrySkill) {
-      console.warn('[ZK-Hooks] builder has no _tryLearnedSkill, skipping wire');
+      log.warn('zk-hooks', 'builder has no _tryLearnedSkill, skipping wire');
       return;
     }
 
@@ -125,7 +127,7 @@ class ZettelkastenHooks {
             { coSkills: (result.coSkills || []).map(s => this.zk._slugify(s)) }
           );
         } catch (err) {
-          console.error('[ZK-Hooks] recordUsage error:', err.message);
+          log.error('zk-hooks', 'recordUsage error', { error: err.message });
         }
       }
 
@@ -146,7 +148,7 @@ class ZettelkastenHooks {
       };
     }
 
-    console.log(`[ZK-Hooks] wired to builder: ${builder.id}`);
+    log.info('zk-hooks', `wired to builder: ${builder.id}`);
   }
 
   // ── Leader Wiring ─────────────────────────────────────────
@@ -173,13 +175,13 @@ class ZettelkastenHooks {
           });
         }
       } catch (err) {
-        console.error('[ZK-Hooks] GoT reasoning failed:', err.message);
+        log.error('zk-hooks', 'GoT reasoning failed', { error: err.message });
       }
 
       return result;
     };
 
-    console.log('[ZK-Hooks] wired to leader');
+    log.info('zk-hooks', 'wired to leader');
   }
 
   // ── SkillPipeline Wiring ──────────────────────────────────
@@ -205,7 +207,7 @@ class ZettelkastenHooks {
           agentId: 'skill-pipeline',
         });
       } catch (err) {
-        console.error('[ZK-Hooks] note creation failed:', err.message);
+        log.error('zk-hooks', 'note creation failed', { error: err.message });
       }
 
       return result;
@@ -227,21 +229,21 @@ class ZettelkastenHooks {
             await this.zk.deprecateNote(slugId, 'low_success_rate');
           }
         } catch (err) {
-          console.error('[ZK-Hooks] updateSuccessRate mirror error:', err.message);
+          log.error('zk-hooks', 'updateSuccessRate mirror error', { error: err.message });
         }
 
         return result;
       };
     }
 
-    console.log('[ZK-Hooks] wired to skill pipeline');
+    log.info('zk-hooks', 'wired to skill pipeline');
   }
 
   // ── Event Handlers ────────────────────────────────────────
 
   async _onSkillDeployed(data) {
     if (!data.newSkill) return; // safety alerts don't have newSkill
-    console.log(`[ZK-Hooks] new skill deployed: ${data.newSkill}`);
+    log.info('zk-hooks', `new skill deployed: ${data.newSkill}`);
     // Note already created by pipeline wire, just log
     if (this.logger) {
       this.logger.logEvent('zettelkasten-hooks', {
@@ -257,17 +259,17 @@ class ZettelkastenHooks {
     // After enough digestions, trigger GoT reasoning
     if (this.ruminationsSinceReasoning >= this.reasoningThreshold) {
       this.ruminationsSinceReasoning = 0;
-      console.log('[ZK-Hooks] triggering GoT reasoning after rumination cycle');
+      log.info('zk-hooks', 'triggering GoT reasoning after rumination cycle');
       try {
         await this.got.fullReasoningCycle();
       } catch (err) {
-        console.error('[ZK-Hooks] GoT reasoning failed:', err.message);
+        log.error('zk-hooks', 'GoT reasoning failed', { error: err.message });
       }
     }
   }
 
   async _onTierUp(data) {
-    console.log(`[ZK-Hooks] 🎉 TIER UP: ${data.skill} → ${data.newTier} (XP: ${data.xp})`);
+    log.info('zk-hooks', `TIER UP: ${data.skill} → ${data.newTier} (XP: ${data.xp})`);
 
     // Publish celebration to all agents
     await this.board.publish('team:celebration', {
@@ -290,7 +292,7 @@ class ZettelkastenHooks {
   }
 
   async _onCompoundCreated(data) {
-    console.log(`[ZK-Hooks] ⚔️ COMPOUND FORGED: ${data.compound}`);
+    log.info('zk-hooks', `COMPOUND FORGED: ${data.compound}`);
 
     if (this.logger) {
       this.logger.logEvent('zettelkasten-hooks', {
@@ -307,10 +309,10 @@ class ZettelkastenHooks {
   _startDeepRumination() {
     this.deepTimer = setInterval(async () => {
       try {
-        console.log('[ZK-Hooks] 🍖 scheduled deep rumination...');
+        log.info('zk-hooks', 'scheduled deep rumination...');
         await this.rumination.deepRuminate();
       } catch (err) {
-        console.error('[ZK-Hooks] deep rumination failed:', err.message);
+        log.error('zk-hooks', 'deep rumination failed', { error: err.message });
       }
     }, this.deepRuminationInterval);
   }

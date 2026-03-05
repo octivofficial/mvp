@@ -3,6 +3,8 @@
  * Agent registry, task routing, broadcast commands via Blackboard
  */
 const { Blackboard } = require('./blackboard');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 class MCPOrchestrator {
   constructor() {
@@ -17,7 +19,7 @@ class MCPOrchestrator {
     for (const [id, raw] of Object.entries(registry)) {
       try { this.agents.set(id, JSON.parse(raw)); } catch {}
     }
-    console.log(`[Orchestrator] initialized, ${this.agents.size} agents registered`);
+    log.info('orchestrator', `initialized, ${this.agents.size} agents registered`);
   }
 
   async registerAgent(agentId, role, metadata = {}) {
@@ -25,7 +27,7 @@ class MCPOrchestrator {
     this.agents.set(agentId, entry);
     await this.board.setHashField('agents:registry', agentId, entry);
     await this.board.publish('orchestrator:registered', { author: 'orchestrator', agentId, role });
-    console.log(`[Orchestrator] registered: ${agentId} (${role})`);
+    log.info('orchestrator', `registered: ${agentId} (${role})`);
     return entry;
   }
 
@@ -33,7 +35,7 @@ class MCPOrchestrator {
     this.agents.delete(agentId);
     await this.board.deleteHashField('agents:registry', agentId);
     await this.board.publish('orchestrator:deregistered', { author: 'orchestrator', agentId });
-    console.log(`[Orchestrator] deregistered: ${agentId}`);
+    log.info('orchestrator', `deregistered: ${agentId}`);
   }
 
   async getAllAgents() {
@@ -51,7 +53,7 @@ class MCPOrchestrator {
   async assignTask(agentId, task) {
     if (!this.agents.has(agentId)) throw new Error(`Agent not registered: ${agentId}`);
     await this.board.publish(`command:${agentId}:task`, { author: 'orchestrator', ...task });
-    console.log(`[Orchestrator] task assigned: ${agentId} → ${task.action}`);
+    log.info('orchestrator', `task assigned: ${agentId} → ${task.action}`);
     return { agentId, task, status: 'assigned' };
   }
 
@@ -66,7 +68,7 @@ class MCPOrchestrator {
     if (entries.length > 0) {
       await this.board.batchPublish(entries);
     }
-    console.log(`[Orchestrator] broadcast to ${targets.length} agents: ${command.action}`);
+    log.info('orchestrator', `broadcast to ${targets.length} agents: ${command.action}`);
     return { targets, command, status: 'broadcast' };
   }
 

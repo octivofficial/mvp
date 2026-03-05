@@ -23,6 +23,8 @@
 const fsp = require('fs').promises;
 const path = require('path');
 const { Blackboard } = require('./blackboard');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const VAULT_DIR = path.join(__dirname, '..', 'vault', '04-Skills', 'reasoning');
 
@@ -38,7 +40,7 @@ class GoTReasoner {
   async init() {
     await this.board.connect();
     await fsp.mkdir(this.vaultDir, { recursive: true });
-    console.log('[GoT] initialized');
+    log.info('got', 'initialized');
   }
 
   // ── Graph Construction ────────────────────────────────────
@@ -158,7 +160,7 @@ class GoTReasoner {
       top5: synergies.slice(0, 5),
     });
 
-    console.log(`[GoT] synergy discovery: ${synergies.length} potential synergies`);
+    log.info('got', `synergy discovery: ${synergies.length} potential synergies`);
     return synergies.slice(0, 20);
   }
 
@@ -228,7 +230,7 @@ class GoTReasoner {
       top3: builds.slice(0, 3),
     });
 
-    console.log(`[GoT] optimal builds: ${builds.length} builds evaluated`);
+    log.info('got', `optimal builds: ${builds.length} builds evaluated`);
     return builds.slice(0, 5);
   }
 
@@ -281,7 +283,7 @@ class GoTReasoner {
       criticalGaps: gaps.filter(g => g.severity === 'critical').length,
     });
 
-    console.log(`[GoT] gap analysis: ${gaps.length} gaps (${gaps.filter(g => g.severity === 'critical').length} critical)`);
+    log.info('got', `gap analysis: ${gaps.length} gaps (${gaps.filter(g => g.severity === 'critical').length} critical)`);
     return gaps;
   }
 
@@ -340,7 +342,7 @@ class GoTReasoner {
    * Run all strategies and produce a comprehensive analysis
    */
   async fullReasoningCycle() {
-    console.log('[GoT] ═══ Full Reasoning Cycle ═══');
+    log.info('got', 'Full Reasoning Cycle started');
 
     const synergies = await this.discoverSynergies();
     const builds = await this.findOptimalBuilds();
@@ -371,7 +373,7 @@ class GoTReasoner {
       ...result.summary,
     });
 
-    console.log('[GoT] ═══ Reasoning Complete ═══');
+    log.info('got', 'Reasoning Complete');
     return result;
   }
 

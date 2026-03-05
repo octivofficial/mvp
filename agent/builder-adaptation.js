@@ -2,6 +2,8 @@
  * Builder Adaptation — extracted from builder.js
  * AC-5: Self-improvement on failure + learned skill application.
  */
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 /**
  * Classify error message into a known error type.
@@ -57,8 +59,8 @@ async function selfImprove(agent, error) {
       improvement,
       iteration: agent.reactIterations,
     });
-    if (agent.logger) agent.logger.logEvent(agent.id, { type: 'self_improve', ...improvement }).catch(e => console.error('[Log]', e.message));
-    console.log(`[${agent.id}] AC-5 self-improve: ${improvement.type} → ${improvement.value}`);
+    if (agent.logger) agent.logger.logEvent(agent.id, { type: 'self_improve', ...improvement }).catch(e => log.error(agent.id, 'log persist error', { error: e.message }));
+    log.info(agent.id, `AC-5 self-improve: ${improvement.type} → ${improvement.value}`);
 
     if (!agent.acProgress[5]) {
       agent.acProgress[5] = true;
@@ -98,18 +100,18 @@ async function tryLearnedSkill(agent, error) {
     const valid = await agent.skillPipeline.validateSkill(skill.code, 1);
     if (!valid) {
       await agent.skillPipeline.updateSuccessRate(skillName, false);
-      if (agent.logger) agent.logger.logEvent(agent.id, { type: 'skill_applied', skill: skillName, success: false, error: 'validation_failed' }).catch(e => console.error('[Log]', e.message));
-      console.log(`[${agent.id}] learned skill validation failed: ${skillName}`);
+      if (agent.logger) agent.logger.logEvent(agent.id, { type: 'skill_applied', skill: skillName, success: false, error: 'validation_failed' }).catch(e => log.error(agent.id, 'log persist error', { error: e.message }));
+      log.info(agent.id, `learned skill validation failed: ${skillName}`);
       return false;
     }
     await agent.skillPipeline.updateSuccessRate(skillName, true);
-    if (agent.logger) agent.logger.logEvent(agent.id, { type: 'skill_applied', skill: skillName, success: true }).catch(e => console.error('[Log]', e.message));
-    console.log(`[${agent.id}] applied learned skill: ${skillName}`);
+    if (agent.logger) agent.logger.logEvent(agent.id, { type: 'skill_applied', skill: skillName, success: true }).catch(e => log.error(agent.id, 'log persist error', { error: e.message }));
+    log.info(agent.id, `applied learned skill: ${skillName}`);
     return true;
   } catch (err) {
     await agent.skillPipeline.updateSuccessRate(skillName, false);
-    if (agent.logger) agent.logger.logEvent(agent.id, { type: 'skill_applied', skill: skillName, success: false, error: err.message }).catch(e => console.error('[Log]', e.message));
-    console.log(`[${agent.id}] learned skill failed: ${skillName} — ${err.message}`);
+    if (agent.logger) agent.logger.logEvent(agent.id, { type: 'skill_applied', skill: skillName, success: false, error: err.message }).catch(e => log.error(agent.id, 'log persist error', { error: e.message }));
+    log.info(agent.id, `learned skill failed: ${skillName} — ${err.message}`);
     return false;
   }
 }

@@ -8,6 +8,8 @@
 const { Blackboard } = require('./blackboard');
 const { validateCode } = require('./vm-sandbox');
 const T = require('../config/timeouts');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 const DAILY_LIMIT = parseInt(process.env.SKILL_DAILY_LIMIT) || 5;
 const MIN_SUCCESS_RATE = parseFloat(process.env.SKILL_MIN_SUCCESS_RATE) || 0.7;
@@ -28,7 +30,7 @@ class SkillPipeline {
       this.dailyCount = parsed.count;
       this.dailyResetAt = parsed.resetAt;
     }
-    console.log(`[SkillPipeline] initialized, daily: ${this.dailyCount}/${DAILY_LIMIT}`);
+    log.info('skill-pipeline', `initialized, daily: ${this.dailyCount}/${DAILY_LIMIT}`);
   }
 
   // 4.1: Full pipeline — failure → generate → validate → deploy
@@ -69,7 +71,7 @@ class SkillPipeline {
       trigger: failureContext.error,
     });
 
-    console.log(`[SkillPipeline] deployed: ${skillJson.name} (${this.dailyCount}/${DAILY_LIMIT})`);
+    log.info('skill-pipeline', `deployed: ${skillJson.name} (${this.dailyCount}/${DAILY_LIMIT})`);
     return { success: true, skill: skillJson.name };
   }
 
@@ -77,7 +79,7 @@ class SkillPipeline {
   async validateSkill(code, attempts = 3) {
     const result = await validateCode(code, attempts);
     if (!result.valid) {
-      console.error(`[SkillPipeline] validation failed (${result.attempt}/${attempts}): ${result.error}`);
+      log.error('skill-pipeline', `validation failed (${result.attempt}/${attempts})`, { error: result.error });
     }
     return result.valid;
   }
@@ -107,7 +109,7 @@ class SkillPipeline {
     // Discard if success rate drops below threshold
     if (skill.uses >= 3 && skill.successRate < MIN_SUCCESS_RATE) {
       await this.board.deleteHashField('skills:library', skillName);
-      console.log(`[SkillPipeline] discarded: ${skillName} (rate: ${skill.successRate.toFixed(2)})`);
+      log.info('skill-pipeline', `discarded: ${skillName} (rate: ${skill.successRate.toFixed(2)})`);
       return { discarded: true, skill: skillName, rate: skill.successRate };
     }
 

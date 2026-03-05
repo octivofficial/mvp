@@ -22,6 +22,8 @@ const { join } = require('path');
 const { Blackboard, PREFIX } = require('./blackboard');
 const { SafetyAgent } = require('./safety');
 const T = require('../config/timeouts');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 // Load channel config
 function loadConfig() {
@@ -67,20 +69,20 @@ class OctivDiscordBot {
     await this.client.login(this.token);
 
     this.client.once('ready', () => {
-      console.log(`[Discord] Logged in as ${this.client.user.tag}`);
+      log.info('discord', `logged in as ${this.client.user.tag}`);
       this._resolveChannels();
       this._subscribeBlackboard();
     });
 
     this.client.on('messageCreate', (msg) => this._handleCommand(msg));
-    this.client.on('error', (err) => console.error('[Discord] Client error:', err.message));
+    this.client.on('error', (err) => log.error('discord', 'client error', { error: err.message }));
   }
 
   async stop() {
     if (this.subscriber) await this.subscriber.disconnect();
     if (this.board) await this.board.disconnect();
     if (this.client) this.client.destroy();
-    console.log('[Discord] Disconnected');
+    log.info('discord', 'disconnected');
   }
 
   // --- Channel Resolution ---
@@ -88,7 +90,7 @@ class OctivDiscordBot {
   _resolveChannels() {
     const guild = this.client.guilds.cache.get(this.guildId);
     if (!guild) {
-      console.error('[Discord] Guild not found:', this.guildId);
+      log.error('discord', 'guild not found', { guildId: this.guildId });
       return;
     }
 
@@ -97,11 +99,11 @@ class OctivDiscordBot {
     this.channels.alerts = resolve(this.config.alertsChannel);
     this.channels.commands = resolve(this.config.commandsChannel);
 
-    console.log('[Discord] Channels resolved:',
-      Object.entries(this.channels)
+    log.info('discord', 'channels resolved', {
+      channels: Object.entries(this.channels)
         .map(([k, v]) => `${k}=${v ? v.name : 'N/A'}`)
         .join(', ')
-    );
+    });
   }
 
   // --- Blackboard -> Discord Bridge ---
@@ -113,7 +115,7 @@ class OctivDiscordBot {
         const data = JSON.parse(message);
         this._postStatusEmbed(channel, data);
       } catch (err) {
-        console.error('[Discord] Failed to parse status message:', err.message);
+        log.error('discord', 'failed to parse status message', { error: err.message });
       }
     });
 
@@ -123,7 +125,7 @@ class OctivDiscordBot {
         const data = JSON.parse(message);
         this._postAlertEmbed('threat', data);
       } catch (err) {
-        console.error('[Discord] Failed to parse threat message:', err.message);
+        log.error('discord', 'failed to parse threat message', { error: err.message });
       }
     });
 
@@ -133,13 +135,13 @@ class OctivDiscordBot {
         const data = JSON.parse(message);
         this._postAlertEmbed('reflexion', data);
       } catch (err) {
-        console.error('[Discord] Failed to parse reflexion message:', err.message);
+        log.error('discord', 'failed to parse reflexion message', { error: err.message });
       }
     });
 
     // L-3: Removed dead octiv:ac:* subscription (no publisher exists)
 
-    console.log('[Discord] Blackboard subscriptions active');
+    log.info('discord', 'blackboard subscriptions active');
   }
 
   _postStatusEmbed(channel, data) {
@@ -387,7 +389,7 @@ function formatPos(pos) {
 }
 
 function logSendError(err) {
-  console.error('[Discord] Failed to send message:', err.message);
+  log.error('discord', 'failed to send message', { error: err.message });
 }
 
 module.exports = { OctivDiscordBot };
@@ -397,7 +399,7 @@ module.exports = { OctivDiscordBot };
 if (require.main === module) {
   const bot = new OctivDiscordBot();
   bot.start().catch((err) => {
-    console.error('[Discord] Failed to start:', err.message);
+    log.error('discord', 'failed to start', { error: err.message });
     process.exit(1);
   });
 
