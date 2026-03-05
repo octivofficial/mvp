@@ -1,7 +1,7 @@
 /**
  * Discord bot unit tests.
- * Tests message parsing, embed formatting, and command routing
- * without requiring actual Discord/Redis connections.
+ * Tests message parsing, embed formatting, command routing,
+ * NeoStarz subscriptions, throttling, and new embed methods.
  */
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -76,6 +76,11 @@ describe('Discord Bot — Helpers', () => {
     it('should parse !reflexion command', () => {
       const result = parseCommand('!reflexion');
       assert.deepEqual(result, { cmd: 'reflexion', args: [] });
+    });
+
+    it('should parse !help command', () => {
+      const result = parseCommand('!help');
+      assert.deepEqual(result, { cmd: 'help', args: [] });
     });
   });
 });
@@ -172,7 +177,7 @@ describe('Discord Bot — JSON Parsing Safety', () => {
 
 // ── OctivDiscordBot Class Tests ──────────────────────────────────
 
-const { OctivDiscordBot } = require('../agent/discord-bot');
+const { OctivDiscordBot, REACT_THROTTLE_MS } = require('../agent/discord-bot');
 const { Blackboard } = require('../agent/blackboard');
 
 // Helper: create a mock message object
@@ -202,6 +207,12 @@ describe('OctivDiscordBot — Constructor', () => {
   it('should default redisUrl to localhost:6380', () => {
     const bot = new OctivDiscordBot({});
     assert.ok(bot.redisUrl.includes('6380'));
+  });
+
+  it('should initialize react throttle map and reconnect counter', () => {
+    const bot = new OctivDiscordBot({});
+    assert.ok(bot._reactThrottle instanceof Map);
+    assert.equal(bot._reconnectAttempts, 0);
   });
 });
 
@@ -250,10 +261,42 @@ describe('OctivDiscordBot — _handleCommand', () => {
     assert.ok(reply.embeds || reply.toString().includes('leader'));
   });
 
+  it('should route !help to _cmdHelp', async () => {
+    const msg = mockMsg('!help');
+    await bot._handleCommand(msg);
+    assert.equal(msg._replies.length, 1);
+    const reply = msg._replies[0];
+    assert.ok(reply.embeds);
+    assert.equal(reply.embeds[0].data.title, 'NeoStarz Commands');
+  });
+
   it('should ignore unknown commands silently', async () => {
     const msg = mockMsg('!unknown_cmd');
     await bot._handleCommand(msg);
     assert.equal(msg._replies.length, 0);
+  });
+});
+
+describe('OctivDiscordBot — _cmdHelp', () => {
+  it('should list all NeoStarz commands', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    const msg = mockMsg('!help');
+    await bot._cmdHelp(msg);
+
+    assert.equal(msg._replies.length, 1);
+    const reply = msg._replies[0];
+    assert.ok(reply.embeds);
+    const embed = reply.embeds[0];
+    assert.equal(embed.data.title, 'NeoStarz Commands');
+    assert.equal(embed.data.color, 0x3498db);
+
+    const fieldNames = embed.data.fields.map(f => f.name);
+    assert.ok(fieldNames.includes('!help'));
+    assert.ok(fieldNames.includes('!status'));
+    assert.ok(fieldNames.includes('!team'));
+    assert.ok(fieldNames.includes('!assign <agent> <task>'));
+    assert.ok(fieldNames.includes('!reflexion'));
+    assert.ok(fieldNames.includes('!rc <subcmd>'));
   });
 });
 
@@ -332,9 +375,350 @@ describe('OctivDiscordBot — _cmdTeam', () => {
     assert.ok(desc.includes('leader'));
     assert.ok(desc.includes('builder'));
   });
+
+  it('should include explorer in fallback agents', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.board = { getHash: async () => ({}) };
+
+    const msg = mockMsg('!team');
+    await bot._handleCommand(msg);
+
+    const desc = msg._replies[0].embeds[0].data.description;
+    assert.ok(desc.includes('explorer'), 'fallback should include explorer agent');
+  });
 });
 
-// ── New Integration Tests: _postStatusEmbed, _postAlertEmbed, _resolveChannels ──
+// ── New NeoStarz Embed Tests ──────────────────────────────────
+
+describe('OctivDiscordBot — _postHealthEmbed', () => {
+  it('should send green embed for high health', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postHealthEmbed({
+      agentId: 'builder-01',
+      health: 18,
+      food: 16,
+      position: { x: 10, y: 64, z: -30 },
+    });
+
+    assert.ok(sentData);
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('builder-01'));
+    assert.equal(embed.data.color, 0x2ecc71); // green for hp > 14
+    assert.equal(embed.data.fields.length, 3); // HP, Food, Position
+  });
+
+  it('should send yellow embed for medium health', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postHealthEmbed({ agentId: 'builder-02', health: 10, food: 8 });
+
+    const embed = sentData.embeds[0];
+    assert.equal(embed.data.color, 0xf39c12); // yellow for 7 < hp <= 14
+  });
+
+  it('should send red embed for low health', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postHealthEmbed({ agentId: 'builder-03', health: 4, food: 2 });
+
+    const embed = sentData.embeds[0];
+    assert.equal(embed.data.color, 0xe74c3c); // red for hp <= 7
+  });
+
+  it('should no-op when status channel is null', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.channels.status = null;
+    bot._postHealthEmbed({ agentId: 'builder-01', health: 20, food: 20 });
+    // No throw = pass
+  });
+});
+
+describe('OctivDiscordBot — _postInventoryEmbed', () => {
+  it('should show item list and wood count', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postInventoryEmbed({
+      agentId: 'builder-01',
+      items: [
+        { name: 'oak_log', count: 8 },
+        { name: 'wooden_pickaxe', count: 1 },
+      ],
+      woodCount: 8,
+      tools: ['wooden_pickaxe', 'wooden_sword'],
+    });
+
+    assert.ok(sentData);
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('builder-01'));
+    assert.equal(embed.data.color, 0x3498db);
+    assert.ok(embed.data.description.includes('oak_log x8'));
+    assert.ok(embed.data.description.includes('wooden_pickaxe x1'));
+    // Wood and Tools fields
+    const fieldNames = embed.data.fields.map(f => f.name);
+    assert.ok(fieldNames.includes('Wood'));
+    assert.ok(fieldNames.includes('Tools'));
+  });
+
+  it('should show empty inventory message', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postInventoryEmbed({ agentId: 'builder-02', items: [] });
+
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.description.includes('Empty inventory'));
+  });
+});
+
+describe('OctivDiscordBot — _postReactPulse', () => {
+  it('should send react pulse embed', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postReactPulse({
+      agentId: 'builder-01',
+      iteration: 47,
+      action: 'collectBlock',
+    });
+
+    assert.ok(sentData);
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('builder-01'));
+    assert.equal(embed.data.color, 0x9b59b6);
+    assert.ok(embed.data.description.includes('#47'));
+  });
+
+  it('should throttle rapid pulses from same agent', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sendCount = 0;
+    bot.channels.status = { send: async () => { sendCount++; } };
+
+    // First pulse — should send
+    bot._postReactPulse({ agentId: 'builder-01', iteration: 1 });
+    assert.equal(sendCount, 1);
+
+    // Second pulse immediately — should be throttled
+    bot._postReactPulse({ agentId: 'builder-01', iteration: 2 });
+    assert.equal(sendCount, 1);
+
+    // Third pulse from different agent — should send
+    bot._postReactPulse({ agentId: 'builder-02', iteration: 1 });
+    assert.equal(sendCount, 2);
+  });
+
+  it('should allow pulse after throttle window expires', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sendCount = 0;
+    bot.channels.status = { send: async () => { sendCount++; } };
+
+    // Simulate a pulse from the past
+    bot._reactThrottle.set('builder-01', Date.now() - REACT_THROTTLE_MS - 1);
+
+    bot._postReactPulse({ agentId: 'builder-01', iteration: 50 });
+    assert.equal(sendCount, 1);
+  });
+});
+
+describe('OctivDiscordBot — _postMilestoneEmbed', () => {
+  it('should create milestone embed with position', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postMilestoneEmbed({
+      agentId: 'builder-02',
+      message: 'Arrived at shelter!',
+      position: { x: 50, y: 70, z: -20 },
+    });
+
+    assert.ok(sentData);
+    const embed = sentData.embeds[0];
+    assert.ok(embed.data.title.includes('builder-02'));
+    assert.equal(embed.data.color, 0xf1c40f);
+    assert.ok(embed.data.description.includes('Arrived at shelter'));
+    const posField = embed.data.fields.find(f => f.name === 'Position');
+    assert.ok(posField);
+    assert.equal(posField.value, '50, 70, -20');
+  });
+
+  it('should handle milestone with items', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.status = { send: async (d) => { sentData = d; } };
+
+    bot._postMilestoneEmbed({
+      agentId: 'builder-03',
+      message: 'Collected resources',
+      items: '4x oak_log',
+    });
+
+    const embed = sentData.embeds[0];
+    const itemField = embed.data.fields.find(f => f.name === 'Items');
+    assert.ok(itemField);
+    assert.equal(itemField.value, '4x oak_log');
+  });
+});
+
+describe('OctivDiscordBot — _postSkillEmbed', () => {
+  it('should create skill embed with agent and error type', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.alerts = { send: async (d) => { sentData = d; } };
+
+    bot._postSkillEmbed({
+      skillName: 'fall-handler',
+      agentId: 'builder-01',
+      errorType: 'fall-damage',
+      trigger: 'emergency',
+    });
+
+    assert.ok(sentData);
+    const embed = sentData.embeds[0];
+    assert.equal(embed.data.title, 'New Skill Learned');
+    assert.equal(embed.data.color, 0x1abc9c);
+    assert.ok(embed.data.description.includes('fall-handler'));
+
+    const fieldNames = embed.data.fields.map(f => f.name);
+    assert.ok(fieldNames.includes('Agent'));
+    assert.ok(fieldNames.includes('Error Type'));
+    assert.ok(fieldNames.includes('Trigger'));
+  });
+
+  it('should no-op when alerts channel is null', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.channels.alerts = null;
+    bot._postSkillEmbed({ skillName: 'test-skill' });
+    // No throw = pass
+  });
+});
+
+describe('OctivDiscordBot — _postAlertEmbed (extended)', () => {
+  it('should handle GoT reasoning complete', () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    let sentData = null;
+    bot.channels.alerts = { send: async (d) => { sentData = d; } };
+
+    bot._postAlertEmbed('got', {
+      description: 'GoT analysis complete',
+      totalSynergies: 5,
+      totalGaps: 2,
+    });
+
+    assert.ok(sentData);
+    assert.equal(sentData.content, ''); // not urgent
+    const embed = sentData.embeds[0];
+    assert.equal(embed.data.title, 'GoT Reasoning Complete');
+    assert.equal(embed.data.color, 0x9b59b6);
+    const synField = embed.data.fields.find(f => f.name === 'Synergies');
+    assert.ok(synField);
+    assert.equal(synField.value, '5');
+  });
+});
+
+describe('OctivDiscordBot — _resolveChannels (with warnings)', () => {
+  it('should resolve channels from mock guild cache', () => {
+    const bot = new OctivDiscordBot({
+      token: 'fake',
+      guildId: 'guild-123',
+      config: { statusChannel: 'ch-1', alertsChannel: 'ch-2', commandsChannel: 'ch-3' },
+    });
+
+    const mockChannels = new Map([
+      ['ch-1', { id: 'ch-1', name: 'neostarz-live' }],
+      ['ch-2', { id: 'ch-2', name: 'neostarz-alerts' }],
+      ['ch-3', { id: 'ch-3', name: 'neostarz-commands' }],
+    ]);
+    const mockGuild = { channels: { cache: { get: (id) => mockChannels.get(id) } } };
+    bot.client = { guilds: { cache: { get: (id) => id === 'guild-123' ? mockGuild : null } } };
+
+    bot._resolveChannels();
+
+    assert.equal(bot.channels.status.name, 'neostarz-live');
+    assert.equal(bot.channels.alerts.name, 'neostarz-alerts');
+    assert.equal(bot.channels.commands.name, 'neostarz-commands');
+  });
+
+  it('should warn for null channel IDs', () => {
+    const bot = new OctivDiscordBot({
+      token: 'fake',
+      guildId: 'guild-123',
+      config: { statusChannel: '', alertsChannel: '', commandsChannel: '' },
+    });
+
+    const mockGuild = { channels: { cache: { get: () => null } } };
+    bot.client = { guilds: { cache: { get: (id) => id === 'guild-123' ? mockGuild : null } } };
+
+    // Should not throw — just logs warnings
+    bot._resolveChannels();
+    assert.equal(bot.channels.status, null);
+    assert.equal(bot.channels.alerts, null);
+    assert.equal(bot.channels.commands, null);
+  });
+
+  it('should handle missing guild gracefully', () => {
+    const bot = new OctivDiscordBot({
+      token: 'fake',
+      guildId: 'nonexistent',
+      config: { statusChannel: 'ch-1' },
+    });
+    bot.client = { guilds: { cache: { get: () => null } } };
+
+    bot._resolveChannels();
+    assert.equal(bot.channels.status, undefined);
+  });
+});
+
+// ── Reconnection Tests ──────────────────────────────────
+
+describe('OctivDiscordBot — Reconnection', () => {
+  it('should stop after max reconnect attempts', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot._reconnectAttempts = 10; // already at max
+
+    // Should not throw, just log and return
+    await bot._reconnect();
+    assert.equal(bot._reconnectAttempts, 10);
+  });
+
+  it('should increment attempt counter', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot._reconnectAttempts = 0;
+
+    // Mock client.login to fail
+    bot.client = {
+      login: async () => { throw new Error('test fail'); },
+      destroy: () => {},
+    };
+
+    // Monkey-patch _reconnect to avoid infinite recursion in test
+    let recurseCalled = false;
+    const original = bot._reconnect.bind(bot);
+    bot._reconnect = async function () {
+      if (bot._reconnectAttempts >= 2) {
+        bot._reconnectAttempts = 10; // stop recursion
+        recurseCalled = true;
+        return;
+      }
+      return original();
+    };
+
+    await bot._reconnect();
+    assert.ok(recurseCalled || bot._reconnectAttempts > 0);
+  });
+});
+
+// ── Integration: _postStatusEmbed, _postAlertEmbed ──────────
 
 describe('OctivDiscordBot — _postStatusEmbed', () => {
   it('should send embed via mock channel', () => {
@@ -361,11 +745,9 @@ describe('OctivDiscordBot — _postStatusEmbed', () => {
     const bot = new OctivDiscordBot({ token: 'fake', config: {} });
     bot.channels.status = null;
 
-    // Should not throw
     bot._postStatusEmbed('octiv:builder-01:status', {
       agentId: 'builder-01', health: 20,
     });
-    // No assertion needed — just verifying no throw
   });
 });
 
@@ -408,47 +790,7 @@ describe('OctivDiscordBot — _postAlertEmbed', () => {
   it('should no-op when alerts channel is null', () => {
     const bot = new OctivDiscordBot({ token: 'fake', config: {} });
     bot.channels.alerts = null;
-
-    // Should not throw
     bot._postAlertEmbed('threat', { description: 'test' });
-  });
-});
-
-describe('OctivDiscordBot — _resolveChannels', () => {
-  it('should resolve channels from mock guild cache', () => {
-    const bot = new OctivDiscordBot({
-      token: 'fake',
-      guildId: 'guild-123',
-      config: { statusChannel: 'ch-1', alertsChannel: 'ch-2', commandsChannel: 'ch-3' },
-    });
-
-    const mockChannels = new Map([
-      ['ch-1', { id: 'ch-1', name: 'octiv-status' }],
-      ['ch-2', { id: 'ch-2', name: 'octiv-alerts' }],
-      ['ch-3', { id: 'ch-3', name: 'octiv-commands' }],
-    ]);
-    const mockGuild = { channels: { cache: { get: (id) => mockChannels.get(id) } } };
-    bot.client = { guilds: { cache: { get: (id) => id === 'guild-123' ? mockGuild : null } } };
-
-    bot._resolveChannels();
-
-    assert.equal(bot.channels.status.name, 'octiv-status');
-    assert.equal(bot.channels.alerts.name, 'octiv-alerts');
-    assert.equal(bot.channels.commands.name, 'octiv-commands');
-  });
-
-  it('should handle missing guild gracefully', () => {
-    const bot = new OctivDiscordBot({
-      token: 'fake',
-      guildId: 'nonexistent',
-      config: { statusChannel: 'ch-1' },
-    });
-    bot.client = { guilds: { cache: { get: () => null } } };
-
-    // Should not throw
-    bot._resolveChannels();
-    // Channels remain unchanged (empty object from constructor)
-    assert.equal(bot.channels.status, undefined);
   });
 });
 
@@ -611,5 +953,13 @@ describe('OctivDiscordBot — stop()', () => {
     assert.ok(calls.includes('sub:disconnect'));
     assert.ok(calls.includes('board:disconnect'));
     assert.ok(calls.includes('client:destroy'));
+  });
+});
+
+// ── REACT_THROTTLE_MS export test ──
+
+describe('REACT_THROTTLE_MS', () => {
+  it('should be exported and equal 30000', () => {
+    assert.equal(REACT_THROTTLE_MS, 30000);
   });
 });

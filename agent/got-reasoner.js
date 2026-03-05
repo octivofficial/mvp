@@ -380,8 +380,7 @@ class GoTReasoner {
   // ── Vault Persistence ─────────────────────────────────────
 
   async _saveReasoningTrace(strategy, data) {
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-    const filename = `${strategy}_${timestamp}.md`;
+    const filename = `${strategy}.md`;
     const filepath = path.join(this.vaultDir, filename);
 
     const md = `---
