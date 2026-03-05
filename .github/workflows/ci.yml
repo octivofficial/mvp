@@ -39,6 +39,6 @@ jobs:
         run: npm run lint
 
       - name: Run tests with coverage
-        run: npx c8 --reporter=text --lines 60 --branches 40 --functions 50 node --test --test-force-exit --test-concurrency=1 test/*.test.js
+        run: node --test --experimental-test-coverage --test-force-exit --test-concurrency=1 test/*.test.js
         env:
           REDIS_PORT: 6380

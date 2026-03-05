@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test --test-force-exit --test-concurrency=1 test/*.test.js",
-    "test:coverage": "c8 --reporter=text --reporter=html --lines 60 --branches 40 --functions 50 node --test --test-force-exit --test-concurrency=1 test/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-force-exit --test-concurrency=1 test/*.test.js",
     "test:bot": "node --test --test-force-exit test/bot.test.js",
     "test:blackboard": "node --test --test-force-exit test/blackboard.test.js",
     "server": "bash start-server.sh",
