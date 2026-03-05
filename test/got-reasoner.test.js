@@ -5,6 +5,9 @@
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const fsp = require('fs').promises;
+const path = require('path');
+const os = require('os');
 const { GoTReasoner } = require('../agent/got-reasoner');
 
 // ── Mock Helpers ────────────────────────────────────────────
@@ -293,5 +296,73 @@ describe('GoTReasoner — shutdown', () => {
 
     await got.shutdown();
     assert.ok(disconnected);
+  });
+});
+
+describe('GoTReasoner — vault persistence', () => {
+  it('uses fixed filenames without timestamps', async () => {
+    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'got-vault-'));
+    const zk = createMockZettelkasten();
+    const got = new GoTReasoner(zk);
+    got.vaultDir = tmpDir;
+
+    await got._saveReasoningTrace('synergy-discovery', { test: true });
+    const files = await fsp.readdir(tmpDir);
+    assert.deepStrictEqual(files, ['synergy-discovery.md']);
+    assert.ok(!files[0].includes('_2026'), 'should not have timestamp suffix');
+  });
+
+  it('writes valid YAML frontmatter', async () => {
+    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'got-yaml-'));
+    const zk = createMockZettelkasten();
+    const got = new GoTReasoner(zk);
+    got.vaultDir = tmpDir;
+
+    await got._saveReasoningTrace('gap-analysis', { gaps: [] });
+    const content = await fsp.readFile(path.join(tmpDir, 'gap-analysis.md'), 'utf-8');
+    assert.ok(content.startsWith('---'));
+    assert.ok(content.includes('strategy: "gap-analysis"'));
+    assert.ok(content.includes('tags: ["got", "reasoning", "gap-analysis"]'));
+    assert.ok(content.includes('date:'));
+  });
+
+  it('overwrites same file on repeated calls', async () => {
+    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'got-overwrite-'));
+    const zk = createMockZettelkasten();
+    const got = new GoTReasoner(zk);
+    got.vaultDir = tmpDir;
+
+    await got._saveReasoningTrace('optimal-builds', { v: 1 });
+    await got._saveReasoningTrace('optimal-builds', { v: 2 });
+    const files = await fsp.readdir(tmpDir);
+    assert.equal(files.length, 1);
+    const content = await fsp.readFile(path.join(tmpDir, 'optimal-builds.md'), 'utf-8');
+    assert.ok(content.includes('"v": 2'));
+  });
+
+  it('generates Mermaid skill graph', async () => {
+    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'got-mermaid-'));
+    // Create reasoning subdir to mimic vault structure
+    const reasoningDir = path.join(tmpDir, '04-Skills', 'reasoning');
+    await fsp.mkdir(reasoningDir, { recursive: true });
+
+    const notes = {
+      mine_wood: makeNote('mine_wood', { tier: 'Apprentice', xp: 15, links: ['craft_planks'] }),
+      craft_planks: makeNote('craft_planks', { tier: 'Novice', xp: 5, links: ['mine_wood'] }),
+    };
+    const zk = createMockZettelkasten(notes);
+    const got = new GoTReasoner(zk);
+    got.vaultDir = reasoningDir;
+    got.board = createMockBoard();
+
+    await got._generateMermaidGraph();
+
+    const graphPath = path.join(tmpDir, '04-Skills', 'Skill-Graph.md');
+    const content = await fsp.readFile(graphPath, 'utf-8');
+    assert.ok(content.includes('```mermaid'));
+    assert.ok(content.includes('graph TD'));
+    assert.ok(content.includes('mine_wood'));
+    assert.ok(content.includes('craft_planks'));
+    assert.ok(content.includes('tags: [graph, skills, auto-generated]'));
   });
 });
