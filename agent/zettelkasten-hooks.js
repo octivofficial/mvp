@@ -158,6 +158,7 @@ class ZettelkastenHooks {
    * After group reflexion → trigger GoT reasoning
    */
   wireToLeader(leader) {
+    this._wiredLeader = leader;
     const originalGroupReflexion = leader.triggerGroupReflexion?.bind(leader);
     if (!originalGroupReflexion) return;
 
@@ -167,6 +168,12 @@ class ZettelkastenHooks {
       // Trigger GoT reasoning after group reflexion
       try {
         const gotResult = await this.got.fullReasoningCycle();
+
+        // Feed GoT insights back to Leader
+        if (leader.processGoTFeedback) {
+          await leader.processGoTFeedback(gotResult);
+        }
+
         if (this.logger) {
           this.logger.logEvent('zettelkasten-hooks', {
             type: 'got_triggered_by_reflexion',
@@ -261,7 +268,12 @@ class ZettelkastenHooks {
       this.ruminationsSinceReasoning = 0;
       log.info('zk-hooks', 'triggering GoT reasoning after rumination cycle');
       try {
-        await this.got.fullReasoningCycle();
+        const gotResult = await this.got.fullReasoningCycle();
+
+        // Feed GoT insights back to Leader if wired
+        if (this._wiredLeader?.processGoTFeedback) {
+          await this._wiredLeader.processGoTFeedback(gotResult);
+        }
       } catch (err) {
         log.error('zk-hooks', 'GoT reasoning failed', { error: err.message });
       }

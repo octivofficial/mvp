@@ -276,22 +276,29 @@ describe('ZettelkastenHooks — Wiring', () => {
     assert.equal(last.succeeded, true);
   });
 
-  it('wireToLeader should trigger GoT on group reflexion', async () => {
+  it('wireToLeader should trigger GoT and pass result to leader', async () => {
     let gotCalled = false;
+    let feedbackReceived = null;
     const originalCycle = got.fullReasoningCycle.bind(got);
     got.fullReasoningCycle = async () => {
       gotCalled = true;
-      return { summary: { totalSynergies: 0, totalGaps: 0 } };
+      return {
+        synergies: [], gaps: [], evolutions: [],
+        summary: { totalSynergies: 0, totalGaps: 0, criticalGaps: 0, closestToMaster: 'none' },
+      };
     };
 
     const mockLeader = {
       triggerGroupReflexion: async () => ({ entries: 3, agents: 3 }),
+      processGoTFeedback: async (result) => { feedbackReceived = result; return { actions: [] }; },
     };
 
     hooks.wireToLeader(mockLeader);
     await mockLeader.triggerGroupReflexion();
 
     assert.ok(gotCalled, 'GoT fullReasoningCycle should have been called');
+    assert.ok(feedbackReceived, 'processGoTFeedback should have received GoT result');
+    assert.equal(feedbackReceived.summary.totalSynergies, 0);
 
     // Restore
     got.fullReasoningCycle = originalCycle;

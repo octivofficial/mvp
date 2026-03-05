@@ -209,6 +209,75 @@ class LeaderAgent {
     return false;
   }
 
+  // Process GoT reasoning feedback: gaps → skills, synergies → compounds, evolution → log
+  async processGoTFeedback(gotResult) {
+    if (!gotResult || !gotResult.summary) {
+      return { actions: [] };
+    }
+
+    const actions = [];
+    const { gaps = [], synergies = [], evolutions = [] } = gotResult;
+    const { criticalGaps = 0 } = gotResult.summary;
+
+    // Priority 1: Critical gaps → generate skills
+    if (this.skillPipeline && criticalGaps > 0) {
+      for (const gap of gaps.filter(g => g.severity === 'critical')) {
+        try {
+          const result = await this.skillPipeline.generateFromFailure({
+            error: gap.errorType,
+            errorType: gap.errorType,
+            agentId: this.id,
+            severity: 'critical',
+          });
+          if (result.success) {
+            await this.injectLearnedSkill(result.skill);
+            actions.push({ type: 'gap_skill_created', errorType: gap.errorType, skill: result.skill });
+          }
+        } catch (err) {
+          log.error(this.id, 'gap skill generation failed', { error: err.message, errorType: gap.errorType });
+        }
+      }
+    }
+
+    // Priority 2: High synergies → suggest compounds
+    const highSynergies = synergies.filter(s => s.score >= 0.6);
+    if (highSynergies.length > 0) {
+      await this.board.publish('leader:got:compound-suggestion', {
+        author: 'leader',
+        synergies: highSynergies,
+        suggestedAt: Date.now(),
+      });
+      actions.push({ type: 'compound_suggested', count: highSynergies.length });
+    }
+
+    // Priority 3: Evolution insights
+    if (evolutions.length > 0 && evolutions[0]) {
+      const closest = evolutions[0];
+      actions.push({ type: 'evolution_noted', skill: closest.skill, usesToMaster: closest.usesToMaster });
+      log.info(this.id, `closest to Master: ${closest.skill} (${closest.usesToMaster} uses)`);
+    }
+
+    // Store analysis on Blackboard for dashboard
+    await this.board.publish('leader:got:actions', {
+      author: 'leader',
+      actions,
+      summary: gotResult.summary,
+      processedAt: Date.now(),
+    });
+
+    if (this.logger) {
+      this.logger.logEvent(this.id, {
+        type: 'got_feedback_processed',
+        actionsCount: actions.length,
+        criticalGaps,
+        highSynergies: highSynergies.length,
+      }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
+    }
+
+    log.info(this.id, `GoT feedback: ${actions.length} actions (${criticalGaps} critical gaps, ${highSynergies.length} synergies)`);
+    return { actions };
+  }
+
   async shutdown() {
     if (this._missionTimer) clearInterval(this._missionTimer);
     await this.board.disconnect();
