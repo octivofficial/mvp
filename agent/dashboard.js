@@ -56,43 +56,34 @@ class DashboardServer {
   }
 
   _subscribeUpdates() {
-    this.subscriber.pSubscribe('octiv:agent:*', (message, channel) => {
-      try {
-        const data = JSON.parse(message);
-        const parts = channel.split(':');
-        const agentId = parts[2];
-        const eventType = parts.slice(3).join(':');
-
-        this.agentState[agentId] = {
-          ...this.agentState[agentId],
-          [eventType]: data,
-          lastUpdate: Date.now(),
-        };
-
-        this._broadcast({ type: eventType, agentId, data });
-      } catch {}
+    this._safePSub('octiv:agent:*', (data, channel) => {
+      const [, , agentId, ...rest] = channel.split(':');
+      const eventType = rest.join(':');
+      this.agentState[agentId] = {
+        ...this.agentState[agentId],
+        [eventType]: data,
+        lastUpdate: Date.now(),
+      };
+      this._broadcast({ type: eventType, agentId, data });
     });
 
-    this.subscriber.pSubscribe('octiv:safety:*', (message, channel) => {
-      try {
-        const data = JSON.parse(message);
-        this._broadcast({ type: 'safety', channel, data });
-      } catch {}
+    this._safePSub('octiv:safety:*', (data, channel) => {
+      this._broadcast({ type: 'safety', channel, data });
     });
 
-    this.subscriber.pSubscribe('octiv:leader:*', (message, channel) => {
-      try {
-        const data = JSON.parse(message);
-        this._broadcast({ type: 'leader', channel, data });
-      } catch {}
+    this._safePSub('octiv:leader:*', (data, channel) => {
+      this._broadcast({ type: 'leader', channel, data });
     });
 
-    this.subscriber.pSubscribe('octiv:zettelkasten:*', (message, channel) => {
-      try {
-        const data = JSON.parse(message);
-        const eventType = channel.split(':').slice(2).join(':');
-        this._broadcast({ type: 'skill', subtype: eventType, data });
-      } catch {}
+    this._safePSub('octiv:zettelkasten:*', (data, channel) => {
+      const [, , ...rest] = channel.split(':');
+      this._broadcast({ type: 'skill', subtype: rest.join(':'), data });
+    });
+  }
+
+  _safePSub(pattern, handler) {
+    this.subscriber.pSubscribe(pattern, (message, channel) => {
+      try { handler(JSON.parse(message), channel); } catch {}
     });
   }
 
@@ -143,8 +134,7 @@ class DashboardServer {
   }
 
   _handleAPIState(req, res) {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ agents: this.agentState, timestamp: Date.now() }));
+    this._sendJSON(res, 200, { agents: this.agentState, timestamp: Date.now() });
   }
 
   _serveDashboard(req, res) {
@@ -154,10 +144,8 @@ class DashboardServer {
 
   async _handleAPISkills(req, res) {
     try {
-      const [stats, notes] = await Promise.all([
-        this.skillZk.getStats(),
-        this.skillZk.getAllNotes(),
-      ]);
+      const notes = await this.skillZk.getAllNotes();
+      const stats = SkillZettelkasten.computeStats(notes);
       const skills = Object.values(notes).map((n) => ({
         id: n.id,
         name: n.name,
@@ -168,16 +156,20 @@ class DashboardServer {
         status: n.status,
         links: n.links.length,
       }));
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ stats, skills, tiers: TIERS }));
+      this._sendJSON(res, 200, { stats, skills, tiers: TIERS });
     } catch (err) {
-      res.writeHead(500);
-      res.end(JSON.stringify({ error: err.message }));
+      this._sendJSON(res, 500, { error: err.message });
     }
   }
 
   async _handleAPISkillDetail(req, res) {
-    const skillId = decodeURIComponent(req.url.split('/api/skills/')[1]);
+    const raw = req.url.split('/api/skills/')[1] || '';
+    const skillId = decodeURIComponent(raw);
+    if (!skillId || skillId.includes('/')) {
+      res.writeHead(400);
+      res.end('Bad Request');
+      return;
+    }
     try {
       const note = await this.skillZk.getNote(skillId);
       if (!note) {
@@ -185,12 +177,15 @@ class DashboardServer {
         res.end('Not found');
         return;
       }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(note));
+      this._sendJSON(res, 200, note);
     } catch (err) {
-      res.writeHead(500);
-      res.end(JSON.stringify({ error: err.message }));
+      this._sendJSON(res, 500, { error: err.message });
     }
+  }
+
+  _sendJSON(res, status, body) {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
   }
 
   getState() {
@@ -312,8 +307,11 @@ function addEvent(evt) {
 }
 
 const tierColors = { Novice:'#3fb950', Apprentice:'#2ea043', Journeyman:'#1f6feb', Expert:'#8957e5', Master:'#f0883e', Grandmaster:'#d29922' };
+let skillsLastLoaded = 0;
 
 function loadSkills() {
+  if (Date.now() - skillsLastLoaded < 5000) return;
+  skillsLastLoaded = Date.now();
   fetch('/api/skills').then(r=>r.json()).then(d => {
     const ss = document.getElementById('skill-stats');
     const ht = d.stats.highestTier;

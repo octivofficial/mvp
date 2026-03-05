@@ -370,6 +370,10 @@ class SkillZettelkasten {
    */
   async getStats() {
     const all = await this.getAllNotes();
+    return SkillZettelkasten.computeStats(all);
+  }
+
+  static computeStats(all) {
     const notes = Object.values(all);
     const active = notes.filter(n => n.status === 'active');
     const compounds = notes.filter(n => n.status === 'compound');
