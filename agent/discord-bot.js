@@ -202,9 +202,10 @@ class OctivDiscordBot {
 
   _subscribeBlackboard() {
     // Agent status updates -> #neostarz-live
-    this.subscriber.pSubscribe(PREFIX + '*:status', (message, channel) => {
+    this.subscriber.pSubscribe(PREFIX + 'agent:*:status', (message, channel) => {
       try {
         const data = JSON.parse(message);
+        data.agentId = data.agentId || _extractAgentId(channel);
         this._postStatusEmbed(channel, data);
       } catch (err) {
         log.error('discord', 'failed to parse status message', { error: err.message });
@@ -473,14 +474,15 @@ class OctivDiscordBot {
       .setDescription(data.skillName || data.name || 'unknown skill')
       .setTimestamp();
 
-    if (data.agentId) {
-      embed.addFields({ name: 'Agent', value: data.agentId, inline: true });
+    const agentId = data.agentId || data.author;
+    if (agentId) {
+      embed.addFields({ name: 'Agent', value: agentId, inline: true });
     }
-    if (data.errorType) {
-      embed.addFields({ name: 'Error Type', value: data.errorType, inline: true });
+    if (data.errorType || data.failureType) {
+      embed.addFields({ name: 'Trigger', value: data.errorType || data.failureType, inline: true });
     }
     if (data.trigger) {
-      embed.addFields({ name: 'Trigger', value: data.trigger, inline: true });
+      embed.addFields({ name: 'Source', value: data.trigger, inline: true });
     }
 
     this.channels.alerts.send({ embeds: [embed] }).catch(logSendError);
@@ -501,14 +503,23 @@ class OctivDiscordBot {
       got: 0x9b59b6,
     };
 
+    // Build description: prefer explicit message, then threat details, then JSON dump
+    let description = data.description || data.message;
+    if (!description && type === 'threat' && data.threat) {
+      description = `**${data.threat.type}** — ${data.threat.reason || 'unknown cause'}`;
+    }
+    description = description || JSON.stringify(data);
+
     const embed = new EmbedBuilder()
       .setTitle(titles[type] || `Alert: ${type}`)
       .setColor(colors[type] || 0x95a5a6)
-      .setDescription(data.description || data.message || JSON.stringify(data))
+      .setDescription(description)
       .setTimestamp();
 
-    if (data.agentId) embed.addFields({ name: 'Agent', value: data.agentId, inline: true });
-    if (data.threatType) embed.addFields({ name: 'Type', value: data.threatType, inline: true });
+    const agentId = data.agentId || data.author;
+    if (agentId) embed.addFields({ name: 'Agent', value: agentId, inline: true });
+    const threatType = data.threatType || data.threat?.type;
+    if (threatType) embed.addFields({ name: 'Type', value: threatType, inline: true });
     if (data.totalSynergies !== undefined) {
       embed.addFields({ name: 'Synergies', value: `${data.totalSynergies}`, inline: true });
     }

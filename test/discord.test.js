@@ -592,8 +592,8 @@ describe('OctivDiscordBot — _postSkillEmbed', () => {
 
     const fieldNames = embed.data.fields.map(f => f.name);
     assert.ok(fieldNames.includes('Agent'));
-    assert.ok(fieldNames.includes('Error Type'));
     assert.ok(fieldNames.includes('Trigger'));
+    assert.ok(fieldNames.includes('Source'));
   });
 
   it('should no-op when alerts channel is null', () => {

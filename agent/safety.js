@@ -52,6 +52,7 @@ class SafetyAgent {
     this.subscriber.pSubscribe('octiv:agent:builder-*:health', async (message) => {
       try {
         const data = JSON.parse(message);
+        const agentId = data.agentId || data.author || 'unknown';
         const mockBot = {
           entity: {
             position: data.position || { x: 0, y: 64, z: 0 },
@@ -62,11 +63,11 @@ class SafetyAgent {
           registry: { blocksByName: {} },
         };
         if ((data.health || 20) <= 5) {
-          this.chat.confess('near_death', { health: data.health, agentId: data.agentId || 'unknown' }).catch(() => {});
+          this.chat.confess('near_death', { health: data.health, agentId }).catch(() => {});
         }
         const threat = this.detectThreat(mockBot);
         if (threat) {
-          await this.handleThreat(threat, data.agentId || 'unknown');
+          await this.handleThreat(threat, agentId);
         } else if (this.consecutiveFailures > 0) {
           this.chat.chat('all_clear', {}).catch(() => {});
           this.consecutiveFailures = 0;
