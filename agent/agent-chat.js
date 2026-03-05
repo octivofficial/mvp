@@ -179,14 +179,21 @@ class AgentChat {
     const template = templates[Math.floor(Math.random() * templates.length)];
     const message = this._fillTemplate(template, vars);
 
-    await this.board.publish(`agent:${this.agentId}:chat`, {
-      author: this.agentId,
-      role: this.role,
-      event,
-      message,
-      ts: now,
-    });
+    // Optimistic lock: claim slot before async publish to prevent concurrent duplicates
+    const prev = this._lastChat[event];
     this._lastChat[event] = now;
+    try {
+      await this.board.publish(`agent:${this.agentId}:chat`, {
+        author: this.agentId,
+        role: this.role,
+        event,
+        message,
+        ts: now,
+      });
+    } catch (err) {
+      this._lastChat[event] = prev; // rollback on failure
+      throw err;
+    }
 
     log.info(this.agentId, `chat: ${message}`);
     return true;
@@ -211,14 +218,21 @@ class AgentChat {
       mood: template.mood,
     };
 
-    await this.board.publish(`agent:${this.agentId}:confess`, {
-      author: this.agentId,
-      role: this.role,
-      event,
-      ...confession,
-      ts: now,
-    });
+    // Optimistic lock: claim slot before async publish to prevent concurrent duplicates
+    const prev = this._lastConfess[event];
     this._lastConfess[event] = now;
+    try {
+      await this.board.publish(`agent:${this.agentId}:confess`, {
+        author: this.agentId,
+        role: this.role,
+        event,
+        ...confession,
+        ts: now,
+      });
+    } catch (err) {
+      this._lastConfess[event] = prev; // rollback on failure
+      throw err;
+    }
 
     log.info(this.agentId, `confess [${confession.mood}]: ${confession.title}`);
     return true;
