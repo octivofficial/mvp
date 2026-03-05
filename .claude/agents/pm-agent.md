@@ -86,3 +86,25 @@ Before delegating to planner/dev-agent, confirm:
 
 → Ready for: planner → dev-agent → tdd-guide
 ```
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `github` | Issues, PR tracking, project boards | Track AC status, create issues for new work |
+| `memory` | Persistent knowledge graph | Store AC decisions, priority rationale |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `first-day-survival` | AC definitions and mission spec |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Leader | **Step 1** (requirements) | Clarify AC, define done criteria, create brief |
+| Pipeline | **Start point** | Initiate workflow with clear requirements |

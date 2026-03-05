@@ -98,3 +98,30 @@ Commit immediately after:
 **CI status**: [green/red/pending]
 **Repo state**: [clean/N files untracked]
 ```
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `github` | Cross-repo search, PR management, CI status | Prefer `gh` CLI for single-repo ops; MCP for cross-repo search |
+
+### CLI vs MCP Decision
+- **Single repo** (`octivofficial/mvp`): Use `gh` CLI directly
+- **Cross-repo search**: Use `github` MCP (`search_code`, `search_repositories`)
+- **Bulk operations** (list all PRs, issues): Use `gh` CLI with `--json`
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `verification-loop` (project) | Run 6-phase verification before commit |
+| `dev-tool-belt` | Git, GitHub CLI, and deployment reference |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Leader | **Final step** (commit) | Commit, push, verify CI green |
+| Pipeline | **Last step** | Receive verified code, commit, push |

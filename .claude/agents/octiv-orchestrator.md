@@ -123,3 +123,51 @@ Never skip from Analysis to Implementation. Planning is required.
 ...
 **Success criteria**: [how to know it's done]
 ```
+
+---
+
+## Available MCP Tools
+
+Use these MCP servers to enhance orchestration decisions. Delegate actual MCP calls to the appropriate agent.
+
+| MCP | Purpose | Delegate To |
+|-----|---------|-------------|
+| `sequentialthinking` | Decompose 3+ step tasks before delegation | self (use directly) |
+| `context7` | Library docs lookup | dev-agent, architect |
+| `serena` | Symbol search, file outlines | planner, architect, dev-agent |
+| `github` | PR status, CI checks, cross-repo search | github-agent |
+| `notebooklm` | Project knowledge queries | notebooklm-agent |
+| `memory` | Persistent knowledge graph | self (use directly) |
+| `playwright` | Browser E2E tests | notebooklm-agent, dev-agent |
+| `redis` | Blackboard data inspection | debug-agent |
+| `docker` | Container health, logs | debug-agent |
+
+### Task Decomposition Protocol
+For any task with 3+ steps or unclear scope:
+1. Use `sequentialthinking` MCP to decompose into sub-problems
+2. Identify dependencies between sub-problems
+3. Map each sub-problem to the right agent + MCP tools
+4. Execute: parallel where independent, sequential where dependent
+
+## Verify Skills Available
+
+Map each verify skill to the agent responsible for execution:
+
+| Verify Skill | Executor Agent | When to Run |
+|--------------|---------------|-------------|
+| `verify-redis` | debug-agent | After Redis/Blackboard changes |
+| `verify-agents` | code-reviewer | After agent/*.js changes |
+| `verify-tests` | tdd-guide | After test modifications |
+| `verify-dependencies` | security-reviewer | Before PR, after npm install |
+| `verify-mcp` | skill-agent | After MCP config changes |
+| `verify-implementation` | self (orchestrate all above) | Before PR — full audit |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Leader | **Conductor** | Assign tasks, collect results, synthesize |
+| Council | **Facilitator** | Pose question, gather votes, resolve conflicts |
+| Swarm | **Dispatcher** | Partition work, launch parallel, merge results |
+| Pipeline | **Sequencer** | Define order, pass artifacts between stages |
+| Watchdog | **Supervisor** | Start work + monitors, halt on alerts |

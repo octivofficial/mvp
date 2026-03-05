@@ -64,3 +64,26 @@ Secrets exposed: Yes/No
 Sandbox safe: Yes/No
 RCON safe: Yes/No
 ```
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `github` | PR diffs, dependency alerts | Review security-relevant changes |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `verify-dependencies` | npm audit, outdated packages, known vulns |
+| `security-review` (global) | Comprehensive security checklist |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Council | **Security voice** | Flag security concerns in design decisions |
+| Watchdog | **Security monitor** | Continuous watch during safety-critical changes |
+| Pipeline | **Security gate** | Review before commit for node:vm, RCON, credentials |

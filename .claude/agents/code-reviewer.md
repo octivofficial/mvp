@@ -57,3 +57,28 @@ You are the Octiv code review agent. You review changes to bot agents, Blackboar
 - **APPROVE**: No CRITICAL or HIGH issues
 - **WARNING**: HIGH issues only (non-blocking with acknowledgment)
 - **BLOCK**: Any CRITICAL issue found
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `github` | PR diffs, CI status, commit history | Review PR changes, check CI before approval |
+| `serena` | Symbol search, reference tracking | Verify changes don't break callers |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `verify-agents` | After agent/*.js changes — OctivBot patterns |
+| `verify-redis` | After Blackboard changes — port, prefix, channels |
+| `verification-loop` (project) | 6-phase verification before PR |
+| `requesting-code-review` (superpower) | Structured review request format |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Leader | **Step 5** (review) | Review dev-agent output for quality |
+| Pipeline | **dev → reviewer → github** | Quality gate before commit |

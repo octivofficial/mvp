@@ -104,3 +104,51 @@ Always report:
 **Tests**: [pass/fail count after fix]
 **Follow-up**: [any related issues to watch]
 ```
+
+---
+
+## Delegation Protocol
+
+Complex fixes that require multi-file changes should be delegated:
+
+| Complexity | Action |
+|------------|--------|
+| Single-line fix | Fix directly |
+| Multi-line in 1 file | Fix directly |
+| Multi-file change | Delegate to dev-agent with handoff below |
+| Architecture change | Escalate to orchestrator |
+
+### Handoff Template (to dev-agent)
+```
+## Debug → Dev Handoff
+**Error**: [one-line summary]
+**Root Cause**: [identified cause]
+**Fix Location**: [file:line]
+**Suggested Fix**: [description or code snippet]
+**Tests to Verify**: [which test file(s) to run]
+```
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `redis` | Inspect Blackboard keys, channel state | `redis-cli -p 6380` preferred; MCP for programmatic access |
+| `docker` | Container logs, health checks | `docker compose` preferred; MCP for programmatic access |
+| `sequentialthinking` | Multi-step root cause analysis | Use for complex bugs with 3+ possible causes |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `verify-redis` | After Redis/Blackboard fixes |
+| `automated-debugging` | Structured crash investigation |
+| `health-monitor` | Infrastructure diagnosis (Redis, PaperMC, agents) |
+| `systematic-debugging` | 4-stage debugging methodology |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Pipeline | **Step 1** (diagnosis) | Classify error, gather evidence, isolate root cause |
+| Watchdog | **Monitor** | Watch for test regressions during dev-agent work |
+| Leader | **On-call** | Activated when tests fail during any step |

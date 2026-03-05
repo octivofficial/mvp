@@ -48,7 +48,7 @@ description: Master index of ALL tools available in the Octiv project — agents
 
 ---
 
-## Skills (19 Slash Commands)
+## Skills (21 Slash Commands)
 
 ### Memory (Session Continuity)
 | Skill | When |
@@ -83,17 +83,44 @@ description: Master index of ALL tools available in the Octiv project — agents
 | `/weather` | Minecraft weather commands |
 | `/first-day-survival` | AC definitions and mission spec |
 | `/automated-debugging` | Crash investigation guide |
+| `/capability-registry` | Agent↔MCP↔Skill mapping |
 | `/tool-index` | **This file** — find any tool |
 
 ---
 
-## MCP Servers (Always-on Tools)
+## MCP Servers (14 configured)
 
-| MCP | Command | When to Use |
-|-----|---------|-------------|
-| `notebooklm` | npx notebooklm-mcp@latest | Query project knowledge base |
-| `github` | @modelcontextprotocol/server-github | PR management, CI status, code search |
-| `context7` | @upstash/context7-mcp | Library docs (mineflayer, Redis, Node.js) |
+### Active (7 — always available)
+| MCP | Purpose | Primary Agents |
+|-----|---------|---------------|
+| `context7` | Library docs (mineflayer, Redis, discord.js) | dev-agent, architect, planner |
+| `sequentialthinking` | Multi-step reasoning, task decomposition | orchestrator, architect, planner, debug-agent |
+| `playwright` | Browser automation, E2E testing | notebooklm-agent |
+| `notebooklm` | Project knowledge base queries | notebooklm-agent |
+| `github` | PR management, CI status, cross-repo search | pm-agent, code-reviewer, security-reviewer, github-agent |
+| `memory` | Persistent knowledge graph | orchestrator, architect, pm-agent, skill-agent, obsidian-agent |
+| `filesystem` | Local file operations | dev-agent, skill-agent, obsidian-agent |
+
+### Infrastructure-Dependent (2 — require Docker)
+| MCP | Purpose | Primary Agents |
+|-----|---------|---------------|
+| `redis` | Blackboard data inspection | debug-agent |
+| `docker` | Container health, logs | debug-agent |
+
+### Token Ready (3 — configured but unused)
+| MCP | Purpose | Activation Condition |
+|-----|---------|---------------------|
+| `supabase` | Database queries (read-only) | When web frontend/DB provisioned |
+| `sentry` | Error tracking, performance | When production deployed |
+| `vercel` | Deploy, preview environments | When web frontend built |
+
+### Pending (2)
+| MCP | Purpose | Blocker |
+|-----|---------|---------|
+| `serena` | LSP semantic code analysis | Requires `uvx` runtime |
+| `figma` | Design spec extraction | Requires Personal Access Token |
+
+> See `capability-registry` skill for full Agent↔MCP↔Skill mapping.
 
 ---
 
@@ -178,14 +205,20 @@ description: Master index of ALL tools available in the Octiv project — agents
 
 ```
 What do I need?
-├── Write code → dev-agent
-├── Debug error → debug-agent
-├── Plan something → planner / architect
-├── Commit changes → github-agent
+├── Write code → dev-agent (+context7, +serena MCP)
+├── Debug error → debug-agent (+redis, +docker MCP)
+├── Plan something → planner (+sequentialthinking, +serena MCP)
+├── Design architecture → architect (+serena, +context7 MCP)
+├── Write tests first → tdd-guide (+serena MCP)
+├── Review code → code-reviewer (+github, +serena MCP)
+├── Check security → security-reviewer (+github MCP)
+├── Commit changes → github-agent (+github MCP)
+├── Manage skills → skill-agent (+filesystem, +memory MCP)
 ├── Find a tool → /tool-index (this file)
+├── Find agent↔MCP mapping → /capability-registry
 ├── Verify code → /verify-implementation
 ├── Session start → /session-memory
 ├── Session end → /save-memory
-├── Don't know → octiv-orchestrator
-└── Look up Minecraft/mineflayer docs → context7 MCP or notebooklm-agent
+├── Don't know → octiv-orchestrator (+sequentialthinking MCP)
+└── Look up docs → context7 MCP or notebooklm-agent (+notebooklm MCP)
 ```

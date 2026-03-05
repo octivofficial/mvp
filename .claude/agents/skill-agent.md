@@ -90,3 +90,27 @@ Keep skills lean:
 **Actions taken**: [list]
 **Next recommendation**: [what to do next]
 ```
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `filesystem` | Read/write skill files in bulk | Bulk skill audits, pattern scanning |
+| `memory` | Persistent knowledge graph | Store skill evolution patterns, audit history |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `manage-skills` | Self-reference — skill lifecycle management |
+| `verify-mcp` | After MCP config changes |
+| `capability-registry` | Agent↔MCP↔Skill mapping reference |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Pipeline | **Post-review step** | Detect new patterns after code-reviewer, create verify skills |
+| Leader | **Maintenance** | Periodic skill audit and sync |

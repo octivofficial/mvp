@@ -106,9 +106,9 @@ Choose the right pattern for the task at hand:
 | `/learn [topic]` | Extract patterns from session → instincts |
 | `/checkpoint [name]` | Save session state snapshot for recovery |
 
-### Skills (20 Octiv + 5 global + 3 utility — with SKILL.md)
+### Skills (21 Octiv + 5 global + 3 utility — with SKILL.md)
 
-**Octiv project skills (20 — `.claude/skills/`):**
+**Octiv project skills (21 — `.claude/skills/`):**
 | Skill | When |
 |-------|------|
 | `cost-aware-llm-pipeline` | LLM model routing, cost optimization |
@@ -131,6 +131,7 @@ Choose the right pattern for the task at hand:
 | `first-day-survival` | Minecraft first-day survival guide |
 | `browser-recovery` | Playwright MCP + Patchright failure recovery |
 | `automated-debugging` | Automated debug workflows |
+| `capability-registry` | Agent↔MCP↔Skill mapping reference |
 
 **Octiv global skills (5 — `~/.claude/skills/`):**
 | Skill | When |
@@ -311,6 +312,38 @@ See `~/.claude/skills/{skill-name}/SKILL.md` for details.
 | Spec | `architect` | figma (extract), serena (existing components) |
 | Dev | `dev-agent` | context7 (library docs), serena (navigate) |
 | Test | `tdd-guide` | playwright (visual tests) |
+
+### MCP Utilization Status
+
+**MCP Utilization Matrix** — which agents actively use each MCP:
+
+| MCP | Status | Used By (Agents) | Referenced By (Skills) |
+|-----|--------|------------------|----------------------|
+| `context7` | Active | dev-agent, architect, planner | search-first |
+| `sequentialthinking` | Active | orchestrator, architect, planner, debug-agent | — |
+| `playwright` | Active | notebooklm-agent | browser-recovery |
+| `notebooklm` | Active | notebooklm-agent | notebooklm (global) |
+| `github` | Active | pm-agent, code-reviewer, security-reviewer, github-agent | dev-tool-belt, verification-loop |
+| `memory` | Active | orchestrator, architect, pm-agent, skill-agent, obsidian-agent | — |
+| `filesystem` | Active | dev-agent, skill-agent, obsidian-agent | — |
+| `redis` | Infra-dep | debug-agent | verify-redis, health-monitor |
+| `docker` | Infra-dep | debug-agent | docker-patterns, health-monitor |
+| `serena` | uvx-dep | planner, architect, dev-agent, tdd-guide, code-reviewer | search-first |
+| `supabase` | Token Ready | (none) | — |
+| `sentry` | Token Ready | (none) | — |
+| `vercel` | Token Ready | (none) | — |
+| `figma` | Token Req | (none) | — |
+
+**Unused MCP Rationale** — why 4 MCPs remain inactive:
+
+| MCP | Why Unused | Activation Condition |
+|-----|-----------|---------------------|
+| `supabase` | No web frontend/DB provisioned | When Octiv dashboard needs persistent storage |
+| `sentry` | No production deployment exists | When bots deploy to cloud (not local Docker) |
+| `vercel` | No web frontend built | When dashboard UI ships |
+| `figma` | No design specs created | When UI/UX design phase begins |
+
+> Full mapping: see `capability-registry` skill for Agent↔MCP↔Skill cross-reference.
 
 ---
 

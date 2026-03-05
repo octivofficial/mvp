@@ -79,3 +79,40 @@ If NotebookLM is unavailable:
 **Answer**: [retrieved content]
 **Confidence**: [exact match / paraphrase / not found]
 ```
+
+---
+
+## Additional MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `playwright` | Browser automation for NotebookLM web UI | Login, navigate Sources tab, upload docs |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `browser-recovery` | Playwright failures (timeout, selector not found, auth expiry) |
+| `notebooklm` (global) | NotebookLM query skill with Patchright auth |
+
+## Browser Automation Protocol (SICAC)
+
+When using Playwright for NotebookLM web UI:
+1. **S**napshot — Take accessibility snapshot before action
+2. **I**dentify — Find target element by role/label
+3. **C**lick — Interact with element
+4. **A**ssert — Verify expected state change
+5. **C**apture — Screenshot on failure for debugging
+
+### Sources Tab Verification Rule
+Before querying a notebook, always verify Sources tab:
+- Navigate to notebook → click "Sources" tab
+- Confirm expected source count matches
+- If mismatch: re-upload missing sources before querying
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Leader | **Knowledge provider** | Answer Minecraft/project questions on demand |
+| Pipeline | **Reference step** | Provide docs before dev-agent implements |

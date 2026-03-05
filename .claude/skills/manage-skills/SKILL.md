@@ -31,6 +31,7 @@ Analyze changes made in the current session to detect and fix verification skill
 | `verify-dependencies` | npm audit vulnerabilities, outdated packages | `package.json`, `package-lock.json` |
 | `verify-mcp` | MCP server config vs token availability | `~/.claude/settings.json`, `.mcp.json` |
 | `verify-implementation` | Orchestrates all verify-* skills sequentially | all of the above |
+| `capability-registry` | Agent↔MCP↔Skill mapping reference | `.claude/agents/*.md`, `.mcp.json` |
 
 ## Workflow
 

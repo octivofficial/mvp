@@ -53,3 +53,30 @@ PaperMC Server (25565)
 - Redis operations without error handling
 - Hardcoded coordinates or block IDs
 - Missing reconnection logic
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `serena` | Symbol search, file outlines | Map existing codebase structure before proposing changes |
+| `context7` | Library docs (mineflayer, Redis, discord.js) | Verify API contracts for design decisions |
+| `sequentialthinking` | Multi-step reasoning | Decompose architecture decisions into sub-problems |
+| `memory` | Persistent knowledge graph | Store and retrieve ADRs, design patterns |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `search-first` | Before proposing new modules — check existing patterns |
+| `docker-patterns` | Container architecture decisions |
+| `cost-aware-llm-pipeline` | LLM integration architecture (model routing, cost) |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Council | **Lead designer** | Propose system design, evaluate trade-offs |
+| Leader | **Architecture gate** | Review structural changes before dev-agent implements |
+| Pipeline | **Early stage** | Define architecture before planner breaks it down |

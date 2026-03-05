@@ -140,3 +140,27 @@ ls -lt vault/03-Sessions/ | head -10
 **Key links created**: [wikilinks added]
 **Vault state**: [N notes total]
 ```
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `filesystem` | Read/write vault files | Bulk vault operations, template creation |
+| `memory` | Persistent knowledge graph | Cross-reference vault notes with project memory |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `session-memory` (global) | Load context at session start |
+| `save-memory` (global) | Persist context at session end |
+| `remember` (global) | Quick mid-session insight capture |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Leader | **Documentation** | Create vault notes for decisions and sessions |
+| Pipeline | **End step** | Session end → sync notes to vault |

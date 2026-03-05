@@ -64,3 +64,27 @@ You are the Octiv planning agent. You create detailed implementation plans for A
    - Mock mineflayer `placeBlock` → verify 27-block structure
    - Verify Blackboard publish on completion
 ```
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `sequentialthinking` | Multi-step task decomposition | Always use for plans with 3+ steps |
+| `serena` | Symbol search, file outlines | Map affected files and dependencies |
+| `context7` | Library docs | Verify API usage in implementation steps |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `search-first` | Before planning — discover existing code to reuse |
+| `first-day-survival` | AC acceptance criteria reference |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Leader | **Step 2** (plan) | Break PM brief into implementation steps |
+| Pipeline | **pm → planner → dev** | Receive requirements, produce actionable plan |

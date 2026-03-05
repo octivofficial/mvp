@@ -77,3 +77,26 @@ describe('Builder', () => {
 - Tests that depend on execution order
 - Unmocked mineflayer or Redis calls
 - Assertions without clear failure messages
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `serena` | Find test targets, locate functions to test | Map public APIs that need coverage |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `verify-tests` | Test suite health check (count, coverage map) |
+| `tdd-workflow` (global) | TDD Red-Green-Refactor workflow |
+| `test-driven-development` (superpower) | TDD Iron Law — tests before implementation |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Leader | **Step 3** (test first) | Write failing tests before dev-agent implements |
+| Swarm | **Parallel tester** | Write tests for assigned module independently |

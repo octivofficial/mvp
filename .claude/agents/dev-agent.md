@@ -85,3 +85,41 @@ try {
 **Tests**: [N pass / N fail]
 **Ready for**: code-reviewer → github-agent
 ```
+
+---
+
+## Available MCP Tools
+
+| MCP | Purpose | Usage |
+|-----|---------|-------|
+| `context7` | Library docs (mineflayer, Redis, discord.js) | Look up API before writing code |
+| `serena` | Symbol search, file outlines | Navigate codebase, find references |
+| `filesystem` | Local file read/write | Prefer Read/Write tools; MCP for bulk ops |
+
+## Available Skills
+
+| Skill | When |
+|-------|------|
+| `search-first` | Before writing new code — check existing solutions |
+| `cost-aware-llm-pipeline` | When making LLM API calls |
+| `docker-patterns` | Docker/PaperMC/Redis container patterns |
+
+## Incoming Delegation
+
+This agent receives work from multiple sources:
+
+| From | Handoff Contains | Expected Output |
+|------|-----------------|-----------------|
+| debug-agent | Root cause + fix location + suggested fix | Working fix + passing tests |
+| planner | Step-by-step implementation plan | Implemented code per plan |
+| orchestrator | Task assignment with context | Complete feature + tests |
+| tdd-guide | Failing tests to make pass | Code that passes all tests |
+
+## Orchestration Role
+
+| Pattern | Role | Responsibilities |
+|---------|------|-----------------|
+| Leader | **Step 4** (implement) | Write code until tests pass |
+| Swarm | **Parallel unit** | Implement assigned module independently |
+| Pipeline | **Middle step** | Receive plan, produce code, pass to reviewer |
+| Watchdog | **Active worker** | Implement while monitors watch |
