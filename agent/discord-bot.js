@@ -474,8 +474,8 @@ class OctivDiscordBot {
       .setDescription(data.skillName || data.name || 'unknown skill')
       .setTimestamp();
 
-    const agentId = data.agentId || data.author;
-    if (agentId) {
+    const agentId = _resolveAgentId(data);
+    if (agentId !== 'unknown') {
       embed.addFields({ name: 'Agent', value: agentId, inline: true });
     }
     if (data.errorType || data.failureType) {
@@ -516,8 +516,8 @@ class OctivDiscordBot {
       .setDescription(description)
       .setTimestamp();
 
-    const agentId = data.agentId || data.author;
-    if (agentId) embed.addFields({ name: 'Agent', value: agentId, inline: true });
+    const agentId = _resolveAgentId(data);
+    if (agentId !== 'unknown') embed.addFields({ name: 'Agent', value: agentId, inline: true });
     const threatType = data.threatType || data.threat?.type;
     if (threatType) embed.addFields({ name: 'Type', value: threatType, inline: true });
     if (data.totalSynergies !== undefined) {
@@ -927,6 +927,11 @@ function _extractAgentId(channel) {
   return (agentIdx >= 0 && parts[agentIdx + 1]) ? parts[agentIdx + 1] : 'unknown';
 }
 
+/** Resolve agentId from payload — prefers agentId, falls back to author */
+function _resolveAgentId(data) {
+  return data.agentId || data.author || 'unknown';
+}
+
 /** Generate a stable anonymous number from agent ID (1-99) */
 function _anonymousHash(agentId) {
   let hash = 0;
@@ -946,7 +951,7 @@ function logSendError(err) {
   log.error('discord', 'failed to send message', { error: err.message });
 }
 
-module.exports = { OctivDiscordBot, REACT_THROTTLE_MS, ROLE_COLORS, DEFAULT_COLOR, _anonymousHash, _roleColor };
+module.exports = { OctivDiscordBot, REACT_THROTTLE_MS, ROLE_COLORS, DEFAULT_COLOR, _anonymousHash, _roleColor, _resolveAgentId };
 
 // --- CLI Entry Point ---
 
