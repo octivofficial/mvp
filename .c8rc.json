@@ -1,0 +1,10 @@
+{
+  "include": ["agent/**/*.js"],
+  "exclude": ["agent/bot.js", "agent/memory-logger.js", "node_modules/**"],
+  "reporter": ["text", "html"],
+  "report-dir": "coverage",
+  "lines": 60,
+  "branches": 40,
+  "functions": 50,
+  "all": true
+}

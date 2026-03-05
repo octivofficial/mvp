@@ -151,7 +151,7 @@ describe('Integration — Emergency Handler (Redis pub/sub)', () => {
       // Daily limit or no LLM — must have a specific reason
       assert.ok(result.reason, 'Failed pipeline should report a reason');
       assert.ok(
-        ['daily_limit_reached', 'invalid_skill_json', 'vm2_validation_failed'].includes(result.reason),
+        ['daily_limit_reached', 'invalid_skill_json', 'vm_validation_failed'].includes(result.reason),
         `Unexpected failure reason: ${result.reason}`
       );
     }

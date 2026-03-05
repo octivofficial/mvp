@@ -191,7 +191,34 @@ describe('Test Quality — Threshold Guards', () => {
   // at runtime. This file guards structural quality only (static analysis).
 });
 
-// ── 5. Mock Quality ─────────────────────────────────────────────────
+// ── 5. Coverage Infrastructure ────────────────────────────────────────
+
+describe('Test Quality — Coverage Infrastructure', () => {
+  it('c8 should be installed as devDependency', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+    assert.ok(pkg.devDependencies && pkg.devDependencies.c8,
+      'c8 not found in devDependencies. Run: npm install --save-dev c8');
+  });
+
+  it('test:coverage script should exist in package.json', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+    assert.ok(pkg.scripts && pkg.scripts['test:coverage'],
+      'test:coverage script not found in package.json');
+    assert.ok(pkg.scripts['test:coverage'].includes('c8'),
+      'test:coverage script should use c8');
+  });
+
+  it('.c8rc.json config should exist', () => {
+    const configPath = path.join(__dirname, '..', '.c8rc.json');
+    assert.ok(fs.existsSync(configPath), '.c8rc.json not found in project root');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    assert.ok(config.lines >= 60, `Line threshold too low: ${config.lines}`);
+    assert.ok(config.branches >= 40, `Branch threshold too low: ${config.branches}`);
+    assert.ok(config.functions >= 50, `Function threshold too low: ${config.functions}`);
+  });
+});
+
+// ── 6. Mock Quality ─────────────────────────────────────────────────
 
 describe('Test Quality — Mock Quality', () => {
   const testFiles = ALL_TEST_FILES;

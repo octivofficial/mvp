@@ -62,6 +62,9 @@ claude_desktop_config.json
 # API key test files (never commit hardcoded keys)
 test_gemini_api.js
 
+# Coverage reports
+coverage/
+
 # npm
 npm-debug.log*
 

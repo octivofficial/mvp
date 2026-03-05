@@ -53,10 +53,10 @@ class SkillPipeline {
       return { success: false, reason: 'invalid_skill_json' };
     }
 
-    // vm2 3x validation
+    // node:vm 3x validation
     const valid = await this.validateSkill(skillJson.code);
     if (!valid) {
-      return { success: false, reason: 'vm2_validation_failed' };
+      return { success: false, reason: 'vm_validation_failed' };
     }
 
     // Deploy to library
