@@ -216,6 +216,8 @@ describe("team — setupRemoteControl", () => {
       safety: { id: "safety-01" },
       builders: [{ id: "builder-01" }, { id: "builder-02" }],
       explorer: { id: "explorer-01" },
+      miner: { id: "miner-01" },
+      farmer: { id: "farmer-01" },
     };
   }
 
@@ -263,13 +265,15 @@ describe("team — setupRemoteControl", () => {
     const [, payload] = board.client.publish.mock.calls[0].arguments;
     const parsed = JSON.parse(payload);
     const list = parsed.data;
-    assert.equal(list.length, 5); // leader + 2 builders + safety + explorer
+    assert.equal(list.length, 7); // leader + 2 builders + safety + explorer + miner + farmer
     assert.equal(list[0].role, "leader");
     assert.equal(list[0].mode, "strategy");
     assert.equal(list[1].role, "builder");
     assert.equal(list[2].role, "builder");
     assert.equal(list[3].role, "safety");
     assert.equal(list[4].role, "explorer");
+    assert.equal(list[5].role, "miner");
+    assert.equal(list[6].role, "farmer");
   });
 
   it("RC ac — returns AC progress matrix", async () => {

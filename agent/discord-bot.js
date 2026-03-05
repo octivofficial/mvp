@@ -955,7 +955,7 @@ function logSendError(err) {
   log.error('discord', 'failed to send message', { error: err.message });
 }
 
-module.exports = { OctivDiscordBot, REACT_THROTTLE_MS, ROLE_COLORS, DEFAULT_COLOR, _anonymousHash, _roleColor, _resolveAgentId };
+module.exports = { OctivDiscordBot, REACT_THROTTLE_MS, ROLE_COLORS, DEFAULT_COLOR, _anonymousHash, _roleColor, _resolveAgentId, _extractAgentId, loadConfig, logSendError };
 
 // --- CLI Entry Point ---
 

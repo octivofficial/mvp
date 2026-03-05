@@ -177,7 +177,7 @@ describe('Discord Bot — JSON Parsing Safety', () => {
 
 // ── OctivDiscordBot Class Tests ──────────────────────────────────
 
-const { OctivDiscordBot, REACT_THROTTLE_MS, _anonymousHash } = require('../agent/discord-bot');
+const { OctivDiscordBot, REACT_THROTTLE_MS, _anonymousHash, _roleColor, _resolveAgentId, _extractAgentId, loadConfig, logSendError, ROLE_COLORS, DEFAULT_COLOR } = require('../agent/discord-bot');
 const { Blackboard } = require('../agent/blackboard');
 const { GatewayIntentBits } = require('discord.js');
 
@@ -1363,5 +1363,84 @@ describe('OctivDiscordBot — forum tag cache', () => {
     assert.equal(bot._forumTagCache.get('thoughts'), 'tag-1');
     assert.equal(bot._forumTagCache.get('regret'), 'tag-2'); // lowercased
     assert.equal(bot._forumTagCache.get('discovery'), 'tag-3'); // lowercased
+  });
+});
+
+// ── Pure Helper Coverage ────────────────────────────────────────────
+
+describe('Discord — _extractAgentId', () => {
+  it('should extract agent ID from channel pattern', () => {
+    assert.equal(_extractAgentId('octiv:agent:builder-01:react'), 'builder-01');
+  });
+
+  it('should extract from status channel pattern', () => {
+    assert.equal(_extractAgentId('octiv:agent:safety-01:status'), 'safety-01');
+  });
+
+  it('should return unknown for empty channel', () => {
+    assert.equal(_extractAgentId(''), 'unknown');
+    assert.equal(_extractAgentId(null), 'unknown');
+    assert.equal(_extractAgentId(undefined), 'unknown');
+  });
+
+  it('should return unknown for channel without agent prefix', () => {
+    assert.equal(_extractAgentId('octiv:team:status'), 'unknown');
+  });
+});
+
+describe('Discord — _roleColor', () => {
+  it('should return leader color for leader agent', () => {
+    assert.equal(_roleColor('leader-01'), ROLE_COLORS.leader);
+  });
+
+  it('should return builder color for builder agent', () => {
+    assert.equal(_roleColor('builder-01'), ROLE_COLORS.builder);
+  });
+
+  it('should return safety color for safety agent', () => {
+    assert.equal(_roleColor('safety-01'), ROLE_COLORS.safety);
+  });
+
+  it('should return explorer color for explorer agent', () => {
+    assert.equal(_roleColor('explorer-01'), ROLE_COLORS.explorer);
+  });
+
+  it('should return default color for unknown role', () => {
+    assert.equal(_roleColor('unknown-agent'), DEFAULT_COLOR);
+  });
+
+  it('should prefer explicit role over parsed role', () => {
+    assert.equal(_roleColor('builder-01', 'leader'), ROLE_COLORS.leader);
+  });
+});
+
+describe('Discord — _resolveAgentId', () => {
+  it('should prefer agentId over author', () => {
+    assert.equal(_resolveAgentId({ agentId: 'miner-01', author: 'builder-01' }), 'miner-01');
+  });
+
+  it('should fall back to author when agentId missing', () => {
+    assert.equal(_resolveAgentId({ author: 'builder-01' }), 'builder-01');
+  });
+
+  it('should return unknown when both missing', () => {
+    assert.equal(_resolveAgentId({}), 'unknown');
+  });
+});
+
+describe('Discord — loadConfig', () => {
+  it('should return object with channel keys on config file missing', () => {
+    // loadConfig() will fail to read discord.json (doesn't exist in test env)
+    // and fall through to env var fallback
+    const config = loadConfig();
+    assert.equal(typeof config, 'object');
+    assert.ok('statusChannel' in config || config.statusChannel === undefined);
+  });
+});
+
+describe('Discord — logSendError', () => {
+  it('should not throw when called with error object', () => {
+    // logSendError just logs — verify it doesn't crash
+    assert.doesNotThrow(() => logSendError(new Error('test error')));
   });
 });

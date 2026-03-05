@@ -10,6 +10,8 @@ const { MemoryLogger } = require('./memory-logger');
 const { SkillPipeline } = require('./skill-pipeline');
 const { ReflexionEngine } = require('./ReflexionEngine');
 const { ExplorerAgent } = require('./roles/ExplorerAgent');
+const { MinerAgent } = require('./roles/MinerAgent');
+const { FarmerAgent } = require('./roles/FarmerAgent');
 const { createApiClients } = require('./api-clients');
 const { SkillZettelkasten } = require('./skill-zettelkasten');
 const { RuminationEngine } = require('./rumination-engine');
@@ -91,6 +93,8 @@ async function setupRemoteControl(board, agents) {
               ...agents.builders.map((b, i) => ({ id: `builder-0${i + 1}`, role: 'builder' })),
               { id: 'safety-01', role: 'safety' },
               { id: 'explorer-01', role: 'explorer' },
+              ...(agents.miner ? [{ id: agents.miner.id, role: 'miner' }] : []),
+              ...(agents.farmer ? [{ id: agents.farmer.id, role: 'farmer' }] : []),
             ];
             data = agentList;
             break;
@@ -141,7 +145,7 @@ async function main() {
   log.info('team', 'Octiv Agent Team starting', {
     papermc: `${process.env.MC_HOST || 'localhost'}:${process.env.MC_PORT || 25565}`,
     redis: redisDisplay,
-    composition: 'Leader + Builder x3 + Safety + Explorer',
+    composition: 'Leader + Builder x3 + Safety + Explorer + Miner + Farmer',
   });
 
   const board = new Blackboard();
@@ -181,7 +185,7 @@ async function main() {
   await board.publish('team:status', {
     author: 'team',
     status: 'initializing',
-    members: ['leader', 'builder-01', 'builder-02', 'builder-03', 'safety', 'explorer'],
+    members: ['leader', 'builder-01', 'builder-02', 'builder-03', 'safety', 'explorer', 'miner-01', 'farmer-01'],
     mission: 'first-day-survival v1.3.1',
   });
 
@@ -223,6 +227,15 @@ async function main() {
   const explorer = new ExplorerAgent({ id: 'explorer-01', maxRadius: 200 });
   await explorer.init();
   log.info('team', 'Explorer-01 started');
+
+  // 5. Start Miner + Farmer (specialized roles — Phase 7.2)
+  const miner = new MinerAgent({ id: 'miner-01' });
+  await miner.init();
+  log.info('team', 'Miner-01 started');
+
+  const farmer = new FarmerAgent({ id: 'farmer-01' });
+  await farmer.init();
+  log.info('team', 'Farmer-01 started');
 
   // Explorer execution loop — piggyback on builder-01's position via Blackboard
   const explorerInterval = setInterval(async () => {
@@ -299,6 +312,8 @@ async function main() {
       await leader.shutdown();
       await safety.shutdown();
       await explorer.shutdown();
+      await miner.shutdown();
+      await farmer.shutdown();
       for (const b of builders) await b.shutdown();
       await emergencySubscriber.unsubscribe();
       await emergencySubscriber.disconnect();
@@ -318,7 +333,7 @@ async function main() {
   });
 
   // Remote Control: listen for RC commands from Discord bot
-  await setupRemoteControl(board, { leader, safety, builders, explorer });
+  await setupRemoteControl(board, { leader, safety, builders, explorer, miner, farmer });
 
   // Log team status periodically (every 30s)
   setInterval(async () => {
