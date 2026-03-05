@@ -3,6 +3,9 @@
  *
  * Keeps vault/Dashboard.md and vault/Session-Sync.md in sync with reality.
  * Called by save-memory/session-memory skills and hooks.
+ *
+ * Note: Real-time live data is handled by obsidian-bridge.js (Redis -> vault/05-Live/).
+ * This module handles static session-boundary updates only.
  */
 const fsp = require('fs').promises;
 const path = require('path');
