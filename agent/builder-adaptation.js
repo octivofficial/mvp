@@ -36,9 +36,17 @@ async function selfImprove(agent, error) {
   if (errorType === 'build_site' && agent.adaptations.buildSiteRadius < 64) {
     agent.adaptations.buildSiteRadius = Math.min(64, agent.adaptations.buildSiteRadius + 8);
     improvement = { type: 'expand_build_radius', value: agent.adaptations.buildSiteRadius };
-  } else if (errorType === 'pathfinding' && agent.adaptations.waitTicks < 100) {
-    agent.adaptations.waitTicks = Math.min(100, agent.adaptations.waitTicks + 10);
-    improvement = { type: 'increase_wait', value: agent.adaptations.waitTicks };
+  } else if (errorType === 'pathfinding') {
+    if (agent.adaptations.waitTicks < 100) {
+      agent.adaptations.waitTicks = Math.min(100, agent.adaptations.waitTicks + 10);
+    }
+    // Expand search radius on pathfinding failures — more useful than just waiting longer
+    if (agent.adaptations.searchRadius < 128) {
+      agent.adaptations.searchRadius = Math.min(128, agent.adaptations.searchRadius + 16);
+      improvement = { type: 'expand_search_radius', value: agent.adaptations.searchRadius };
+    } else {
+      improvement = { type: 'increase_wait', value: agent.adaptations.waitTicks };
+    }
   } else if (errorType === 'inventory') {
     agent.adaptations.searchRadius = Math.min(128, agent.adaptations.searchRadius + 16);
     improvement = { type: 'expand_search_radius', value: agent.adaptations.searchRadius };

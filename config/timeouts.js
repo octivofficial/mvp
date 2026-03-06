@@ -23,8 +23,8 @@ module.exports = {
 
   // -- Navigation & Movement --
 
-  /** Pathfinder goto timeout */
-  PATHFINDER_TIMEOUT_MS: parseInt(process.env.PATHFINDER_TIMEOUT_MS) || 30000,
+  /** Pathfinder goto timeout (base — actual timeout scales with distance) */
+  PATHFINDER_TIMEOUT_MS: parseInt(process.env.PATHFINDER_TIMEOUT_MS) || 60000,
 
   /** Wait for ground after spawn */
   SPAWN_GROUND_WAIT_MS: parseInt(process.env.SPAWN_GROUND_WAIT_MS) || 2000,

@@ -17,8 +17,8 @@ const log = getLogger();
 const { GoalNear, GoalBlock, GoalXZ } = goals;
 const collectBlock = require('mineflayer-collectblock');
 
-const MAX_WANDER_ATTEMPTS = 10;
-const WANDER_DISTANCE = 25; // blocks
+const MAX_WANDER_ATTEMPTS = 15;
+const WANDER_DISTANCE = 75; // blocks
 const SEARCH_RADIUS_INCREMENT = 16;
 const MAX_SEARCH_RADIUS = 128;
 
@@ -129,8 +129,8 @@ class BuilderAgent {
           throw new Error(`no wood found after ${MAX_WANDER_ATTEMPTS} wander attempts`);
         }
 
-        // Auto-expand search radius every 5 failures
-        if (wanderFailures % 5 === 0 && this.adaptations.searchRadius < MAX_SEARCH_RADIUS) {
+        // Auto-expand search radius every 2 failures
+        if (wanderFailures % 2 === 0 && this.adaptations.searchRadius < MAX_SEARCH_RADIUS) {
           this.adaptations.searchRadius = Math.min(MAX_SEARCH_RADIUS, this.adaptations.searchRadius + SEARCH_RADIUS_INCREMENT);
           log.info(this.id, `expanded searchRadius to ${this.adaptations.searchRadius}`);
         }

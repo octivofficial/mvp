@@ -379,10 +379,11 @@ describe('builder-adaptation — selfImprove', () => {
     assert.equal(agent.adaptations.buildSiteRadius, 24); // 16 + 8
   });
 
-  it('should increase waitTicks on pathfinding error', async () => {
+  it('should expand searchRadius on pathfinding error', async () => {
     const agent = createAgent();
     await selfImprove(agent, new Error('pathfinding timeout'));
-    assert.equal(agent.adaptations.waitTicks, 30); // 20 + 10
+    assert.equal(agent.adaptations.searchRadius, 48); // 32 + 16
+    assert.equal(agent.adaptations.waitTicks, 30); // also bumps waitTicks
   });
 
   it('should expand searchRadius on inventory error', async () => {

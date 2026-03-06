@@ -494,8 +494,8 @@ describe('Builder — Wandering autonomy', () => {
       }
     );
 
-    // Should have called _goto for wandering (9 times — 10th attempt throws before wander)
-    assert.ok(builder._goto.mock.calls.length >= 9, `Expected >=9 wander calls, got ${builder._goto.mock.calls.length}`);
+    // Should have called _goto for wandering (14 times — 15th attempt throws before wander)
+    assert.ok(builder._goto.mock.calls.length >= 14, `Expected >=14 wander calls, got ${builder._goto.mock.calls.length}`);
     await builder.board.disconnect();
   });
 
