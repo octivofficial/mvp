@@ -396,3 +396,75 @@ describe('Priority constant', () => {
     assert.ok(Priority.NORMAL < Priority.HIGH);
   });
 });
+
+describe('VoiceManager — player event handlers', () => {
+  it('player error event sets playing=false and calls _processQueue', async () => {
+    const { vm } = createVM();
+    vm.join();
+    vm._playing = true;
+
+    // Trigger the error event on the player directly
+    vm._player.emit('error', new Error('audio decode failed'));
+
+    // After error handler runs synchronously: playing should be false
+    assert.equal(vm._playing, false);
+  });
+
+  it('player idle event sets playing=false', () => {
+    const { vm } = createVM();
+    vm.join();
+    vm._playing = true;
+
+    // Trigger the idle event
+    vm._player.emit('idle');
+
+    assert.equal(vm._playing, false);
+  });
+
+  it('join returns null when guild is not found in cache', () => {
+    const { vm } = createVM({ guildId: 'nonexistent-guild' });
+    const conn = vm.join();
+    assert.equal(conn, null);
+  });
+
+  it('join returns null when joinVoiceChannel throws', () => {
+    const { deps, ...rest } = mockDeps({
+      joinVoiceChannel: () => { throw new Error('voice module missing'); },
+    });
+    const client = { guilds: { cache: { get: () => ({ voiceAdapterCreator: 'x' }) } } };
+    const vm = new VoiceManager(client, 'ch', 'g', { _deps: deps });
+    const conn = vm.join();
+    assert.equal(conn, null);
+  });
+
+  it('_processQueue continues when synthesize throws', async () => {
+    const m = mockDeps({
+      synthesize: async () => { throw new Error('TTS service down'); },
+    });
+    const client = { guilds: { cache: { get: () => ({ voiceAdapterCreator: 'x' }) } } };
+    const vm = new VoiceManager(client, 'ch', 'g', { _deps: m.deps });
+    vm.join();
+    vm._queue = [{ text: 'will-throw', voice: null }];
+
+    // Should not throw, should reset playing
+    await vm._processQueue();
+    assert.equal(vm._playing, false);
+  });
+
+  it('_processQueue skips item when stream is null', async () => {
+    const m = mockDeps({
+      synthesize: async () => null,
+    });
+    const client = { guilds: { cache: { get: () => ({ voiceAdapterCreator: 'x' }) } } };
+    const vm = new VoiceManager(client, 'ch', 'g', { _deps: m.deps });
+    vm.join();
+    vm._queue = [{ text: 'returns-null', voice: null }];
+
+    await vm._processQueue();
+
+    // After null stream, _playing should be reset
+    assert.equal(vm._playing, false);
+    // Queue should be empty (item was consumed)
+    assert.equal(vm._queue.length, 0);
+  });
+});

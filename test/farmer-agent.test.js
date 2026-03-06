@@ -369,4 +369,23 @@ describe('FarmerAgent — Inventory', () => {
     await agent.execute(bot);
     assert.equal(agent.getTotalHarvested(), 2);
   });
+
+  it('should handle block_disappeared when blockAt returns null', async () => {
+    const { agent } = createAgent();
+    let callCount = 0;
+    const bot = createMockBot({
+      findBlocks: [{ x: 105, y: 64, z: 100 }],
+      blockAt: (pos) => {
+        callCount++;
+        // findMatureCrops calls blockAt, return a valid crop
+        // execute() also calls blockAt for the same position — return null the second time
+        if (callCount <= 1) return { name: 'wheat', position: { x: 105, y: 64, z: 100 }, metadata: 7 };
+        return null;
+      },
+    });
+
+    const result = await agent.execute(bot);
+    assert.equal(result.success, false);
+    assert.equal(result.reason, 'block_disappeared');
+  });
 });

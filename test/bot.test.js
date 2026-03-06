@@ -531,7 +531,112 @@ describe('BuilderAgent — Shelter Gathering (AC-4)', () => {
     });
 });
 
-// ── AC-5 Self-Improvement Tests ─────────────────────────────────
+// ── OctivBot Edge Case Tests ─────────────────────────────────────
+describe('OctivBot — Edge Cases', () => {
+    let OctivBot;
+
+    before(() => {
+        OctivBot = require('../agent/OctivBot').OctivBot;
+    });
+
+    after(() => {
+        delete require.cache[require.resolve('../agent/OctivBot')];
+    });
+
+    it('Should not chat !pos when entity position is null', async () => {
+        const mockBot = createMockBot();
+        mockBot.entity = null; // no entity at all
+        const bot = new OctivBot({ username: 'TestBot-nopos' }, {
+            createBotFn: () => mockBot,
+        });
+
+        await bot.start();
+        mockBot.emit('spawn');
+        await new Promise(r => setTimeout(r, 50));
+
+        // Trigger !pos with null entity
+        mockBot.emit('chat', 'SomePlayer', '!pos');
+        await new Promise(r => setTimeout(r, 50));
+
+        // chat should NOT have been called with position (only spawn status msg)
+        const posCall = mockBot.chat.mock.calls.find(c =>
+            c.arguments[0] && c.arguments[0].startsWith('Position:')
+        );
+        assert.equal(posCall, undefined, 'Should not respond to !pos when entity is null');
+
+        await bot.shutdown();
+    });
+
+    it('Should ignore chat from self', async () => {
+        const mockBot = createMockBot({ username: 'MyBot' });
+        const bot = new OctivBot({ username: 'MyBot' }, {
+            createBotFn: () => mockBot,
+        });
+
+        await bot.start();
+        mockBot.emit('spawn');
+        await new Promise(r => setTimeout(r, 50));
+
+        const callsBefore = mockBot.chat.mock.calls.length;
+        mockBot.emit('chat', 'MyBot', '!status');
+        await new Promise(r => setTimeout(r, 50));
+
+        assert.equal(mockBot.chat.mock.calls.length, callsBefore, 'Bot should ignore its own messages');
+
+        await bot.shutdown();
+    });
+
+    it('_publishStatus handles Blackboard error without crashing', async () => {
+        const mockBot = createMockBot({ username: 'TestBot-publish-fail' });
+        const bot = new OctivBot({ username: 'TestBot-publish-fail' }, {
+            createBotFn: () => mockBot,
+            redisUrl: 'redis://localhost:6380',
+        });
+
+        await bot.start();
+        mockBot.emit('spawn');
+        await new Promise(r => setTimeout(r, 50));
+
+        // Force board publish to throw
+        bot.board.publish = async () => { throw new Error('Redis error'); };
+
+        let threw = false;
+        try {
+            await bot._publishStatus('test');
+        } catch (e) {
+            threw = true;
+        }
+
+        assert.equal(threw, false, '_publishStatus should not throw on board error');
+
+        await bot.shutdown();
+    });
+
+    it('_reconnect exits early when shuttingDown is true', async () => {
+        const mockBot = createMockBot({ username: 'TestBot-shutdown-reconnect' });
+        let createCount = 0;
+        const bot = new OctivBot({ username: 'TestBot-shutdown-reconnect' }, {
+            createBotFn: () => {
+                createCount++;
+                return mockBot;
+            },
+        });
+
+        await bot.start();
+        const countAfterStart = createCount;
+
+        // Set shuttingDown before reconnect
+        bot.shuttingDown = true;
+        await bot._reconnect(new Error('forced'));
+
+        // Should not create another bot
+        assert.equal(createCount, countAfterStart, 'Should not create bot when shuttingDown');
+
+        await bot.shutdown();
+    });
+});
+
+// ── AC-5 Self-Improvement Tests ─────────────────────────────────────
 describe('BuilderAgent — Self-Improvement (AC-5)', () => {
     let BuilderAgent;
     let redisClient;

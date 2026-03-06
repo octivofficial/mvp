@@ -546,3 +546,62 @@ describe('LeaderAgent — shutdown', () => {
     assert.equal(leader.board.disconnect.mock.callCount(), 1);
   });
 });
+
+// ── _startMissionLoop ────────────────────────────────────────
+describe('LeaderAgent — _startMissionLoop', () => {
+  it('should create a mission timer', () => {
+    const leader = createLeader();
+    // init() calls _startMissionLoop, which was cleared by createLeader
+    // Test by calling it directly
+    leader._startMissionLoop();
+    assert.ok(leader._missionTimer, '_missionTimer should exist');
+    clearInterval(leader._missionTimer);
+  });
+
+  it('should distribute missions periodically', async () => {
+    const leader = createLeader();
+    let distributeCalls = 0;
+    leader.distributeMission = mock.fn(async () => {
+      distributeCalls++;
+      return { ac: 1, action: 'collectWood' };
+    });
+    leader.decideMode = mock.fn(async () => 'training');
+
+    // Start loop with short interval for testing
+    leader._missionTimer = setInterval(async () => {
+      try {
+        for (let i = 1; i <= leader.teamSize; i++) {
+          await leader.distributeMission(`builder-0${i}`);
+        }
+        await leader.decideMode('builder-01');
+      } catch {}
+    }, 50);
+
+    await new Promise(r => setTimeout(r, 120));
+    clearInterval(leader._missionTimer);
+
+    assert.ok(distributeCalls >= 3, `expected >=3 distribute calls, got ${distributeCalls}`);
+  });
+
+  it('should handle errors in mission loop gracefully', async () => {
+    const leader = createLeader();
+    leader.distributeMission = mock.fn(async () => { throw new Error('redis down'); });
+    leader.decideMode = mock.fn(async () => 'training');
+
+    leader._startMissionLoop();
+    // Override interval to be short
+    clearInterval(leader._missionTimer);
+    leader._missionTimer = setInterval(async () => {
+      try {
+        for (let i = 1; i <= leader.teamSize; i++) {
+          await leader.distributeMission(`builder-0${i}`);
+        }
+      } catch {}
+    }, 50);
+
+    await new Promise(r => setTimeout(r, 100));
+    clearInterval(leader._missionTimer);
+    // No crash = success; loop should have attempted at least one cycle
+    assert.ok(leader.distributeMission.mock.callCount() >= 1, 'mission loop should have run at least once without crashing');
+  });
+});

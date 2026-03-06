@@ -404,6 +404,158 @@ describe('SkillZettelkasten — Compound Creation', () => {
   });
 });
 
+// ── SkillZettelkasten — deprecateNote ────────────────────────────
+
+describe('SkillZettelkasten — deprecateNote', () => {
+  let zk, cleanupBoard;
+
+  before(async () => {
+    cleanupBoard = new Blackboard();
+    await cleanupBoard.connect();
+    await cleanZkKeys(cleanupBoard);
+
+    zk = new SkillZettelkasten({ vaultDir: path.join(TEMP_VAULT, 'deprecate') });
+    await zk.init();
+
+    await zk.createNote({
+      name: 'bad_skill',
+      code: 'fail()',
+      errorType: 'test',
+      agentId: 'test',
+    });
+  });
+
+  after(async () => {
+    await cleanZkKeys(cleanupBoard);
+    await zk.shutdown();
+    await cleanupBoard.disconnect();
+  });
+
+  it('should set status to deprecated and record deprecatedAt', async () => {
+    const before = Date.now();
+    const note = await zk.deprecateNote('bad-skill');
+    assert.ok(note, 'Should return the deprecated note');
+    assert.equal(note.status, 'deprecated');
+    assert.ok(note.deprecatedAt >= before, 'deprecatedAt should be set');
+    assert.equal(note.deprecationReason, 'low_success_rate');
+  });
+
+  it('should persist deprecated status in Redis', async () => {
+    const fetched = await zk.getNote('bad-skill');
+    assert.ok(fetched, 'Note should still exist in Redis');
+    assert.equal(fetched.status, 'deprecated');
+  });
+
+  it('should return null for non-existent note', async () => {
+    const result = await zk.deprecateNote('does-not-exist');
+    assert.equal(result, null);
+  });
+
+  it('should accept a custom deprecation reason', async () => {
+    await zk.createNote({
+      name: 'another_bad_skill',
+      code: 'bad()',
+      errorType: 'test',
+      agentId: 'test',
+    });
+    const note = await zk.deprecateNote('another-bad-skill', 'manually_retired');
+    assert.ok(note);
+    assert.equal(note.deprecationReason, 'manually_retired');
+  });
+});
+
+// ── SkillZettelkasten — getByTier ────────────────────────────────
+
+describe('SkillZettelkasten — getByTier', () => {
+  let zk, cleanupBoard;
+
+  before(async () => {
+    cleanupBoard = new Blackboard();
+    await cleanupBoard.connect();
+    await cleanZkKeys(cleanupBoard);
+
+    zk = new SkillZettelkasten({ vaultDir: path.join(TEMP_VAULT, 'getbytier') });
+    await zk.init();
+
+    // Create a Novice note and an Apprentice note (by pumping XP)
+    await zk.createNote({ name: 'novice_skill', code: 'n()', errorType: 'test', agentId: 'test' });
+    await zk.createNote({ name: 'apprentice_skill', code: 'a()', errorType: 'test', agentId: 'test' });
+
+    // Pump apprentice_skill to Apprentice tier (need 10+ XP: 4 successes = 12 XP)
+    for (let i = 0; i < 4; i++) {
+      await zk.recordUsage('apprentice-skill', true);
+    }
+  });
+
+  after(async () => {
+    await cleanZkKeys(cleanupBoard);
+    await zk.shutdown();
+    await cleanupBoard.disconnect();
+  });
+
+  it('should return only skills at the specified tier', async () => {
+    const novices = await zk.getByTier('Novice');
+    assert.ok(novices.length >= 1, 'Should find at least one Novice skill');
+    for (const note of novices) {
+      assert.equal(note.tier, 'Novice');
+      assert.equal(note.status, 'active');
+    }
+  });
+
+  it('should exclude deprecated notes from tier results', async () => {
+    await zk.deprecateNote('novice-skill');
+    const novices = await zk.getByTier('Novice');
+    const ids = novices.map(n => n.id);
+    assert.ok(!ids.includes('novice-skill'), 'Deprecated note should be excluded');
+  });
+});
+
+// ── SkillZettelkasten — getStrongestLinks ─────────────────────────
+
+describe('SkillZettelkasten — getStrongestLinks', () => {
+  let zk, cleanupBoard;
+
+  before(async () => {
+    cleanupBoard = new Blackboard();
+    await cleanupBoard.connect();
+    await cleanZkKeys(cleanupBoard);
+
+    zk = new SkillZettelkasten({ vaultDir: path.join(TEMP_VAULT, 'stronglinks') });
+    await zk.init();
+  });
+
+  after(async () => {
+    await cleanZkKeys(cleanupBoard);
+    await zk.shutdown();
+    await cleanupBoard.disconnect();
+  });
+
+  it('should return empty array when no notes exist', async () => {
+    const links = await zk.getStrongestLinks();
+    assert.deepEqual(links, []);
+  });
+
+  it('should return links sorted by strength after co-occurrences', async () => {
+    await zk.createNote({ name: 'link_skill_a', code: 'a()', errorType: 'mining', agentId: 'test' });
+    await zk.createNote({ name: 'link_skill_b', code: 'b()', errorType: 'mining', agentId: 'test' });
+
+    // Record 6 co-occurrences: 5 success + 1 failure → strength ~0.83
+    for (let i = 0; i < 5; i++) {
+      await zk.recordUsage('link-skill-a', true, { coSkills: ['link-skill-b'] });
+    }
+    await zk.recordUsage('link-skill-a', false, { coSkills: ['link-skill-b'] });
+
+    const links = await zk.getStrongestLinks(0.5);
+    assert.ok(links.length >= 1, 'Should find at least one strong link');
+    assert.ok(links[0].strength >= 0.5, 'Link strength should meet minimum threshold');
+
+    // Verify sorted descending
+    for (let i = 1; i < links.length; i++) {
+      assert.ok(links[i - 1].strength >= links[i].strength, 'Links should be sorted by strength descending');
+    }
+  });
+});
+
 // ── Vault File Persistence ──────────────────────────────────────
 
 describe('SkillZettelkasten — Vault Persistence', () => {

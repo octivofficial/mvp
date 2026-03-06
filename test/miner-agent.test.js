@@ -846,3 +846,91 @@ describe('MinerAgent — Blackboard Coordination', () => {
     assert.ok(quotaCalls >= 2, 'should check quota multiple times');
   });
 });
+
+// ── navigateToOre — goal.isEnd and goal.hasChanged ──────────
+describe('MinerAgent — navigateToOre goal functions', () => {
+  it('isEnd should return true within range', async () => {
+    const board = createMockBoard();
+    const agent = new MinerAgent({ id: 'miner-nav' });
+    agent.board = board;
+    agent.chat = { chat: mock.fn(async () => {}), confess: mock.fn(async () => {}) };
+
+    let capturedGoal = null;
+    _setNav({
+      setupPathfinder: (bot, cached) => cached || {},
+      goto: async (bot, goal) => { capturedGoal = goal; },
+    });
+
+    const bot = createMockBot({
+      findBlocks: [{ x: 10, y: 60, z: 10 }],
+      blockAt: (pos) => ({ name: 'coal_ore', position: pos }),
+    });
+    bot.pathfinder = { setMovements: mock.fn() };
+
+    await agent.navigateToOre(bot, { x: 10, y: 60, z: 10 });
+
+    assert.ok(capturedGoal, 'goal should be captured');
+    // isEnd: within 2 blocks → true
+    assert.equal(capturedGoal.isEnd({ x: 10, y: 60, z: 10 }), true);
+    assert.equal(capturedGoal.isEnd({ x: 11, y: 60, z: 10 }), true);
+    // isEnd: far away → false
+    assert.equal(capturedGoal.isEnd({ x: 100, y: 60, z: 100 }), false);
+    // hasChanged always false
+    assert.equal(capturedGoal.hasChanged(), false);
+  });
+
+  it('should return nav_timeout on timeout error', async () => {
+    const board = createMockBoard();
+    const agent = new MinerAgent({ id: 'miner-nav-t' });
+    agent.board = board;
+    agent.chat = { chat: mock.fn(async () => {}), confess: mock.fn(async () => {}) };
+
+    _setNav({
+      setupPathfinder: (bot, cached) => cached || {},
+      goto: async () => { throw new Error('timeout reached'); },
+    });
+
+    const bot = createMockBot({
+      findBlocks: [{ x: 10, y: 60, z: 10 }],
+      blockAt: (pos) => ({ name: 'coal_ore', position: pos }),
+    });
+    bot.pathfinder = { setMovements: mock.fn() };
+
+    const result = await agent.navigateToOre(bot, { x: 10, y: 60, z: 10 });
+    assert.equal(result.success, false);
+    assert.equal(result.reason, 'nav_timeout');
+  });
+});
+
+// ── smelt — goal.isEnd and goal.hasChanged ──────────────────
+describe('MinerAgent — smelt goal functions', () => {
+  it('smelt goal isEnd and hasChanged should work', async () => {
+    const board = createMockBoard();
+    const agent = new MinerAgent({ id: 'miner-smelt' });
+    agent.board = board;
+    agent.chat = { chat: mock.fn(async () => {}), confess: mock.fn(async () => {}) };
+
+    let capturedGoal = null;
+    _setNav({
+      setupPathfinder: (bot, cached) => cached || {},
+      goto: async (bot, goal) => { capturedGoal = goal; },
+    });
+
+    const mockFurnace = {
+      putInput: mock.fn(async () => {}),
+      close: mock.fn(async () => {}),
+    };
+    const bot = createMockBot({ inventory: [] });
+    bot.pathfinder = { setMovements: mock.fn() };
+    bot.blockAt = mock.fn(() => ({ name: 'furnace' }));
+    bot.openFurnace = mock.fn(async () => mockFurnace);
+    bot.inventory = { items: mock.fn(() => []) };
+
+    await agent.smelt(bot, { x: 5, y: 64, z: 5 });
+
+    assert.ok(capturedGoal, 'smelt goal should be captured');
+    assert.equal(capturedGoal.isEnd({ x: 5, y: 64, z: 5 }), true);
+    assert.equal(capturedGoal.isEnd({ x: 100, y: 64, z: 100 }), false);
+    assert.equal(capturedGoal.hasChanged(), false);
+  });
+});

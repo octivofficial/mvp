@@ -442,3 +442,61 @@ describe('DashboardServer — Skill Lab API (Phase 6.2)', () => {
         assert.equal(data.tiers[5].name, 'Grandmaster');
     });
 });
+
+// ── DashboardServer — unit tests (no Redis) ──────────────────
+describe('DashboardServer — _broadcast and _sendJSON', () => {
+    let DashboardServerLocal;
+
+    before(() => {
+        ({ DashboardServer: DashboardServerLocal } = require('../agent/dashboard'));
+    });
+
+    it('_broadcast should filter out dead SSE clients', () => {
+        const dash = new DashboardServerLocal(0);
+        let writeCount = 0;
+        const goodClient = { write: () => { writeCount++; return true; } };
+        const badClient = { write: () => { throw new Error('closed'); } };
+        dash.sseClients = [goodClient, badClient];
+
+        dash._broadcast({ type: 'test', data: 'hello' });
+
+        assert.equal(dash.sseClients.length, 1, 'dead client should be removed');
+        assert.equal(writeCount, 1, 'good client should receive message');
+    });
+
+    it('getState should return a copy of agentState', () => {
+        const dash = new DashboardServerLocal(0);
+        dash.agentState = { bot1: { status: 'active' } };
+        const state = dash.getState();
+        assert.deepEqual(state, { bot1: { status: 'active' } });
+        state.bot1 = 'modified';
+        assert.equal(dash.agentState.bot1.status, 'active', 'original should be unchanged');
+    });
+
+    it('_handleRequest should return 404 for unknown route', () => {
+        const dash = new DashboardServerLocal(0);
+        let statusCode = 0;
+        let body = '';
+        const mockReq = { url: '/totally-unknown' };
+        const mockRes = {
+            writeHead: (code) => { statusCode = code; },
+            end: (data) => { body = data; },
+        };
+        dash._handleRequest(mockReq, mockRes);
+        assert.equal(statusCode, 404);
+        assert.equal(body, 'Not found');
+    });
+
+    it('_handleAPISkillDetail should return 400 for path traversal', async () => {
+        const dash = new DashboardServerLocal(0);
+        let statusCode = 0;
+        let body = '';
+        const mockReq = { url: '/api/skills/../../etc/passwd' };
+        const mockRes = {
+            writeHead: (code) => { statusCode = code; },
+            end: (data) => { body = data; },
+        };
+        await dash._handleAPISkillDetail(mockReq, mockRes);
+        assert.equal(statusCode, 400);
+    });
+});

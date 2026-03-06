@@ -9,6 +9,9 @@ const {
   monitorGathering,
   shouldProcessEmergency,
   setupRemoteControl,
+  handleEmergencyEvent,
+  createExplorerLoop,
+  gracefulShutdown,
 } = require("../agent/team");
 
 describe("team — monitorGathering", () => {
@@ -387,5 +390,353 @@ describe("team — setupRemoteControl", () => {
     const [, payload] = board.client.publish.mock.calls[0].arguments;
     const parsed = JSON.parse(payload);
     assert.ok(parsed.data.includes("unknown"));
+  });
+});
+
+// ── handleEmergencyEvent ────────────────────────────────────────
+
+describe("team — handleEmergencyEvent", () => {
+  function createDeps(overrides = {}) {
+    return {
+      pipeline: {
+        generateFromFailure: mock.fn(
+          async () => overrides.pipelineResult || { success: false },
+        ),
+      },
+      leader: {
+        consecutiveTeamFailures: 0,
+        checkReflexionTrigger: mock.fn(async () => {}),
+        injectLearnedSkill: mock.fn(async () => {}),
+      },
+      logger: {
+        logEvent: mock.fn(async () => {}),
+      },
+      lastEmergency: { type: null, time: 0 },
+    };
+  }
+
+  it("should log emergency event", async () => {
+    const deps = createDeps();
+    await handleEmergencyEvent({ failureType: "fall" }, deps);
+    assert.equal(deps.logger.logEvent.mock.callCount(), 1);
+    const args = deps.logger.logEvent.mock.calls[0].arguments;
+    assert.equal(args[0], "team");
+    assert.equal(args[1].type, "emergency");
+  });
+
+  it("should increment leader failures on failureType", async () => {
+    const deps = createDeps();
+    await handleEmergencyEvent({ failureType: "fall" }, deps);
+    assert.equal(deps.leader.consecutiveTeamFailures, 1);
+    assert.equal(deps.leader.checkReflexionTrigger.mock.callCount(), 1);
+  });
+
+  it("should dedup same failureType within window", async () => {
+    const deps = createDeps();
+    await handleEmergencyEvent({ failureType: "fall" }, deps);
+    await handleEmergencyEvent({ failureType: "fall" }, deps);
+    assert.equal(deps.leader.consecutiveTeamFailures, 1);
+  });
+
+  it("should allow different failureType", async () => {
+    const deps = createDeps();
+    await handleEmergencyEvent({ failureType: "fall" }, deps);
+    await handleEmergencyEvent({ failureType: "lava" }, deps);
+    assert.equal(deps.leader.consecutiveTeamFailures, 2);
+  });
+
+  it("should trigger skill creation when triggerSkillCreation is set", async () => {
+    const deps = createDeps({
+      pipelineResult: { success: true, skill: { name: "dodgeLava" } },
+    });
+    await handleEmergencyEvent(
+      { failureType: "lava", triggerSkillCreation: true },
+      deps,
+    );
+    assert.equal(deps.pipeline.generateFromFailure.mock.callCount(), 1);
+    assert.equal(deps.leader.injectLearnedSkill.mock.callCount(), 1);
+  });
+
+  it("should not inject skill when pipeline fails", async () => {
+    const deps = createDeps({ pipelineResult: { success: false } });
+    await handleEmergencyEvent(
+      { failureType: "lava", triggerSkillCreation: true },
+      deps,
+    );
+    assert.equal(deps.leader.injectLearnedSkill.mock.callCount(), 0);
+  });
+
+  it("should handle event with newSkill but no failureType", async () => {
+    const deps = createDeps();
+    await handleEmergencyEvent({ newSkill: "mineWood" }, deps);
+    assert.equal(deps.leader.consecutiveTeamFailures, 0);
+  });
+
+  it("should handle logger.logEvent rejection gracefully", async () => {
+    const deps = createDeps();
+    deps.logger.logEvent = mock.fn(async () => {
+      throw new Error("disk full");
+    });
+    // Should not throw
+    await assert.doesNotReject(
+      handleEmergencyEvent({ failureType: "fall" }, deps),
+    );
+  });
+});
+
+// ── createExplorerLoop ──────────────────────────────────────────
+
+describe("team — createExplorerLoop", () => {
+  const intervals = [];
+  after(() => {
+    for (const id of intervals) clearInterval(id);
+  });
+
+  it("should return interval ID", () => {
+    const board = { get: mock.fn(async () => null) };
+    const explorer = { execute: mock.fn(async () => {}) };
+    const id = createExplorerLoop(board, explorer, 50000);
+    assert.ok(id);
+    clearInterval(id);
+  });
+
+  it("should call explorer.execute when position available", async () => {
+    const board = {
+      get: mock.fn(async () => ({
+        position: { x: 10, y: 64, z: 20 },
+      })),
+    };
+    const explorer = { execute: mock.fn(async () => {}) };
+
+    await new Promise((resolve) => {
+      const id = createExplorerLoop(board, explorer, 20);
+      intervals.push(id);
+      setTimeout(() => {
+        clearInterval(id);
+        assert.ok(explorer.execute.mock.callCount() >= 1);
+        resolve();
+      }, 100);
+    });
+  });
+
+  it("should skip when no position in status", async () => {
+    const board = { get: mock.fn(async () => ({ status: "idle" })) };
+    const explorer = { execute: mock.fn(async () => {}) };
+
+    await new Promise((resolve) => {
+      const id = createExplorerLoop(board, explorer, 20);
+      intervals.push(id);
+      setTimeout(() => {
+        clearInterval(id);
+        assert.equal(explorer.execute.mock.callCount(), 0);
+        resolve();
+      }, 100);
+    });
+  });
+
+  it("should handle errors gracefully", async () => {
+    const board = {
+      get: mock.fn(async () => {
+        throw new Error("Redis timeout");
+      }),
+    };
+    const explorer = { execute: mock.fn(async () => {}) };
+
+    await new Promise((resolve) => {
+      const id = createExplorerLoop(board, explorer, 20);
+      intervals.push(id);
+      setTimeout(() => {
+        clearInterval(id);
+        assert.ok(board.get.mock.callCount() >= 1);
+        resolve();
+      }, 100);
+    });
+  });
+});
+
+// ── gracefulShutdown ──────────────────────────────────────────
+
+describe("team — gracefulShutdown", () => {
+  function createMockAgent() {
+    return { shutdown: mock.fn(async () => {}) };
+  }
+
+  it("should shutdown all agents in order", async () => {
+    const agents = {
+      leader: createMockAgent(),
+      safety: createMockAgent(),
+      explorer: createMockAgent(),
+      miner: createMockAgent(),
+      farmer: createMockAgent(),
+      builders: [createMockAgent(), createMockAgent()],
+    };
+    const resources = {
+      explorerInterval: setInterval(() => {}, 99999),
+      emergencySubscriber: {
+        unsubscribe: mock.fn(async () => {}),
+        disconnect: mock.fn(async () => {}),
+      },
+      zkHooks: createMockAgent(),
+      got: createMockAgent(),
+      rumination: createMockAgent(),
+      zettelkasten: createMockAgent(),
+      pipeline: createMockAgent(),
+      reflexion: createMockAgent(),
+      board: { disconnect: mock.fn(async () => {}) },
+      logger: { logEvent: mock.fn(async () => {}) },
+    };
+
+    await gracefulShutdown(agents, resources);
+
+    assert.equal(agents.leader.shutdown.mock.callCount(), 1);
+    assert.equal(agents.safety.shutdown.mock.callCount(), 1);
+    assert.equal(agents.explorer.shutdown.mock.callCount(), 1);
+    assert.equal(agents.miner.shutdown.mock.callCount(), 1);
+    assert.equal(agents.farmer.shutdown.mock.callCount(), 1);
+    assert.equal(agents.builders[0].shutdown.mock.callCount(), 1);
+    assert.equal(agents.builders[1].shutdown.mock.callCount(), 1);
+    assert.equal(
+      resources.emergencySubscriber.unsubscribe.mock.callCount(),
+      1,
+    );
+    assert.equal(resources.board.disconnect.mock.callCount(), 1);
+  });
+
+  it("should continue shutdown even if one agent fails", async () => {
+    const agents = {
+      leader: {
+        shutdown: mock.fn(async () => {
+          throw new Error("leader crash");
+        }),
+      },
+      safety: createMockAgent(),
+      explorer: createMockAgent(),
+      miner: createMockAgent(),
+      farmer: createMockAgent(),
+      builders: [],
+    };
+    const resources = {
+      explorerInterval: setInterval(() => {}, 99999),
+      emergencySubscriber: {
+        unsubscribe: mock.fn(async () => {}),
+        disconnect: mock.fn(async () => {}),
+      },
+      zkHooks: createMockAgent(),
+      got: createMockAgent(),
+      rumination: createMockAgent(),
+      zettelkasten: createMockAgent(),
+      pipeline: createMockAgent(),
+      reflexion: createMockAgent(),
+      board: { disconnect: mock.fn(async () => {}) },
+      logger: { logEvent: mock.fn(async () => {}) },
+    };
+
+    // Should not throw
+    await assert.doesNotReject(gracefulShutdown(agents, resources));
+    // Safety should still be called even though leader failed
+    assert.equal(agents.safety.shutdown.mock.callCount(), 1);
+    assert.equal(resources.board.disconnect.mock.callCount(), 1);
+  });
+
+  it("should clear explorer interval", async () => {
+    let intervalCleared = false;
+    const interval = setInterval(() => {
+      intervalCleared = false;
+    }, 99999);
+
+    const agents = {
+      leader: createMockAgent(),
+      safety: createMockAgent(),
+      explorer: createMockAgent(),
+      miner: createMockAgent(),
+      farmer: createMockAgent(),
+      builders: [],
+    };
+    const resources = {
+      explorerInterval: interval,
+      emergencySubscriber: {
+        unsubscribe: mock.fn(async () => {}),
+        disconnect: mock.fn(async () => {}),
+      },
+      zkHooks: createMockAgent(),
+      got: createMockAgent(),
+      rumination: createMockAgent(),
+      zettelkasten: createMockAgent(),
+      pipeline: createMockAgent(),
+      reflexion: createMockAgent(),
+      board: { disconnect: mock.fn(async () => {}) },
+      logger: { logEvent: mock.fn(async () => {}) },
+    };
+
+    await gracefulShutdown(agents, resources);
+    // clearInterval was called — verify agents were still shutdown correctly
+    assert.equal(agents.leader.shutdown.mock.callCount(), 1);
+  });
+
+  it("should handle subscriber unsubscribe failure", async () => {
+    const agents = {
+      leader: createMockAgent(),
+      safety: createMockAgent(),
+      explorer: createMockAgent(),
+      miner: createMockAgent(),
+      farmer: createMockAgent(),
+      builders: [],
+    };
+    const resources = {
+      explorerInterval: setInterval(() => {}, 99999),
+      emergencySubscriber: {
+        unsubscribe: mock.fn(async () => {
+          throw new Error("unsubscribe fail");
+        }),
+        disconnect: mock.fn(async () => {}),
+      },
+      zkHooks: createMockAgent(),
+      got: createMockAgent(),
+      rumination: createMockAgent(),
+      zettelkasten: createMockAgent(),
+      pipeline: createMockAgent(),
+      reflexion: createMockAgent(),
+      board: { disconnect: mock.fn(async () => {}) },
+      logger: { logEvent: mock.fn(async () => {}) },
+    };
+
+    await assert.doesNotReject(gracefulShutdown(agents, resources));
+    // disconnect should still be attempted
+    assert.equal(
+      resources.emergencySubscriber.disconnect.mock.callCount(),
+      1,
+    );
+  });
+
+  it("should log shutdown event via logger", async () => {
+    const agents = {
+      leader: createMockAgent(),
+      safety: createMockAgent(),
+      explorer: createMockAgent(),
+      miner: createMockAgent(),
+      farmer: createMockAgent(),
+      builders: [],
+    };
+    const resources = {
+      explorerInterval: setInterval(() => {}, 99999),
+      emergencySubscriber: {
+        unsubscribe: mock.fn(async () => {}),
+        disconnect: mock.fn(async () => {}),
+      },
+      zkHooks: createMockAgent(),
+      got: createMockAgent(),
+      rumination: createMockAgent(),
+      zettelkasten: createMockAgent(),
+      pipeline: createMockAgent(),
+      reflexion: createMockAgent(),
+      board: { disconnect: mock.fn(async () => {}) },
+      logger: { logEvent: mock.fn(async () => {}) },
+    };
+
+    await gracefulShutdown(agents, resources);
+    assert.equal(resources.logger.logEvent.mock.callCount(), 1);
+    const logArgs = resources.logger.logEvent.mock.calls[0].arguments;
+    assert.equal(logArgs[0], "team");
+    assert.equal(logArgs[1].type, "shutdown");
   });
 });

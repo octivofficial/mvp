@@ -109,4 +109,4 @@ function voiceForRole(role) {
   return VOICES[role] || DEFAULT_VOICE;
 }
 
-module.exports = { synthesize, voiceForRole, VOICES, DEFAULT_VOICE, _setTtsFactory };
+module.exports = { synthesize, voiceForRole, VOICES, DEFAULT_VOICE, _setTtsFactory, _tmpPath };

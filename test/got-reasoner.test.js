@@ -277,6 +277,14 @@ describe('GoTReasoner — _explainSynergy', () => {
     assert.ok(result.includes('same error type'));
   });
 
+  it('should include both-successful note when both rates >= 0.7', () => {
+    const got = new GoTReasoner(createMockZettelkasten());
+    const a = { tags: [], errorType: 'nav:stuck', successRate: 0.8 };
+    const b = { tags: [], errorType: 'nav:timeout', successRate: 0.9 };
+    const result = got._explainSynergy(a, b, []);
+    assert.ok(result.includes('both highly successful'));
+  });
+
   it('should return default when no specific reason', () => {
     const got = new GoTReasoner(createMockZettelkasten());
     // Use different errorTypes so the equality check doesn't match
@@ -284,6 +292,73 @@ describe('GoTReasoner — _explainSynergy', () => {
     const b = { tags: [], errorType: 'nav:stuck', successRate: 0.3 };
     const result = got._explainSynergy(a, b, []);
     assert.equal(result, 'complementary skills');
+  });
+});
+
+describe('GoTReasoner — _generateMermaidGraph empty', () => {
+  it('should return early without calling fsp.writeFile when no skills exist', async () => {
+    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'got-empty-graph-'));
+    const zk = createMockZettelkasten({}); // empty
+    const got = new GoTReasoner(zk);
+    got.vaultDir = tmpDir;
+    got.board = createMockBoard();
+
+    // Track whether writeFile is called for Skill-Graph.md
+    let graphWritten = false;
+    const origWriteFile = fsp.writeFile.bind(fsp);
+    // Patch fsp on the module level is complex — instead verify via side-effect:
+    // _generateMermaidGraph returns undefined early when nodes.length === 0
+    const result = await got._generateMermaidGraph();
+    assert.equal(result, undefined, 'Should return undefined (early return) for empty graph');
+
+    // Verify no Skill-Graph.md was created in this specific tmpDir parent
+    // (early return means we never reach the writeFile call)
+    const files = await fsp.readdir(tmpDir);
+    assert.equal(files.length, 0, 'vaultDir should remain empty on early return');
+  });
+});
+
+describe('GoTReasoner — fullReasoningCycle', () => {
+  it('should run all 4 strategies and return a summary', async () => {
+    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'got-cycle-'));
+    const notes = {
+      skill_x: makeNote('skill_x', { errorType: 'nav:stuck', xp: 5, successRate: 0.8, tags: ['nav'] }),
+      skill_y: makeNote('skill_y', { errorType: 'nav:stuck', xp: 3, successRate: 0.7, tags: ['nav'] }),
+    };
+    const zk = createMockZettelkasten(notes);
+    const got = new GoTReasoner(zk);
+    got.vaultDir = tmpDir;
+    got.board = createMockBoard();
+
+    let published = false;
+    got.board.publish = async (channel, payload) => {
+      if (channel === 'got:reasoning-complete') published = true;
+    };
+
+    const result = await got.fullReasoningCycle();
+
+    assert.ok(result, 'Should return a result object');
+    assert.ok('synergies' in result, 'Result should include synergies');
+    assert.ok('optimalBuilds' in result, 'Result should include optimalBuilds');
+    assert.ok('gaps' in result, 'Result should include gaps');
+    assert.ok('evolutions' in result, 'Result should include evolutions');
+    assert.ok('summary' in result, 'Result should include summary');
+    assert.ok(typeof result.summary.totalSynergies === 'number');
+    assert.ok(published, 'Should publish got:reasoning-complete to the board');
+  });
+
+  it('should handle an empty zettelkasten without throwing', async () => {
+    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'got-cycle-empty-'));
+    const zk = createMockZettelkasten({});
+    const got = new GoTReasoner(zk);
+    got.vaultDir = tmpDir;
+    got.board = createMockBoard();
+    got.board.publish = async () => {};
+
+    const result = await got.fullReasoningCycle();
+    assert.equal(result.summary.totalSynergies, 0);
+    assert.equal(result.summary.totalGaps, 0);
+    assert.equal(result.summary.closestToMaster, 'none');
   });
 });
 

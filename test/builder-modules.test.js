@@ -535,3 +535,261 @@ describe('builder-adaptation — tryLearnedSkill', () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// builder.js — _reactLoop
+// ═══════════════════════════════════════════════════════════════
+
+describe('builder — _reactLoop exits immediately when _running is false', () => {
+  const { BuilderAgent } = require('../agent/builder');
+
+  it('should not execute any loop body when _running=false at start', async () => {
+    const builder = new BuilderAgent({ id: 'test-react-loop' });
+    builder._running = false;
+
+    // _reactLoop calls board.publish; stub the board so it does not need Redis
+    builder.board = {
+      publish: mock.fn(async () => {}),
+      logReflexion: mock.fn(async () => {}),
+      disconnect: mock.fn(async () => {}),
+    };
+
+    // Should resolve immediately without calling publish
+    await builder._reactLoop();
+    assert.equal(builder.board.publish.mock.calls.length, 0, 'publish should never be called');
+    assert.equal(builder.reactIterations, 0, 'reactIterations should stay 0');
+  });
+});
+
+describe('builder — _reactLoop AC-2 branch when AC-1 and AC-3 done', () => {
+  const { BuilderAgent } = require('../agent/builder');
+
+  it('should call buildShelter when AC-1 done and AC-3 done but AC-2 not done', async () => {
+    const builder = new BuilderAgent({ id: 'test-react-ac2' });
+    // AC-1 done, AC-3 done, AC-2 not done → buildShelter branch
+    builder.acProgress = { 1: true, 2: false, 3: true, 4: false, 5: false };
+
+    let shelterCalled = false;
+    builder.buildShelter = async () => {
+      shelterCalled = true;
+      // Stop the loop after one iteration
+      builder._running = false;
+    };
+
+    builder.board = {
+      publish: mock.fn(async () => {}),
+      logReflexion: mock.fn(async () => {}),
+      disconnect: mock.fn(async () => {}),
+    };
+
+    await builder._reactLoop();
+    assert.ok(shelterCalled, 'buildShelter should have been called for AC-2 progression');
+  });
+});
+
+// ── tryLearnedSkill — catch paths ────────────────────────
+describe('builder-adaptation — tryLearnedSkill catch paths', () => {
+  it('should return false when getLibrary throws', async () => {
+    const agent = {
+      id: 'test-01',
+      skillPipeline: {
+        getLibrary: mock.fn(async () => { throw new Error('redis down'); }),
+      },
+    };
+    const result = await tryLearnedSkill(agent, new Error('build site error'));
+    assert.equal(result, false);
+  });
+
+  it('should return false when validateSkill throws', async () => {
+    const agent = {
+      id: 'test-01',
+      skillPipeline: {
+        getLibrary: mock.fn(async () => ({
+          'fix-build': { errorType: 'build_site', successRate: 0.8, code: 'return 1;' },
+        })),
+        validateSkill: mock.fn(async () => { throw new Error('validation error'); }),
+        updateSuccessRate: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => {}) },
+    };
+    const result = await tryLearnedSkill(agent, new Error('build site flat'));
+    assert.equal(result, false);
+    assert.equal(agent.skillPipeline.updateSuccessRate.mock.callCount(), 1);
+    assert.equal(agent.skillPipeline.updateSuccessRate.mock.calls[0].arguments[1], false);
+  });
+
+  it('should return true when validateSkill succeeds', async () => {
+    const agent = {
+      id: 'test-01',
+      skillPipeline: {
+        getLibrary: mock.fn(async () => ({
+          'fix-build': { errorType: 'build_site', successRate: 0.8, code: 'return 1;' },
+        })),
+        validateSkill: mock.fn(async () => true),
+        updateSuccessRate: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => {}) },
+    };
+    const result = await tryLearnedSkill(agent, new Error('build site flat'));
+    assert.equal(result, true);
+    assert.equal(agent.skillPipeline.updateSuccessRate.mock.calls[0].arguments[1], true);
+  });
+
+  it('should return false when validateSkill returns false', async () => {
+    const agent = {
+      id: 'test-01',
+      skillPipeline: {
+        getLibrary: mock.fn(async () => ({
+          'fix-path': { errorType: 'pathfinding', successRate: 0.5, code: 'x' },
+        })),
+        validateSkill: mock.fn(async () => false),
+        updateSuccessRate: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => {}) },
+    };
+    const result = await tryLearnedSkill(agent, new Error('path blocked'));
+    assert.equal(result, false);
+  });
+
+  it('should select skill with highest success rate', async () => {
+    const agent = {
+      id: 'test-01',
+      skillPipeline: {
+        getLibrary: mock.fn(async () => ({
+          'fix-build-v1': { errorType: 'build_site', successRate: 0.3, code: 'a' },
+          'fix-build-v2': { errorType: 'build_site', successRate: 0.9, code: 'b' },
+          'fix-path': { errorType: 'pathfinding', successRate: 1.0, code: 'c' },
+        })),
+        validateSkill: mock.fn(async () => true),
+        updateSuccessRate: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => {}) },
+    };
+    await tryLearnedSkill(agent, new Error('build site flat'));
+    // Should pick fix-build-v2 (0.9 rate), not fix-build-v1 (0.3)
+    const validated = agent.skillPipeline.validateSkill.mock.calls[0].arguments[0];
+    assert.equal(validated, 'b');
+  });
+});
+
+// ── selfImprove — maxRetries ────────────────────────────────────
+describe('builder-adaptation — selfImprove maxRetries', () => {
+  it('should return false when retries exceed maxRetries', async () => {
+    const agent = {
+      id: 'test-01',
+      adaptations: {
+        retries: { build_site: 5 },
+        maxRetries: 3,
+        buildSiteRadius: 32,
+        improvements: [],
+      },
+      acProgress: {},
+      board: {
+        publish: mock.fn(async () => {}),
+        logReflexion: mock.fn(async () => {}),
+        updateAC: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => {}) },
+      reactIterations: 5,
+    };
+    const result = await selfImprove(agent, new Error('build site error'));
+    assert.equal(result, false);
+  });
+
+  it('should return true when retries within limit', async () => {
+    const agent = {
+      id: 'test-01',
+      adaptations: {
+        retries: {},
+        maxRetries: 5,
+        buildSiteRadius: 16,
+        improvements: [],
+      },
+      acProgress: {},
+      board: {
+        publish: mock.fn(async () => {}),
+        logReflexion: mock.fn(async () => {}),
+        updateAC: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => {}) },
+      reactIterations: 1,
+    };
+    const result = await selfImprove(agent, new Error('build site error'));
+    assert.equal(result, true);
+    assert.equal(agent.adaptations.buildSiteRadius, 24);
+  });
+});
+
+// ── builder-adaptation — logger rejection catch callbacks ────
+describe('builder-adaptation — logger.logEvent rejection callbacks', () => {
+  it('selfImprove should handle logger.logEvent rejection', async () => {
+    const agent = {
+      id: 'test-01',
+      adaptations: {
+        retries: {},
+        maxRetries: 5,
+        buildSiteRadius: 16,
+        improvements: [],
+      },
+      acProgress: {},
+      board: {
+        publish: mock.fn(async () => {}),
+        logReflexion: mock.fn(async () => {}),
+        updateAC: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => { throw new Error('disk full'); }) },
+      reactIterations: 1,
+    };
+    const result = await selfImprove(agent, new Error('build site error'));
+    assert.equal(result, true);
+    // The .catch callback on line 62 should fire, no crash
+  });
+
+  it('tryLearnedSkill should handle logger rejection on validation failure', async () => {
+    const agent = {
+      id: 'test-01',
+      skillPipeline: {
+        getLibrary: mock.fn(async () => ({
+          'fix-build': { errorType: 'build_site', successRate: 0.8, code: 'x' },
+        })),
+        validateSkill: mock.fn(async () => false),
+        updateSuccessRate: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => { throw new Error('disk full'); }) },
+    };
+    const result = await tryLearnedSkill(agent, new Error('build site flat'));
+    assert.equal(result, false);
+  });
+
+  it('tryLearnedSkill should handle logger rejection on success', async () => {
+    const agent = {
+      id: 'test-01',
+      skillPipeline: {
+        getLibrary: mock.fn(async () => ({
+          'fix-build': { errorType: 'build_site', successRate: 0.8, code: 'x' },
+        })),
+        validateSkill: mock.fn(async () => true),
+        updateSuccessRate: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => { throw new Error('disk full'); }) },
+    };
+    const result = await tryLearnedSkill(agent, new Error('build site flat'));
+    assert.equal(result, true);
+  });
+
+  it('tryLearnedSkill should handle logger rejection in catch block', async () => {
+    const agent = {
+      id: 'test-01',
+      skillPipeline: {
+        getLibrary: mock.fn(async () => ({
+          'fix-build': { errorType: 'build_site', successRate: 0.8, code: 'x' },
+        })),
+        validateSkill: mock.fn(async () => { throw new Error('vm crash'); }),
+        updateSuccessRate: mock.fn(async () => {}),
+      },
+      logger: { logEvent: mock.fn(async () => { throw new Error('disk full'); }) },
+    };
+    const result = await tryLearnedSkill(agent, new Error('build site flat'));
+    assert.equal(result, false);
+  });
+});

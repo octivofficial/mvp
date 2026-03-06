@@ -23,6 +23,93 @@ const T = require('../config/timeouts');
 const log = getLogger();
 const TEAM_SIZE = 3; // number of builder agents
 
+/**
+ * Handle emergency event from skills:emergency subscription.
+ * Extracted from main() for testability.
+ * @param {object} data - parsed emergency event
+ * @param {object} deps - { pipeline, leader, logger, lastEmergency }
+ */
+async function handleEmergencyEvent(data, deps) {
+  const { pipeline, leader, logger, lastEmergency } = deps;
+  logger.logEvent('team', { type: 'emergency', ...data }).catch(e => log.error('team', 'log persist error', { error: e.message }));
+  log.warn('team', `Emergency: ${data.failureType || data.newSkill || 'unknown'}`);
+
+  // Increment leader failure counter on safety threats (deduped)
+  if (data.failureType) {
+    if (shouldProcessEmergency(lastEmergency, data.failureType)) {
+      leader.consecutiveTeamFailures++;
+      await leader.checkReflexionTrigger();
+    }
+  }
+
+  // If safety triggered skill creation, attempt to generate a skill
+  if (data.triggerSkillCreation && data.failureType) {
+    const result = await pipeline.generateFromFailure({
+      error: data.failureType,
+      errorType: data.failureType,
+      agentId: data.agentId || 'unknown',
+    });
+    if (result.success) {
+      await leader.injectLearnedSkill(result.skill);
+      logger.logEvent('team', { type: 'skill_created', skill: result.skill }).catch(e => log.error('team', 'log persist error', { error: e.message }));
+    }
+  }
+}
+
+/**
+ * Create explorer execution loop — piggyback on builder-01's position via Blackboard.
+ * Extracted from main() for testability.
+ * @param {object} board - Blackboard instance
+ * @param {object} explorer - ExplorerAgent instance
+ * @param {number} intervalMs - poll interval
+ * @returns {NodeJS.Timeout} interval ID for cleanup
+ */
+function createExplorerLoop(board, explorer, intervalMs = T.EXPLORER_LOOP_INTERVAL_MS) {
+  return setInterval(async () => {
+    try {
+      const status = await board.get('agent:builder-01:status');
+      if (status?.position) {
+        const mockBot = { entity: { position: status.position }, blockAt: () => null };
+        await explorer.execute(mockBot);
+      }
+    } catch (err) {
+      log.error('explorer', 'loop error', { error: err.message });
+    }
+  }, intervalMs);
+}
+
+/**
+ * Graceful shutdown — stop all agents and resources.
+ * Extracted from main() for testability.
+ * @param {object} agents - { leader, safety, explorer, miner, farmer, builders }
+ * @param {object} resources - { explorerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger }
+ */
+async function gracefulShutdown(agents, resources) {
+  log.info('team', 'Team shutting down...');
+
+  clearInterval(resources.explorerInterval);
+  resources.logger.logEvent('team', { type: 'shutdown' }).catch(e => log.error('team', 'log persist error', { error: e.message }));
+
+  try { await agents.leader.shutdown(); } catch (err) { log.error('team', 'leader shutdown error', { error: err.message }); }
+  try { await agents.safety.shutdown(); } catch (err) { log.error('team', 'safety shutdown error', { error: err.message }); }
+  try { await agents.explorer.shutdown(); } catch (err) { log.error('team', 'explorer shutdown error', { error: err.message }); }
+  try { await agents.miner.shutdown(); } catch (err) { log.error('team', 'miner shutdown error', { error: err.message }); }
+  try { await agents.farmer.shutdown(); } catch (err) { log.error('team', 'farmer shutdown error', { error: err.message }); }
+  for (const b of agents.builders) {
+    try { await b.shutdown(); } catch (err) { log.error('team', 'builder shutdown error', { error: err.message }); }
+  }
+
+  try { await resources.emergencySubscriber.unsubscribe(); } catch (err) { log.error('team', 'subscriber cleanup error', { error: err.message }); }
+  try { await resources.emergencySubscriber.disconnect(); } catch (err) { log.error('team', 'subscriber disconnect error', { error: err.message }); }
+  try { await resources.zkHooks.shutdown(); } catch (err) { log.error('team', 'zkHooks shutdown error', { error: err.message }); }
+  try { await resources.got.shutdown(); } catch (err) { log.error('team', 'got shutdown error', { error: err.message }); }
+  try { await resources.rumination.shutdown(); } catch (err) { log.error('team', 'rumination shutdown error', { error: err.message }); }
+  try { await resources.zettelkasten.shutdown(); } catch (err) { log.error('team', 'zettelkasten shutdown error', { error: err.message }); }
+  try { await resources.pipeline.shutdown(); } catch (err) { log.error('team', 'pipeline shutdown error', { error: err.message }); }
+  try { await resources.reflexion.shutdown(); } catch (err) { log.error('team', 'reflexion shutdown error', { error: err.message }); }
+  try { await resources.board.disconnect(); } catch (err) { log.error('team', 'board disconnect error', { error: err.message }); }
+}
+
 function shouldProcessEmergency(state, failureType, dedupMs = T.EMERGENCY_DEDUP_MS) {
   const now = Date.now();
   if (failureType === state.type && now - state.time < dedupMs) return false;
@@ -238,17 +325,7 @@ async function main() {
   log.info('team', 'Farmer-01 started');
 
   // Explorer execution loop — piggyback on builder-01's position via Blackboard
-  const explorerInterval = setInterval(async () => {
-    try {
-      const status = await board.get('agent:builder-01:status');
-      if (status?.position) {
-        const mockBot = { entity: { position: status.position }, blockAt: () => null };
-        await explorer.execute(mockBot);
-      }
-    } catch (err) {
-      log.error('explorer', 'loop error', { error: err.message });
-    }
-  }, T.EXPLORER_LOOP_INTERVAL_MS);
+  const explorerInterval = createExplorerLoop(board, explorer);
 
   // Subscribe to skills:emergency — handle safety alerts and skill pipeline events
   const emergencySubscriber = await board.createSubscriber();
@@ -256,29 +333,7 @@ async function main() {
   emergencySubscriber.subscribe('octiv:skills:emergency', async (message) => {
     try {
       const data = JSON.parse(message);
-      logger.logEvent('team', { type: 'emergency', ...data }).catch(e => log.error('team', 'log persist error', { error: e.message }));
-      log.warn('team', `Emergency: ${data.failureType || data.newSkill || 'unknown'}`);
-
-      // Task C: Increment leader failure counter on safety threats (deduped)
-      if (data.failureType) {
-        if (shouldProcessEmergency(lastEmergency, data.failureType)) {
-          leader.consecutiveTeamFailures++;
-          await leader.checkReflexionTrigger();
-        }
-      }
-
-      // If safety triggered skill creation, attempt to generate a skill
-      if (data.triggerSkillCreation && data.failureType) {
-        const result = await pipeline.generateFromFailure({
-          error: data.failureType,
-          errorType: data.failureType,
-          agentId: data.agentId || 'unknown',
-        });
-        if (result.success) {
-          await leader.injectLearnedSkill(result.skill);
-          logger.logEvent('team', { type: 'skill_created', skill: result.skill }).catch(e => log.error('team', 'log persist error', { error: e.message }));
-        }
-      }
+      await handleEmergencyEvent(data, { pipeline, leader, logger, lastEmergency });
     } catch (err) {
       log.error('team', 'emergency handler error', { error: err.message });
     }
@@ -300,33 +355,15 @@ async function main() {
 
   // Graceful shutdown handler
   process.on('SIGINT', async () => {
-    log.info('team', 'Team shutting down...');
     const forceExit = setTimeout(() => {
       log.error('team', 'Shutdown timeout (10s), forcing exit');
       process.exit(1);
     }, T.SHUTDOWN_TIMEOUT_MS);
 
-    try {
-      clearInterval(explorerInterval);
-      logger.logEvent('team', { type: 'shutdown' }).catch(e => log.error('team', 'log persist error', { error: e.message }));
-      await leader.shutdown();
-      await safety.shutdown();
-      await explorer.shutdown();
-      await miner.shutdown();
-      await farmer.shutdown();
-      for (const b of builders) await b.shutdown();
-      await emergencySubscriber.unsubscribe();
-      await emergencySubscriber.disconnect();
-      await zkHooks.shutdown();
-      await got.shutdown();
-      await rumination.shutdown();
-      await zettelkasten.shutdown();
-      await pipeline.shutdown();
-      await reflexion.shutdown();
-      await board.disconnect();
-    } catch (err) {
-      log.error('team', 'Shutdown error', { error: err.message });
-    }
+    await gracefulShutdown(
+      { leader, safety, explorer, miner, farmer, builders },
+      { explorerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger },
+    );
 
     clearTimeout(forceExit);
     process.exit(0);
@@ -348,4 +385,7 @@ if (require.main === module) {
   main().catch(err => log.error('team', 'Fatal error', { error: err.message }));
 }
 
-module.exports = { monitorGathering, main, shouldProcessEmergency, setupRemoteControl };
+module.exports = {
+  monitorGathering, main, shouldProcessEmergency, setupRemoteControl,
+  handleEmergencyEvent, createExplorerLoop, gracefulShutdown,
+};

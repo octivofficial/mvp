@@ -4,7 +4,7 @@
  *        REST client, graceful degradation, system heartbeat
  * Usage: node --test test/obsidian-bridge.test.js
  */
-const { describe, it, beforeEach, afterEach } = require('node:test');
+const { describe, it, beforeEach, afterEach, mock } = require('node:test');
 const assert = require('node:assert/strict');
 
 // ── Mocks ────────────────────────────────────────────────────────
@@ -428,6 +428,173 @@ describe('ObsidianBridge — Subscriptions', () => {
   it('should subscribe to zettelkasten events', () => {
     const sub = mockBoard._sub;
     assert.ok('octiv:zettelkasten:*' in sub._psubs);
+  });
+});
+
+// ── _extractAgentId ──────────────────────────────────────────────
+
+describe('ObsidianBridge — _extractAgentId', () => {
+  let _extractAgentId;
+
+  beforeEach(() => {
+    const mod = loadModule();
+    _extractAgentId = mod._extractAgentId;
+  });
+
+  it('should extract agent id from full channel path', () => {
+    const result = _extractAgentId('octiv:agent:builder-01:status');
+    assert.equal(result, 'builder-01');
+  });
+
+  it('should return unknown for null or empty channel', () => {
+    assert.equal(_extractAgentId(null), 'unknown');
+    assert.equal(_extractAgentId(''), 'unknown');
+  });
+
+  it('should return unknown for channel without agent segment', () => {
+    const result = _extractAgentId('octiv:system:health');
+    assert.equal(result, 'unknown');
+  });
+});
+
+// ── _onApiFailure logging ─────────────────────────────────────────
+
+describe('ObsidianBridge — _onApiFailure logging', () => {
+  let bridge;
+
+  beforeEach(() => {
+    loadModule();
+    bridge = new ObsidianBridge({ apiKey: 'k' });
+  });
+
+  it('should increment consecutiveFailures on each call', () => {
+    bridge._onApiFailure('test');
+    bridge._onApiFailure('test');
+    bridge._onApiFailure('test');
+    assert.equal(bridge._consecutiveFailures, 3);
+  });
+
+  it('should continue incrementing beyond 3 without extra side effects', () => {
+    // Failures 4-9 should silently increment
+    for (let i = 0; i < 9; i++) {
+      bridge._onApiFailure('test');
+    }
+    assert.equal(bridge._consecutiveFailures, 9);
+  });
+
+  it('should reach 10 consecutive failures', () => {
+    for (let i = 0; i < 10; i++) {
+      bridge._onApiFailure('test');
+    }
+    assert.equal(bridge._consecutiveFailures, 10);
+  });
+});
+
+// ── Subscription handler fire-through ────────────────────────────
+
+describe('ObsidianBridge — Subscription handler fire-through', () => {
+  let bridge;
+  let mockBoard;
+
+  beforeEach(async () => {
+    loadModule();
+    mockBoard = createMockBlackboard();
+    bridge = new ObsidianBridge({ apiKey: 'k' });
+    bridge.board = mockBoard;
+    bridge.subscriber = await mockBoard.createSubscriber();
+
+    // Replace write methods with mocks
+    bridge._throttledAgentWrite = mock.fn(() => {});
+    bridge._appendEvent = mock.fn(() => {});
+    bridge._writeGoTTrace = mock.fn(async () => {});
+    bridge._writeSkillsSnapshot = mock.fn(async () => {});
+
+    bridge._subscribeBlackboard();
+  });
+
+  afterEach(() => {
+    bridge._clearTimers();
+  });
+
+  it('should call _throttledAgentWrite when agent status message fires', () => {
+    const sub = mockBoard._sub;
+    const handler = sub._psubs['octiv:agent:*:status'];
+    handler(JSON.stringify({ agentId: 'builder-01', status: 'active', health: 20 }), 'octiv:agent:builder-01:status');
+    assert.equal(bridge._throttledAgentWrite.mock.calls.length, 1);
+  });
+
+  it('should call _throttledAgentWrite when agent health message fires', () => {
+    const sub = mockBoard._sub;
+    const handler = sub._psubs['octiv:agent:*:health'];
+    handler(JSON.stringify({ agentId: 'explorer-01', health: 15, food: 14 }), 'octiv:agent:explorer-01:health');
+    assert.equal(bridge._throttledAgentWrite.mock.calls.length, 1);
+  });
+
+  it('should call _appendEvent when agent chat message fires', () => {
+    const sub = mockBoard._sub;
+    const handler = sub._psubs['octiv:agent:*:chat'];
+    handler(JSON.stringify({ agentId: 'leader', message: 'hello team', ts: Date.now() }), 'octiv:agent:leader:chat');
+    assert.equal(bridge._appendEvent.mock.calls.length, 1);
+  });
+
+  it('should call _appendEvent when agent confess message fires', () => {
+    const sub = mockBoard._sub;
+    const handler = sub._psubs['octiv:agent:*:confess'];
+    handler(JSON.stringify({ agentId: 'builder-01', message: 'I got lost', ts: Date.now() }), 'octiv:agent:builder-01:confess');
+    assert.equal(bridge._appendEvent.mock.calls.length, 1);
+  });
+
+  it('should call _appendEvent when safety threat message fires', () => {
+    const sub = mockBoard._sub;
+    const handler = sub._subs['octiv:safety:threat'];
+    handler(JSON.stringify({ agentId: 'safety', threatType: 'zombie', ts: Date.now() }));
+    assert.equal(bridge._appendEvent.mock.calls.length, 1);
+  });
+
+  it('should call _writeGoTTrace when got reasoning-complete fires', () => {
+    const sub = mockBoard._sub;
+    const handler = sub._subs['octiv:got:reasoning-complete'];
+    handler(JSON.stringify({ question: 'how to mine', answer: 'use pickaxe', synergies: 2, gaps: 0 }));
+    assert.equal(bridge._writeGoTTrace.mock.calls.length, 1);
+  });
+});
+
+// ── _writeGoTTrace / _writeSkillsSnapshot ────────────────────────
+
+describe('ObsidianBridge — _writeGoTTrace and _writeSkillsSnapshot', () => {
+  let bridge;
+
+  beforeEach(() => {
+    loadModule();
+    bridge = new ObsidianBridge({ apiKey: 'k' });
+    bridge._putCalls = [];
+    bridge._obsidianPut = async (path, content) => {
+      bridge._putCalls.push({ path, content });
+    };
+  });
+
+  it('should call _obsidianPut with got-traces.md path', async () => {
+    await bridge._writeGoTTrace({ question: 'test?', answer: 'yes', synergies: 1, gaps: 0 });
+    assert.equal(bridge._putCalls.length, 1);
+    assert.ok(bridge._putCalls[0].path.includes('got-traces.md'));
+  });
+
+  it('should wrap single skill object into array for _writeSkillsSnapshot', async () => {
+    await bridge._writeSkillsSnapshot({ name: 'mineWood', tier: 'Apprentice', xp: 10 });
+    assert.equal(bridge._putCalls.length, 1);
+    assert.ok(bridge._putCalls[0].content.includes('mineWood'));
+  });
+
+  it('should use skills array directly for _writeSkillsSnapshot when provided', async () => {
+    await bridge._writeSkillsSnapshot({
+      skills: [
+        { name: 'mineWood', tier: 'Apprentice', xp: 10 },
+        { name: 'buildShelter', tier: 'Journeyman', xp: 50 },
+      ],
+    });
+    assert.equal(bridge._putCalls.length, 1);
+    assert.ok(bridge._putCalls[0].content.includes('mineWood'));
+    assert.ok(bridge._putCalls[0].content.includes('buildShelter'));
   });
 });
 

@@ -415,3 +415,76 @@ describe('ZettelkastenHooks — shutdown', () => {
     assert.equal(hooks.board.disconnect.mock.callCount(), 1);
   });
 });
+
+// ── Additional coverage tests ────────────────────────────────
+
+describe('ZettelkastenHooks — _startDeepRumination', () => {
+  it('should set deepTimer and call rumination.deepRuminate after interval', async () => {
+    const { hooks, rumination } = createHooks();
+    // Use a short interval for this test
+    hooks.deepRuminationInterval = 30;
+    hooks._startDeepRumination();
+
+    assert.ok(hooks.deepTimer, 'deepTimer should be set');
+
+    // Wait for one tick
+    await new Promise(r => setTimeout(r, 60));
+
+    assert.ok(rumination.deepRuminate.mock.callCount() >= 1, 'deepRuminate should have been called');
+
+    clearInterval(hooks.deepTimer);
+  });
+
+  it('should handle deepRuminate error without crashing', async () => {
+    const rumination = createMockRumination();
+    rumination.deepRuminate = mock.fn(async () => { throw new Error('rumination crash'); });
+    const { hooks } = createHooks({ rumination });
+    hooks.deepRuminationInterval = 30;
+    hooks._startDeepRumination();
+
+    // Should not throw
+    await new Promise(r => setTimeout(r, 60));
+
+    clearInterval(hooks.deepTimer);
+  });
+});
+
+describe('ZettelkastenHooks — init() subscriber wiring', () => {
+  it('should call board.connect and board.createSubscriber', async () => {
+    const { hooks } = createHooks();
+
+    await hooks.init();
+
+    assert.equal(hooks.board.connect.mock.callCount(), 1);
+    assert.equal(hooks.board.createSubscriber.mock.callCount(), 1);
+  });
+
+  it('should subscribe to all four required channels', async () => {
+    const subscribeCalls = [];
+    const { hooks } = createHooks();
+    hooks.board.createSubscriber = mock.fn(async () => ({
+      subscribe: mock.fn(async (channel) => { subscribeCalls.push(channel); }),
+      pSubscribe: mock.fn(async () => {}),
+    }));
+
+    await hooks.init();
+
+    const prefixed = (ch) => require('../agent/blackboard').Blackboard.PREFIX + ch;
+    assert.ok(subscribeCalls.some(c => c === prefixed('skills:emergency')), 'should subscribe to skills:emergency');
+    assert.ok(subscribeCalls.some(c => c === prefixed('rumination:digested')), 'should subscribe to rumination:digested');
+    assert.ok(subscribeCalls.some(c => c === prefixed('zettelkasten:tier-up')), 'should subscribe to zettelkasten:tier-up');
+    assert.ok(subscribeCalls.some(c => c === prefixed('zettelkasten:compound-created')), 'should subscribe to zettelkasten:compound-created');
+  });
+
+  it('_onDigestionComplete with wiredLeader calls processGoTFeedback when threshold reached', async () => {
+    const { hooks, got } = createHooks({ reasoningThreshold: 1 });
+    const processGoTFeedback = mock.fn(async () => {});
+    hooks._wiredLeader = { processGoTFeedback };
+    hooks.ruminationsSinceReasoning = 0;
+
+    await hooks._onDigestionComplete({});
+
+    // GoT cycle should have run
+    assert.equal(got.fullReasoningCycle.mock.callCount(), 1);
+  });
+});
