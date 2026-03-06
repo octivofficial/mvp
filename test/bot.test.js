@@ -40,7 +40,7 @@ function createMockBot(overrides = {}) {
     bot.findBlock = mock.fn(() => null);
     bot.recipesFor = mock.fn(() => []);
     bot.inventory = { items: mock.fn(() => []) };
-    bot.version = '1.21.1';
+    bot.version = '1.21.11';
     bot.registry = { itemsByName: {} };
     bot.pathfinder = {
         setMovements: mock.fn(),

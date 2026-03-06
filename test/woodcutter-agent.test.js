@@ -21,7 +21,7 @@ function createMockBoard() {
 
 function createMockBot(findBlockResult = null) {
   return {
-    version: '1.21.1',
+    version: '1.21.11',
     findBlock: mock.fn(() => findBlockResult),
   };
 }

@@ -90,7 +90,7 @@ it('E2E — OctivBot spawn and heartbeat', async (t) => {
     host: 'localhost',
     port: 25565,
     username: 'E2E_Octiv',
-    version: '1.21.1',
+    version: '1.21.11',
     auth: 'offline',
   }, {
     spawnTimeoutMs: 15000,

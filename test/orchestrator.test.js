@@ -196,7 +196,7 @@ describe('Role-Based Agents (Phase 3.5)', () => {
         await wc.init();
 
         const mockBot = {
-            version: '1.21.1',
+            version: '1.21.11',
             findBlock: () => ({ position: { x: 10, y: 64, z: -10 } }),
         };
         const result = await wc.execute(mockBot);

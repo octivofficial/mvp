@@ -24,7 +24,7 @@ function createMockBot(overrides = {}) {
   const inventory = overrides.inventory || [];
   return {
     entity: { position: { x: 100, y: 64, z: 100 } },
-    version: '1.21.1',
+    version: '1.21.11',
     findBlocks: mock.fn(() => overrides.findBlocks || []),
     blockAt: mock.fn((pos) => {
       if (overrides.blockAt) return overrides.blockAt(pos);

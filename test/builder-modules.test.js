@@ -37,7 +37,7 @@ describe('builder-navigation — setupPathfinder', () => {
       pathfinder: { setMovements: mock.fn() },
       // Movements constructor accesses these
       registry: { blocksByName: {} },
-      version: '1.21.1',
+      version: '1.21.11',
       entity: { position: new Vec3(0, 64, 0) },
     };
     try {

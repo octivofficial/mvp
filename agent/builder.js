@@ -55,7 +55,7 @@ class BuilderAgent {
       host: process.env.MC_HOST || 'localhost',
       port: parseInt(process.env.MC_PORT) || 25565,
       username: `Octiv_${this.id}`,
-      version: process.env.MC_VERSION || '1.21.1',
+      version: process.env.MC_VERSION || '1.21.11',
       auth: 'offline',
     });
 

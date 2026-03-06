@@ -43,7 +43,7 @@ function createMockBot(overrides = {}) {
   bot.findBlocks = mock.fn(() => []);
   bot.recipesFor = mock.fn(() => []);
   bot.inventory = { items: mock.fn(() => []) };
-  bot.version = '1.21.1';
+  bot.version = '1.21.11';
   bot.registry = { itemsByName: {} };
   bot.pathfinder = {
     setMovements: mock.fn(),
@@ -114,7 +114,7 @@ describe('Builder Failures — Dig (collectWood)', () => {
     const mockBot = createMockBot();
     mockBot.entity.position = new Vec3(100, 64, -200);
     builder.bot = mockBot;
-    builder.mcData = require('minecraft-data')('1.21.1');
+    builder.mcData = require('minecraft-data')('1.21.11');
     builder._setupPathfinder = () => {};
     builder._goto = mock.fn(async () => {});
     return { builder, mockBot };
@@ -275,7 +275,7 @@ describe('Builder Failures — BuildShelter', () => {
     bot.blockAt = mock.fn(() => ({ name: 'air', boundingBox: 'empty' }));
     bot.recipesFor = mock.fn(() => []);
 
-    const mcData = require('minecraft-data')('1.21.1');
+    const mcData = require('minecraft-data')('1.21.11');
 
     await assert.rejects(
       () => buildShelter({
@@ -396,7 +396,7 @@ describe('Builder Failures — CollectBlocks', () => {
     const builder = new BuilderAgent({ id: 'builder-collect-fail' });
     await builder.board.connect();
     builder.bot = createMockBot();
-    builder.mcData = require('minecraft-data')('1.21.1');
+    builder.mcData = require('minecraft-data')('1.21.11');
 
     await assert.rejects(
       () => builder.collectBlocks('unobtainium', 1),
@@ -414,7 +414,7 @@ describe('Builder Failures — CollectBlocks', () => {
     const mockBot = createMockBot();
     mockBot.findBlocks = mock.fn(() => []); // nothing nearby
     builder.bot = mockBot;
-    builder.mcData = require('minecraft-data')('1.21.1');
+    builder.mcData = require('minecraft-data')('1.21.11');
 
     await assert.rejects(
       () => builder.collectBlocks('iron_ore', 1),
@@ -437,7 +437,7 @@ describe('Builder Failures — CollectBlocks', () => {
       collect: mock.fn(async () => { throw new Error('Tool broke mid-collection'); }),
     };
     builder.bot = mockBot;
-    builder.mcData = require('minecraft-data')('1.21.1');
+    builder.mcData = require('minecraft-data')('1.21.11');
 
     await assert.rejects(
       () => builder.collectBlocks('iron_ore', 1),
@@ -474,7 +474,7 @@ describe('Builder — Wandering autonomy', () => {
     const mockBot = createMockBot();
     mockBot.entity.position = new Vec3(100, 64, -200);
     builder.bot = mockBot;
-    builder.mcData = require('minecraft-data')('1.21.1');
+    builder.mcData = require('minecraft-data')('1.21.11');
     builder._setupPathfinder = () => {};
     builder._goto = mock.fn(async () => {});
     return { builder, mockBot };
@@ -589,7 +589,7 @@ describe('Builder Failures — CraftPlanks edge cases', () => {
   it('should not throw when no oak_log in inventory (silent return)', async () => {
     const bot = createMockBot();
     bot.inventory.items = mock.fn(() => []); // no logs
-    const mcData = require('minecraft-data')('1.21.1');
+    const mcData = require('minecraft-data')('1.21.11');
 
     // Should not throw — just returns without crafting
     await craftPlanks(bot, mcData);
@@ -600,7 +600,7 @@ describe('Builder Failures — CraftPlanks edge cases', () => {
     const bot = createMockBot();
     bot.inventory.items = mock.fn(() => [{ name: 'oak_log', count: 4 }]);
     bot.recipesFor = mock.fn(() => []); // no recipes
-    const mcData = require('minecraft-data')('1.21.1');
+    const mcData = require('minecraft-data')('1.21.11');
 
     await craftPlanks(bot, mcData);
     assert.equal(bot.craft.mock.calls.length, 0, 'Should not call craft with no recipe');
@@ -611,7 +611,7 @@ describe('Builder Failures — CraftPlanks edge cases', () => {
     bot.inventory.items = mock.fn(() => [{ name: 'oak_log', count: 4 }]);
     bot.recipesFor = mock.fn(() => [{ id: 1 }]); // recipe found
     bot.craft = mock.fn(async () => { throw new Error('Crafting table required'); });
-    const mcData = require('minecraft-data')('1.21.1');
+    const mcData = require('minecraft-data')('1.21.11');
 
     await assert.rejects(
       () => craftPlanks(bot, mcData),
@@ -708,7 +708,7 @@ describe('Builder — collectBlocks success path', () => {
     mockBot.equip = mock.fn(async () => {});
     mockBot.collectBlock = { collect: mock.fn(async () => {}) };
     builder.bot = mockBot;
-    builder.mcData = require('minecraft-data')('1.21.1');
+    builder.mcData = require('minecraft-data')('1.21.11');
 
     const count = await builder.collectBlocks('iron_ore', 1);
 
@@ -729,7 +729,7 @@ describe('Builder — collectBlocks success path', () => {
     mockBot.inventory.items = mock.fn(() => []); // no tools
     mockBot.collectBlock = { collect: mock.fn(async () => {}) };
     builder.bot = mockBot;
-    builder.mcData = require('minecraft-data')('1.21.1');
+    builder.mcData = require('minecraft-data')('1.21.11');
 
     await builder.collectBlocks('cobblestone', 1);
 
