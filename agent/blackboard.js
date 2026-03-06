@@ -2,18 +2,18 @@
  * Octiv Blackboard — Redis-based Agent Shared Memory
  * All agents share state through this module.
  */
-const { createRedisClient } = require('./redis-factory');
+const { createRedisClient, isClusterMode } = require('./redis-factory');
 const T = require('../config/timeouts');
 const { getLogger } = require('./logger');
 const log = getLogger();
 
-const REDIS_URL = process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380';
 const PREFIX = 'octiv:';
 
 class Blackboard {
   constructor(redisUrl, options = {}) {
+    this._url = redisUrl || process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380';
     this.client = createRedisClient({
-      url: redisUrl || REDIS_URL,
+      url: this._url,
       socket: options.socket,
       cluster: options.cluster,
     });
@@ -22,7 +22,8 @@ class Blackboard {
 
   async connect() {
     await this.client.connect();
-    log.info('blackboard', `Connected: ${REDIS_URL}`);
+    const target = isClusterMode() ? `cluster(${process.env.REDIS_CLUSTER_NODES})` : this._url;
+    log.info('blackboard', `Connected: ${target}`);
   }
 
   async disconnect() {

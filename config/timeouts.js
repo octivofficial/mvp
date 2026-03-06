@@ -80,13 +80,8 @@ module.exports = {
 
   // -- Redis (Blackboard) --
 
-  /** Max backoff for Redis reconnect strategy */
-  REDIS_RECONNECT_MAX_MS: 3000,
-
   /** TTL for latest status keys (seconds, not ms) */
   REDIS_KEY_EXPIRY_SECONDS: 300,
-
-  // -- Redis Cluster --
 
   /** Base delay for exponential backoff (Full Jitter) */
   REDIS_RECONNECT_BASE_MS: parseInt(process.env.REDIS_RECONNECT_BASE_MS) || 100,

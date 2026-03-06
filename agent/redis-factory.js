@@ -57,8 +57,9 @@ function createRedisClient(options = {}) {
     ...options.socket,
   };
 
-  if (isClusterMode()) {
-    const rootNodes = parseClusterNodes(process.env.REDIS_CLUSTER_NODES);
+  const clusterNodes = process.env.REDIS_CLUSTER_NODES;
+  if (clusterNodes) {
+    const rootNodes = parseClusterNodes(clusterNodes);
     return createCluster({
       rootNodes,
       defaults: { socket: socketOpts },

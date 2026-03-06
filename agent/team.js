@@ -112,11 +112,6 @@ async function gracefulShutdown(agents, resources) {
   try { await resources.emergencySubscriber.unsubscribe(); } catch (err) { log.error('team', 'subscriber cleanup error', { error: err.message }); }
   try { await resources.emergencySubscriber.disconnect(); } catch (err) { log.error('team', 'subscriber disconnect error', { error: err.message }); }
 
-  // Shutdown API clients (stops LM Studio health monitor timer)
-  if (resources.apiClients?.shutdown) {
-    try { resources.apiClients.shutdown(); } catch (err) { log.error('team', 'apiClients shutdown error', { error: err.message }); }
-  }
-
   const resourceResults = await Promise.allSettled([
     resources.zkHooks.shutdown(),
     resources.got.shutdown(),
@@ -128,6 +123,12 @@ async function gracefulShutdown(agents, resources) {
     if (r.status === 'rejected') log.error('team', 'resource shutdown error', { error: r.reason?.message });
   }
   try { await resources.reflexion.shutdown(); } catch (err) { log.error('team', 'reflexion shutdown error', { error: err.message }); }
+
+  // Shutdown API clients after all consumers — stops LM Studio health monitor timer
+  if (resources.apiClients?.shutdown) {
+    try { resources.apiClients.shutdown(); } catch (err) { log.error('team', 'apiClients shutdown error', { error: err.message }); }
+  }
+
   try { await resources.board.disconnect(); } catch (err) { log.error('team', 'board disconnect error', { error: err.message }); }
 }
 
