@@ -43,7 +43,6 @@ function createApiClients() {
     lmClient.checkHealth().catch(() => {}); // non-blocking initial probe
     lmClient.startHealthMonitor();
     clients.local = lmClient;
-    clients._lmStudio = lmClient; // for shutdown access
     log.info('api-clients', `LM Studio client ready (${lmClient.urls.join(', ')})`);
   }
 
@@ -66,6 +65,10 @@ function createApiClients() {
       // Groq is optional — silently skip
     }
   }
+
+  clients.shutdown = () => {
+    if (clients.local?.stopHealthMonitor) clients.local.stopHealthMonitor();
+  };
 
   return clients;
 }

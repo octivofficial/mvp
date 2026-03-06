@@ -162,13 +162,13 @@ describe('ApiClients — LM Studio client.call()', () => {
     assert.equal(result, 'Clean answer');
   });
 
-  it('should expose _lmStudio for shutdown access', () => {
+  it('should expose shutdown() that stops health monitor', () => {
     globalThis.fetch = mock.fn(async () => ({ ok: false }));
     const { createApiClients } = freshRequire();
     const clients = createApiClients();
-    clients.local.stopHealthMonitor();
-    assert.ok(clients._lmStudio, '_lmStudio should be set');
-    assert.equal(clients._lmStudio, clients.local);
+    assert.equal(typeof clients.shutdown, 'function');
+    clients.shutdown(); // should stop health monitor without throwing
+    assert.equal(clients.local._healthInterval, null);
   });
 });
 

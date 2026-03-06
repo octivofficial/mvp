@@ -48,8 +48,6 @@ class LMStudioClient {
    * Probe URLs in order, set _activeUrl to first healthy one
    */
   async checkHealth() {
-    let foundHealthy = false;
-
     for (const url of this.urls) {
       try {
         const res = await fetch(`${url}/v1/models`, {
@@ -62,24 +60,21 @@ class LMStudioClient {
         this._activeUrl = url;
         this._healthy = true;
         this._lastHealthCheck = Date.now();
-        foundHealthy = true;
-
         log.info('lm-studio', `Healthy: ${url}`, { models: this._models });
-        break;
+        this._publishHealth(true);
+        return;
       } catch {
         // Try next URL
       }
     }
 
-    if (!foundHealthy) {
-      this._healthy = false;
-      this._activeUrl = null;
-      this._models = [];
-      this._lastHealthCheck = Date.now();
-      log.warn('lm-studio', 'All URLs unreachable', { urls: this.urls });
-    }
-
-    this._publishHealth(this._healthy);
+    // All URLs failed
+    this._healthy = false;
+    this._activeUrl = null;
+    this._models = [];
+    this._lastHealthCheck = Date.now();
+    log.warn('lm-studio', 'All URLs unreachable', { urls: this.urls });
+    this._publishHealth(false);
   }
 
   /**
@@ -134,7 +129,7 @@ class LMStudioClient {
       const result = await this._inference(baseUrl, model, prompt);
       return LMStudioClient.cleanResponse(result);
     } catch (firstErr) {
-      // Retry once after delay
+      log.debug('lm-studio', 'Transient failure, retrying', { error: firstErr.message, url: baseUrl });
       await new Promise(r => setTimeout(r, T.LM_STUDIO_RETRY_DELAY_MS));
       const result = await this._inference(baseUrl, model, prompt);
       return LMStudioClient.cleanResponse(result);
@@ -195,16 +190,13 @@ class LMStudioClient {
    */
   _publishHealth(healthy) {
     if (!this._board) return;
-    try {
-      this._board.publish('infra:lm-studio:health', JSON.stringify({
-        healthy,
-        activeUrl: this._activeUrl,
-        models: this._models,
-        timestamp: Date.now(),
-      }));
-    } catch {
-      // Non-critical — don't let Blackboard failures affect health checks
-    }
+    this._board.publish('infra:lm-studio:health', {
+      author: 'lm-studio-client',
+      healthy,
+      activeUrl: this._activeUrl,
+      models: this._models,
+      timestamp: Date.now(),
+    }).catch(() => {}); // non-critical, suppress unhandled rejection
   }
 }
 

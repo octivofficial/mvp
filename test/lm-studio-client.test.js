@@ -524,25 +524,28 @@ describe('LMStudioClient — Blackboard integration', () => {
       ok: true,
       json: async () => ({ data: [{ id: 'qwen' }] }),
     }));
-    const mockBoard = { publish: mock.fn() };
+    const mockBoard = { publish: mock.fn(async () => {}) };
     const { LMStudioClient } = freshRequire();
     const client = new LMStudioClient({ board: mockBoard });
     await client.checkHealth();
     assert.equal(mockBoard.publish.mock.callCount(), 1);
     const args = mockBoard.publish.mock.calls[0].arguments;
     assert.equal(args[0], 'infra:lm-studio:health');
-    const payload = JSON.parse(args[1]);
+    const payload = args[1];
+    assert.equal(typeof payload, 'object');
     assert.equal(payload.healthy, true);
+    assert.equal(payload.author, 'lm-studio-client');
   });
 
   it('should publish unhealthy status', async () => {
     globalThis.fetch = mock.fn(async () => { throw new Error('down'); });
-    const mockBoard = { publish: mock.fn() };
+    const mockBoard = { publish: mock.fn(async () => {}) };
     const { LMStudioClient } = freshRequire();
     const client = new LMStudioClient({ board: mockBoard });
     await client.checkHealth();
-    const payload = JSON.parse(mockBoard.publish.mock.calls[0].arguments[1]);
+    const payload = mockBoard.publish.mock.calls[0].arguments[1];
     assert.equal(payload.healthy, false);
+    assert.equal(payload.author, 'lm-studio-client');
   });
 
   it('should work without board (noop)', async () => {
@@ -556,12 +559,12 @@ describe('LMStudioClient — Blackboard integration', () => {
     await assert.doesNotReject(() => client.checkHealth());
   });
 
-  it('should not throw if board.publish fails', async () => {
+  it('should not throw if board.publish rejects', async () => {
     globalThis.fetch = mock.fn(async () => ({
       ok: true,
       json: async () => ({ data: [] }),
     }));
-    const mockBoard = { publish: mock.fn(() => { throw new Error('redis down'); }) };
+    const mockBoard = { publish: mock.fn(async () => { throw new Error('redis down'); }) };
     const { LMStudioClient } = freshRequire();
     const client = new LMStudioClient({ board: mockBoard });
     await assert.doesNotReject(() => client.checkHealth());
