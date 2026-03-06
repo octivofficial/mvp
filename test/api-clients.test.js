@@ -2,29 +2,37 @@
  * API Clients Tests — coverage for LM Studio, Anthropic call, Groq paths
  * Usage: node --test --test-force-exit test/api-clients.test.js
  */
-const { describe, it, before, after, mock } = require('node:test');
+const { describe, it, before, after, afterEach, mock } = require('node:test');
 const assert = require('node:assert/strict');
 
 const API_CLIENTS_PATH = require.resolve('../agent/api-clients');
+const LM_CLIENT_PATH = require.resolve('../agent/lm-studio-client');
+const TIMEOUTS_PATH = require.resolve('../config/timeouts');
 
 function freshRequire() {
   delete require.cache[API_CLIENTS_PATH];
+  delete require.cache[LM_CLIENT_PATH];
+  delete require.cache[TIMEOUTS_PATH];
   return require('../agent/api-clients');
 }
 
 // ── LM Studio Disabled ──────────────────────────────────────────────
 
 describe('ApiClients — LM Studio disabled', () => {
-  let savedEnabled;
+  let savedEnabled, originalFetch;
 
   before(() => {
     savedEnabled = process.env.LM_STUDIO_ENABLED;
+    originalFetch = globalThis.fetch;
   });
 
   after(() => {
+    globalThis.fetch = originalFetch;
     if (savedEnabled !== undefined) process.env.LM_STUDIO_ENABLED = savedEnabled;
     else delete process.env.LM_STUDIO_ENABLED;
     delete require.cache[API_CLIENTS_PATH];
+    delete require.cache[LM_CLIENT_PATH];
+    delete require.cache[TIMEOUTS_PATH];
   });
 
   it('should skip local client when LM_STUDIO_ENABLED=false', () => {
@@ -54,6 +62,13 @@ describe('ApiClients — LM Studio client.call()', () => {
     delete process.env.LM_STUDIO_ENABLED;
   });
 
+  afterEach(() => {
+    // Prevent timer leaks from LMStudioClient health monitor
+    delete require.cache[API_CLIENTS_PATH];
+    delete require.cache[LM_CLIENT_PATH];
+    delete require.cache[TIMEOUTS_PATH];
+  });
+
   after(() => {
     globalThis.fetch = originalFetch;
     if (savedEnabled !== undefined) process.env.LM_STUDIO_ENABLED = savedEnabled;
@@ -62,32 +77,33 @@ describe('ApiClients — LM Studio client.call()', () => {
     else delete process.env.ANTHROPIC_API_KEY;
     if (savedGroq) process.env.GROQ_API_KEY = savedGroq;
     else delete process.env.GROQ_API_KEY;
-    delete require.cache[API_CLIENTS_PATH];
   });
 
-  it('should throw when LM Studio health check fails', async () => {
-    globalThis.fetch = mock.fn(async () => null);
+  it('should throw when LM Studio is unreachable', async () => {
+    globalThis.fetch = mock.fn(async () => { throw new Error('ECONNREFUSED'); });
 
     const { createApiClients } = freshRequire();
     const clients = createApiClients();
+    clients.local.stopHealthMonitor();
 
     assert.ok(clients.local, 'local client should exist');
     await assert.rejects(
       () => clients.local.call('test-model', 'hello'),
-      { message: 'LM Studio not reachable' }
+      (err) => err.message.includes('not reachable')
     );
   });
 
   it('should throw on non-ok response from LM Studio', async () => {
-    let callCount = 0;
-    globalThis.fetch = mock.fn(async () => {
-      callCount++;
-      if (callCount === 1) return { ok: true }; // health check passes
-      return { ok: false, status: 500, text: async () => 'Internal Error' }; // API call fails
-    });
+    globalThis.fetch = mock.fn(async () => ({
+      ok: false, status: 500, text: async () => 'Internal Error',
+    }));
 
     const { createApiClients } = freshRequire();
     const clients = createApiClients();
+    clients.local.stopHealthMonitor();
+    // Pre-set healthy state (cached health pattern)
+    clients.local._healthy = true;
+    clients.local._activeUrl = 'http://localhost:1234';
 
     await assert.rejects(
       () => clients.local.call('test-model', 'hello'),
@@ -96,38 +112,63 @@ describe('ApiClients — LM Studio client.call()', () => {
   });
 
   it('should return content on successful LM Studio call', async () => {
-    let callCount = 0;
-    globalThis.fetch = mock.fn(async () => {
-      callCount++;
-      if (callCount === 1) return { ok: true }; // health check
-      return {
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: 'LM Studio response' } }],
-        }),
-      };
-    });
+    globalThis.fetch = mock.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'LM Studio response' } }],
+      }),
+    }));
 
     const { createApiClients } = freshRequire();
     const clients = createApiClients();
+    clients.local.stopHealthMonitor();
+    clients.local._healthy = true;
+    clients.local._activeUrl = 'http://localhost:1234';
 
     const result = await clients.local.call('test-model', 'hello');
     assert.equal(result, 'LM Studio response');
   });
 
   it('should return empty string when response has no content', async () => {
-    let callCount = 0;
-    globalThis.fetch = mock.fn(async () => {
-      callCount++;
-      if (callCount === 1) return { ok: true };
-      return { ok: true, json: async () => ({ choices: [] }) };
-    });
+    globalThis.fetch = mock.fn(async () => ({
+      ok: true, json: async () => ({ choices: [] }),
+    }));
 
     const { createApiClients } = freshRequire();
     const clients = createApiClients();
+    clients.local.stopHealthMonitor();
+    clients.local._healthy = true;
+    clients.local._activeUrl = 'http://localhost:1234';
 
     const result = await clients.local.call('test-model', 'hello');
     assert.equal(result, '');
+  });
+
+  it('should strip <think> tags from response', async () => {
+    globalThis.fetch = mock.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '<think>reasoning</think>Clean answer' } }],
+      }),
+    }));
+
+    const { createApiClients } = freshRequire();
+    const clients = createApiClients();
+    clients.local.stopHealthMonitor();
+    clients.local._healthy = true;
+    clients.local._activeUrl = 'http://localhost:1234';
+
+    const result = await clients.local.call('qwen', 'test');
+    assert.equal(result, 'Clean answer');
+  });
+
+  it('should expose _lmStudio for shutdown access', () => {
+    globalThis.fetch = mock.fn(async () => ({ ok: false }));
+    const { createApiClients } = freshRequire();
+    const clients = createApiClients();
+    clients.local.stopHealthMonitor();
+    assert.ok(clients._lmStudio, '_lmStudio should be set');
+    assert.equal(clients._lmStudio, clients.local);
   });
 });
 

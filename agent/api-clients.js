@@ -6,9 +6,8 @@
  * Gracefully degrades when SDK/API key is unavailable.
  */
 const { getLogger } = require('./logger');
+const { LMStudioClient } = require('./lm-studio-client');
 const log = getLogger();
-
-const LM_STUDIO_BASE_URL = process.env.LM_STUDIO_URL || 'http://localhost:1234';
 
 function createApiClients() {
   const clients = {};
@@ -36,37 +35,16 @@ function createApiClients() {
     log.warn('api-clients', 'ANTHROPIC_API_KEY not set — LLM generation disabled');
   }
 
-  // LM Studio client (local fallback — OpenAI-compatible API)
+  // LM Studio client (local fallback — cached health, multi-URL, <think> stripping)
   if (process.env.LM_STUDIO_ENABLED === 'false') {
     log.info('api-clients', 'LM Studio disabled via LM_STUDIO_ENABLED=false');
   } else {
-    clients.local = {
-      call: async (model, prompt) => {
-        // 2s pre-check: fail fast if LM Studio is not running
-        const check = await fetch(`${LM_STUDIO_BASE_URL}/v1/models`, {
-          signal: AbortSignal.timeout(2000),
-        }).catch(() => null);
-        if (!check?.ok) throw new Error('LM Studio not reachable');
-
-        const url = `${LM_STUDIO_BASE_URL}/v1/chat/completions`;
-        const body = JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 1024,
-          temperature: 0.7,
-        });
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body,
-          signal: AbortSignal.timeout(60000),
-        });
-        if (!res.ok) throw new Error(`LM Studio ${res.status}: ${await res.text()}`);
-        const data = await res.json();
-        return data.choices?.[0]?.message?.content || '';
-      },
-    };
-    log.info('api-clients', `LM Studio client ready (${LM_STUDIO_BASE_URL})`);
+    const lmClient = new LMStudioClient();
+    lmClient.checkHealth().catch(() => {}); // non-blocking initial probe
+    lmClient.startHealthMonitor();
+    clients.local = lmClient;
+    clients._lmStudio = lmClient; // for shutdown access
+    log.info('api-clients', `LM Studio client ready (${lmClient.urls.join(', ')})`);
   }
 
   // Groq client (optional cloud fallback)

@@ -143,4 +143,18 @@ module.exports = {
 
   /** Max TTS text length (chars) before truncation */
   TTS_MAX_TEXT_LENGTH: 500,
+
+  // -- LM Studio --
+
+  /** Health probe timeout per URL */
+  LM_STUDIO_HEALTH_CHECK_MS: parseInt(process.env.LM_STUDIO_HEALTH_CHECK_MS) || 2000,
+
+  /** Inference request timeout */
+  LM_STUDIO_INFERENCE_TIMEOUT_MS: parseInt(process.env.LM_STUDIO_INFERENCE_TIMEOUT_MS) || 60000,
+
+  /** Periodic health poll interval */
+  LM_STUDIO_HEALTH_INTERVAL_MS: parseInt(process.env.LM_STUDIO_HEALTH_INTERVAL_MS) || 30000,
+
+  /** Retry delay before second attempt */
+  LM_STUDIO_RETRY_DELAY_MS: parseInt(process.env.LM_STUDIO_RETRY_DELAY_MS) || 1000,
 };
