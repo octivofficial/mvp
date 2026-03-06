@@ -112,6 +112,11 @@ async function gracefulShutdown(agents, resources) {
   try { await resources.emergencySubscriber.unsubscribe(); } catch (err) { log.error('team', 'subscriber cleanup error', { error: err.message }); }
   try { await resources.emergencySubscriber.disconnect(); } catch (err) { log.error('team', 'subscriber disconnect error', { error: err.message }); }
 
+  // Shutdown API clients (stops LM Studio health monitor timer)
+  if (resources.apiClients?.shutdown) {
+    try { resources.apiClients.shutdown(); } catch (err) { log.error('team', 'apiClients shutdown error', { error: err.message }); }
+  }
+
   const resourceResults = await Promise.allSettled([
     resources.zkHooks.shutdown(),
     resources.got.shutdown(),
@@ -378,7 +383,7 @@ async function main() {
 
     await gracefulShutdown(
       { leader, safety, explorer, miner, farmer, builders },
-      { explorerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger },
+      { explorerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger, apiClients },
     );
 
     clearTimeout(forceExit);

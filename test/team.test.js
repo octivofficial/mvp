@@ -740,4 +740,64 @@ describe("team — gracefulShutdown", () => {
     assert.equal(logArgs[0], "team");
     assert.equal(logArgs[1].type, "shutdown");
   });
+
+  it("should call apiClients.shutdown() when present in resources", async () => {
+    const agents = {
+      leader: createMockAgent(),
+      safety: createMockAgent(),
+      explorer: createMockAgent(),
+      miner: createMockAgent(),
+      farmer: createMockAgent(),
+      builders: [],
+    };
+    const apiClients = { shutdown: mock.fn(() => {}) };
+    const resources = {
+      explorerInterval: setInterval(() => {}, 99999),
+      emergencySubscriber: {
+        unsubscribe: mock.fn(async () => {}),
+        disconnect: mock.fn(async () => {}),
+      },
+      zkHooks: createMockAgent(),
+      got: createMockAgent(),
+      rumination: createMockAgent(),
+      zettelkasten: createMockAgent(),
+      pipeline: createMockAgent(),
+      reflexion: createMockAgent(),
+      board: { disconnect: mock.fn(async () => {}) },
+      logger: { logEvent: mock.fn(async () => {}) },
+      apiClients,
+    };
+
+    await gracefulShutdown(agents, resources);
+    assert.equal(apiClients.shutdown.mock.callCount(), 1);
+  });
+
+  it("should handle missing apiClients gracefully", async () => {
+    const agents = {
+      leader: createMockAgent(),
+      safety: createMockAgent(),
+      explorer: createMockAgent(),
+      miner: createMockAgent(),
+      farmer: createMockAgent(),
+      builders: [],
+    };
+    const resources = {
+      explorerInterval: setInterval(() => {}, 99999),
+      emergencySubscriber: {
+        unsubscribe: mock.fn(async () => {}),
+        disconnect: mock.fn(async () => {}),
+      },
+      zkHooks: createMockAgent(),
+      got: createMockAgent(),
+      rumination: createMockAgent(),
+      zettelkasten: createMockAgent(),
+      pipeline: createMockAgent(),
+      reflexion: createMockAgent(),
+      board: { disconnect: mock.fn(async () => {}) },
+      logger: { logEvent: mock.fn(async () => {}) },
+      // no apiClients
+    };
+
+    await assert.doesNotReject(gracefulShutdown(agents, resources));
+  });
 });

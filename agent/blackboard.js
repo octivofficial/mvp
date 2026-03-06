@@ -2,7 +2,7 @@
  * Octiv Blackboard — Redis-based Agent Shared Memory
  * All agents share state through this module.
  */
-const { createClient } = require('redis');
+const { createRedisClient } = require('./redis-factory');
 const T = require('../config/timeouts');
 const { getLogger } = require('./logger');
 const log = getLogger();
@@ -12,16 +12,10 @@ const PREFIX = 'octiv:';
 
 class Blackboard {
   constructor(redisUrl, options = {}) {
-    const url = redisUrl || REDIS_URL;
-    this.client = createClient({
-      url,
-      socket: {
-        reconnectStrategy: (retries) => {
-          if (retries > T.MAX_RECONNECT_ATTEMPTS) return false;
-          return Math.min(retries * 100, T.REDIS_RECONNECT_MAX_MS);
-        },
-        ...options.socket,
-      },
+    this.client = createRedisClient({
+      url: redisUrl || REDIS_URL,
+      socket: options.socket,
+      cluster: options.cluster,
     });
     this.client.on('error', (err) => log.error('blackboard', 'Redis error', { error: err.message }));
   }
