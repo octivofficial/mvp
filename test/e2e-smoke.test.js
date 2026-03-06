@@ -41,12 +41,13 @@ function isRedisOnline(port = 6380) {
 }
 
 async function cleanupE2EKeys(board) {
-  const patterns = ['octiv:e2e:*', 'octiv:agent:e2e-*'];
-  for (const pattern of patterns) {
-    const keys = await board.client.keys(pattern);
-    if (keys.length > 0) {
-      await board.client.del(keys);
-    }
+  const [keys1, keys2] = await Promise.all([
+    board.client.keys('octiv:e2e:*'),
+    board.client.keys('octiv:agent:e2e-*'),
+  ]);
+  const allKeys = [...keys1, ...keys2];
+  if (allKeys.length > 0) {
+    await board.client.del(allKeys);
   }
 }
 
@@ -60,7 +61,7 @@ const DRAIN_MS = 500;
 it('E2E — infra: Redis PONG + PaperMC reachable', async (t) => {
   const [papermc, redis] = await Promise.all([
     isPaperMCOnline(),
-    Promise.resolve(isRedisOnline()),
+    isRedisOnline(),
   ]);
 
   if (!papermc || !redis) {
@@ -139,13 +140,11 @@ it('E2E — BuilderAgent spawn publishes Blackboard status', async (t) => {
   await listener.connect();
   const sub = await listener.createSubscriber();
 
-  let receivedStatus = null;
   const statusPromise = new Promise((resolve) => {
     const timeout = setTimeout(() => resolve(null), 15000);
     sub.subscribe('octiv:agent:e2e-01:status', (message) => {
       clearTimeout(timeout);
-      receivedStatus = JSON.parse(message);
-      resolve(receivedStatus);
+      resolve(JSON.parse(message));
     });
   });
 
@@ -175,7 +174,7 @@ it('E2E — BuilderAgent spawn publishes Blackboard status', async (t) => {
     builder._running = false;
     await builder.shutdown();
     try { await sub.unsubscribe(); } catch { /* ignore */ }
-    try { await sub.disconnect(); } catch { /* ignore */ }
+    try { await sub.quit(); } catch { /* ignore */ }
     await listener.disconnect();
     await new Promise(r => setTimeout(r, DRAIN_MS));
   }
@@ -278,7 +277,7 @@ it('E2E — Blackboard pub/sub roundtrip', async (t) => {
     assert.ok(latency < 500, `Latency should be < 500ms (was ${latency}ms)`);
   } finally {
     try { await sub.unsubscribe(); } catch { /* ignore */ }
-    try { await sub.disconnect(); } catch { /* ignore */ }
+    try { await sub.quit(); } catch { /* ignore */ }
     await Promise.allSettled([
       publisher.disconnect(),
       listener.disconnect(),
@@ -370,8 +369,10 @@ it('E2E — cleanup: remove e2e Redis keys', async (t) => {
     await cleanupE2EKeys(board);
 
     // Verify no leftover keys
-    const remaining1 = await board.client.keys('octiv:e2e:*');
-    const remaining2 = await board.client.keys('octiv:agent:e2e-*');
+    const [remaining1, remaining2] = await Promise.all([
+      board.client.keys('octiv:e2e:*'),
+      board.client.keys('octiv:agent:e2e-*'),
+    ]);
 
     assert.equal(remaining1.length, 0, 'No octiv:e2e:* keys should remain');
     assert.equal(remaining2.length, 0, 'No octiv:agent:e2e-* keys should remain');
