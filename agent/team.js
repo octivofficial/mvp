@@ -43,7 +43,7 @@ async function handleEmergencyEvent(data, deps) {
   }
 
   // If safety triggered skill creation, attempt to generate a skill
-  if (data.triggerSkillCreation && data.failureType) {
+  if (data.triggerSkillCreation && data.failureType && pipeline) {
     const result = await pipeline.generateFromFailure({
       error: data.failureType,
       errorType: data.failureType,
@@ -112,17 +112,22 @@ async function gracefulShutdown(agents, resources) {
   try { await resources.emergencySubscriber.unsubscribe(); } catch (err) { log.error('team', 'subscriber cleanup error', { error: err.message }); }
   try { await resources.emergencySubscriber.disconnect(); } catch (err) { log.error('team', 'subscriber disconnect error', { error: err.message }); }
 
-  const resourceResults = await Promise.allSettled([
-    resources.zkHooks.shutdown(),
-    resources.got.shutdown(),
-    resources.rumination.shutdown(),
-    resources.zettelkasten.shutdown(),
-    resources.pipeline.shutdown(),
-  ]);
-  for (const r of resourceResults) {
-    if (r.status === 'rejected') log.error('team', 'resource shutdown error', { error: r.reason?.message });
+  // Only shutdown learning resources that were successfully initialized
+  const learningResources = [
+    resources.zkHooks, resources.got, resources.rumination,
+    resources.zettelkasten, resources.pipeline,
+  ].filter(Boolean);
+  if (learningResources.length > 0) {
+    const resourceResults = await Promise.allSettled(
+      learningResources.map(r => r.shutdown()),
+    );
+    for (const r of resourceResults) {
+      if (r.status === 'rejected') log.error('team', 'resource shutdown error', { error: r.reason?.message });
+    }
   }
-  try { await resources.reflexion.shutdown(); } catch (err) { log.error('team', 'reflexion shutdown error', { error: err.message }); }
+  if (resources.reflexion) {
+    try { await resources.reflexion.shutdown(); } catch (err) { log.error('team', 'reflexion shutdown error', { error: err.message }); }
+  }
 
   // Shutdown API clients after all consumers — stops LM Studio health monitor timer
   if (resources.apiClients?.shutdown) {
@@ -271,24 +276,31 @@ async function main() {
   // Task A: Create API clients from environment (Anthropic primary, Groq fallback)
   const apiClients = createApiClients();
 
-  // Learning pipeline: ReflexionEngine (with real API clients) → SkillPipeline → Leader
-  const reflexion = new ReflexionEngine(apiClients);
-  await reflexion.init();
-  const pipeline = new SkillPipeline(reflexion);
-  await pipeline.init();
+  // Learning pipeline: ReflexionEngine → SkillPipeline → Zettelkasten
+  // Wrapped in try/catch — bots run without LLM skill generation if this fails
+  let reflexion = null, pipeline = null;
+  let zettelkasten = null, rumination = null, got = null, zkHooks = null;
 
-  // Learning brain: Zettelkasten + Rumination + GoT
-  const zettelkasten = new SkillZettelkasten({ logger });
-  await zettelkasten.init();
-  const rumination = new RuminationEngine(zettelkasten, { logger });
-  await rumination.init();
-  const got = new GoTReasoner(zettelkasten, { logger });
-  await got.init();
-  const zkHooks = new ZettelkastenHooks(zettelkasten, rumination, got, { logger });
-  await zkHooks.init();
+  try {
+    reflexion = new ReflexionEngine(apiClients);
+    await reflexion.init();
+    pipeline = new SkillPipeline(reflexion);
+    await pipeline.init();
 
-  // Wire Zettelkasten hooks to skill pipeline
-  zkHooks.wireToSkillPipeline(pipeline);
+    zettelkasten = new SkillZettelkasten({ logger });
+    await zettelkasten.init();
+    rumination = new RuminationEngine(zettelkasten, { logger });
+    await rumination.init();
+    got = new GoTReasoner(zettelkasten, { logger });
+    await got.init();
+    zkHooks = new ZettelkastenHooks(zettelkasten, rumination, got, { logger });
+    await zkHooks.init();
+
+    zkHooks.wireToSkillPipeline(pipeline);
+    log.info('team', 'Learning pipeline initialized');
+  } catch (err) {
+    log.warn('team', 'Learning pipeline unavailable — bots will run without skill generation', { error: err.message });
+  }
 
   // Record Octiv team initialization state
   await board.publish('team:status', {
@@ -301,9 +313,9 @@ async function main() {
   // 1. Start Leader (with learning pipeline)
   const leader = new LeaderAgent(TEAM_SIZE);
   leader.setLogger(logger);
-  leader.setSkillPipeline(pipeline);
+  leader.setSkillPipeline(pipeline); // accepts null
   await leader.init();
-  zkHooks.wireToLeader(leader);
+  if (zkHooks) zkHooks.wireToLeader(leader);
 
   // 2. Start Safety (with logger)
   const safety = new SafetyAgent();
@@ -316,10 +328,10 @@ async function main() {
     await new Promise(r => setTimeout(r, T.BUILDER_SPAWN_INTERVAL_MS));
     const builder = new BuilderAgent({ id: `builder-0${i}` });
     builder.setLogger(logger);
-    builder.setSkillPipeline(pipeline); // Task B: enable skill feedback loop
+    builder.setSkillPipeline(pipeline); // accepts null — bots work without skills
     try {
       await builder.init();
-      zkHooks.wireToBuilder(builder);
+      if (zkHooks) zkHooks.wireToBuilder(builder);
       builders.push(builder);
       log.info('team', `Builder-0${i} started`);
     } catch (err) {
