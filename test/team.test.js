@@ -434,6 +434,7 @@ describe("team — handleEmergencyEvent", () => {
   it("should dedup same failureType within window", async () => {
     const deps = createDeps();
     await handleEmergencyEvent({ failureType: "fall" }, deps);
+    assert.equal(deps.lastEmergency.type, "fall", "mutation contract: type updated");
     await handleEmergencyEvent({ failureType: "fall" }, deps);
     assert.equal(deps.leader.consecutiveTeamFailures, 1);
   });

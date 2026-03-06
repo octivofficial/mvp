@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const { Readable } = require('stream');
 
 const os = require('os');
-const { synthesize, voiceForRole, VOICES, DEFAULT_VOICE, _setTtsFactory, _tmpPath } = require('../agent/tts-engine');
+const { synthesize, voiceForRole, VOICES, DEFAULT_VOICE, _setTtsFactory } = require('../agent/tts-engine');
 const T = require('../config/timeouts');
 
 // Track calls to the mock TTS factory
@@ -144,20 +144,6 @@ describe('TTS Engine — VOICES constant', () => {
     assert.ok(VOICES.builder);
     assert.ok(VOICES.safety);
     assert.ok(VOICES.explorer);
-  });
-});
-
-describe('TTS Engine — _tmpPath()', () => {
-  it('should return unique paths on each call', () => {
-    const path1 = _tmpPath();
-    const path2 = _tmpPath();
-    assert.notEqual(path1, path2, 'two calls should produce different paths');
-  });
-
-  it('should return a path starting with os.tmpdir() and octiv-tts- prefix', () => {
-    const p = _tmpPath();
-    const expected = os.tmpdir() + '/octiv-tts-';
-    assert.ok(p.startsWith(expected), `expected path to start with ${expected}, got ${p}`);
   });
 });
 

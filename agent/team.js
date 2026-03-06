@@ -65,7 +65,10 @@ async function handleEmergencyEvent(data, deps) {
  * @returns {NodeJS.Timeout} interval ID for cleanup
  */
 function createExplorerLoop(board, explorer, intervalMs = T.EXPLORER_LOOP_INTERVAL_MS) {
+  let executing = false;
   return setInterval(async () => {
+    if (executing) return;
+    executing = true;
     try {
       const status = await board.get('agent:builder-01:status');
       if (status?.position) {
@@ -74,6 +77,8 @@ function createExplorerLoop(board, explorer, intervalMs = T.EXPLORER_LOOP_INTERV
       }
     } catch (err) {
       log.error('explorer', 'loop error', { error: err.message });
+    } finally {
+      executing = false;
     }
   }, intervalMs);
 }
@@ -90,22 +95,33 @@ async function gracefulShutdown(agents, resources) {
   clearInterval(resources.explorerInterval);
   resources.logger.logEvent('team', { type: 'shutdown' }).catch(e => log.error('team', 'log persist error', { error: e.message }));
 
-  try { await agents.leader.shutdown(); } catch (err) { log.error('team', 'leader shutdown error', { error: err.message }); }
-  try { await agents.safety.shutdown(); } catch (err) { log.error('team', 'safety shutdown error', { error: err.message }); }
-  try { await agents.explorer.shutdown(); } catch (err) { log.error('team', 'explorer shutdown error', { error: err.message }); }
-  try { await agents.miner.shutdown(); } catch (err) { log.error('team', 'miner shutdown error', { error: err.message }); }
-  try { await agents.farmer.shutdown(); } catch (err) { log.error('team', 'farmer shutdown error', { error: err.message }); }
-  for (const b of agents.builders) {
-    try { await b.shutdown(); } catch (err) { log.error('team', 'builder shutdown error', { error: err.message }); }
+  // Parallel agent shutdown — independent agents don't need serial ordering
+  const agentResults = await Promise.allSettled([
+    agents.leader.shutdown(),
+    agents.safety.shutdown(),
+    agents.explorer.shutdown(),
+    agents.miner.shutdown(),
+    agents.farmer.shutdown(),
+    ...agents.builders.map(b => b.shutdown()),
+  ]);
+  for (const r of agentResults) {
+    if (r.status === 'rejected') log.error('team', 'agent shutdown error', { error: r.reason?.message });
   }
 
+  // Sequential resource cleanup — subscriber must unsubscribe before disconnect, board last
   try { await resources.emergencySubscriber.unsubscribe(); } catch (err) { log.error('team', 'subscriber cleanup error', { error: err.message }); }
   try { await resources.emergencySubscriber.disconnect(); } catch (err) { log.error('team', 'subscriber disconnect error', { error: err.message }); }
-  try { await resources.zkHooks.shutdown(); } catch (err) { log.error('team', 'zkHooks shutdown error', { error: err.message }); }
-  try { await resources.got.shutdown(); } catch (err) { log.error('team', 'got shutdown error', { error: err.message }); }
-  try { await resources.rumination.shutdown(); } catch (err) { log.error('team', 'rumination shutdown error', { error: err.message }); }
-  try { await resources.zettelkasten.shutdown(); } catch (err) { log.error('team', 'zettelkasten shutdown error', { error: err.message }); }
-  try { await resources.pipeline.shutdown(); } catch (err) { log.error('team', 'pipeline shutdown error', { error: err.message }); }
+
+  const resourceResults = await Promise.allSettled([
+    resources.zkHooks.shutdown(),
+    resources.got.shutdown(),
+    resources.rumination.shutdown(),
+    resources.zettelkasten.shutdown(),
+    resources.pipeline.shutdown(),
+  ]);
+  for (const r of resourceResults) {
+    if (r.status === 'rejected') log.error('team', 'resource shutdown error', { error: r.reason?.message });
+  }
   try { await resources.reflexion.shutdown(); } catch (err) { log.error('team', 'reflexion shutdown error', { error: err.message }); }
   try { await resources.board.disconnect(); } catch (err) { log.error('team', 'board disconnect error', { error: err.message }); }
 }
