@@ -38,6 +38,9 @@ describe('Integration — Learning Pipeline Assembly', () => {
     board = new Blackboard();
     await board.connect();
 
+    // Reset daily skill meta to prevent cross-suite pollution
+    await board.setConfig('skills:daily_meta', { count: 0, resetAt: 0 });
+
     logger = new MemoryLogger();
     // Empty clients: LLM calls fail fast → _fallbackSkill used deterministically
     reflexion = new ReflexionEngine({});
@@ -100,6 +103,9 @@ describe('Integration — Emergency Handler (Redis pub/sub)', () => {
   before(async () => {
     board = new Blackboard();
     await board.connect();
+
+    // Reset daily skill meta to prevent cross-suite pollution
+    await board.setConfig('skills:daily_meta', { count: 0, resetAt: 0 });
 
     logger = new MemoryLogger();
     // Empty clients: no live LLM calls in integration tests
