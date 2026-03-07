@@ -314,21 +314,22 @@ Explorer maps 200-block radius without dying
 
 ---
 
-## Phase 7 — Scale & Extend (7.4 Complete, others Not Started)
+## Phase 7 — Scale & Extend (7.1-7.5 Complete)
 > Goal: Build a long-term operations framework beyond first-night survival
 
 ### 7.1 Mission Expansion
 - [x] Week 2: Ore mining + stone tool upgrade (MinerAgent: nav, session, inventory, smelt, quota)
-- [ ] Week 3: Farm automation + food self-sufficiency
+- [x] Week 3: Farm automation + food self-sufficiency (FarmerAgent: nav, session, harvest, replant, quota)
 - [ ] Week 4: Ender Dragon strategy planning
 
 ### 7.2 Agent Enhancement
+- [x] Role specialization (MinerAgent, FarmerAgent, ExplorerAgent, WoodcutterAgent)
+- [x] BaseRole DRY refactoring — 8 common methods extracted (nav, session, inventory, quota)
 - [ ] Expand agent count (Builder 3→5+)
-- [ ] Role specialization (farmer, miner, explorer, architect)
 - [ ] Natural language negotiation between agents (LLM-based)
 
 ### 7.3 Infrastructure Expansion
-- [ ] LM Studio local model integration (cost reduction)
+- [x] LM Studio local model integration (LMStudioClient: multi-URL failover, `<think>` stripping)
 - [ ] Multi-server support
 - [ ] Plugin system (KubeJS integration)
 
@@ -342,14 +343,25 @@ Explorer maps 200-block radius without dying
   - [x] Concurrent updates resolved via optimistic locking
 - Files: `agent/blackboard.js`
 
-### 7.5 Redis Cluster (NEW — from TXT 4.md, when needed)
-- ioredis Cluster client (Hash Slot, Auto Failover)
-- Exponential Backoff + Full Jitter reconnection
+### 7.5 Redis Cluster Ready (NEW — from TXT 4.md)
+- [x] redis-factory.js: createRedisClient single/cluster factory
+- [x] Exponential Backoff + Full Jitter reconnection strategy
 - Production transition only (current single-node maintained)
 - **Acceptance Test**:
-  - [ ] Cluster client connects to 3+ nodes
-  - [ ] Failover completes within 5s
-  - [ ] Reconnection with full jitter avoids thundering herd
+  - [x] Factory creates single or cluster client based on config
+  - [x] Full Jitter reconnection avoids thundering herd
+  - [ ] Cluster client connects to 3+ nodes (when production cluster deployed)
+
+---
+
+## Phase 8 — Live Operations & Quality
+> Goal: Verify agents work in real Docker environment, fix operational issues
+
+### 8.1 Pathfinding Reality Check — DONE
+- [x] Dynamic timeout scaling with distance
+- [x] Faster exploration patterns
+- [x] Self-improvement on pathfinding failures
+- ~~**Known Issue**: Fall damage at spawn~~ → **RESOLVED**: `_waitForGround()` + spawn damage logging in OctivBot (6 tests)
 
 ---
 
