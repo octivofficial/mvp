@@ -2,6 +2,9 @@
  * Octiv Builder Agent — thin orchestrator
  * Delegates to: builder-navigation, builder-shelter, builder-adaptation
  * Bot control: wood collection, shelter construction, tool crafting
+ *
+ * A2A: Subscribes to Leader missions via `command:{id}:mission` pub/sub.
+ * Falls back to hardcoded AC progression when no leader mission available.
  */
 const mineflayer = require('mineflayer');
 const { pathfinder, goals } = require('mineflayer-pathfinder');
@@ -43,6 +46,8 @@ class BuilderAgent {
     this.skillPipeline = null;
     this.spawnTimeoutMs = config.spawnTimeoutMs || T.SPAWN_TIMEOUT_MS;
     this._running = true;
+    this._lastMission = null;
+    this._missionSubscriber = null;
     this.chat = new AgentChat(this.board, this.id, 'builder');
   }
 
@@ -89,6 +94,7 @@ class BuilderAgent {
   async _onSpawn() {
     log.info(this.id, 'spawned');
     await this._waitForGround();
+    await this._setupMissionSubscriber();
     await this.board.publish(`agent:${this.id}:status`, {
       author: this.id,
       status: 'spawned',
@@ -273,6 +279,46 @@ class BuilderAgent {
     }
   }
 
+  // ── A2A: Mission subscription from Leader ──────────────────────
+  async _setupMissionSubscriber() {
+    this._missionSubscriber = await this.board.createSubscriber();
+    const channel = `octiv:command:${this.id}:mission`;
+    await this._missionSubscriber.subscribe(channel, (message) => {
+      try {
+        const data = JSON.parse(message);
+        this._lastMission = data;
+        log.info(this.id, 'received mission from leader', { ac: data.ac, action: data.action });
+        this.board.publish(`agent:${this.id}:mission:ack`, {
+          author: this.id,
+          ac: data.ac,
+          action: data.action,
+        }).catch(() => {});
+      } catch (err) {
+        log.error(this.id, 'mission parse error', { error: err.message });
+      }
+    });
+    log.info(this.id, 'A2A mission subscriber active');
+  }
+
+  _getMissionAction() {
+    if (this._lastMission && this._lastMission.action) {
+      return this._lastMission.action;
+    }
+    // Fallback: local AC tracking
+    if (!this.acProgress[1]) return 'collectWood';
+    if (!this.acProgress[3]) return 'craftBasicTools';
+    if (!this.acProgress[2]) return 'buildShelter';
+    if (!this.acProgress[4]) return 'gatherAtShelter';
+    return 'idle';
+  }
+
+  _getMissionParams() {
+    if (this._lastMission && this._lastMission.params) {
+      return this._lastMission.params;
+    }
+    return {};
+  }
+
   // ── AC-5 + Skill feedback (delegates to builder-adaptation) ────
   _classifyError(message) { return classifyError(message); }
   async _selfImprove(error) { return selfImprove(this, error); }
@@ -307,16 +353,14 @@ class BuilderAgent {
       if (!this._running) return;
 
       try {
-        if (!this.acProgress[1]) {
-          await this.collectWood(16);
-        } else if (!this.acProgress[3]) {
-          await this.craftBasicTools();
-        } else if (!this.acProgress[2]) {
-          await this.buildShelter();
-        } else if (!this.acProgress[4]) {
-          await this.gatherAtShelter();
-        } else {
-          await this.bot.waitForTicks(40);
+        const action = this._getMissionAction();
+        const params = this._getMissionParams();
+        switch (action) {
+          case 'collectWood': await this.collectWood(params.count || 16); break;
+          case 'craftBasicTools': await this.craftBasicTools(); break;
+          case 'buildShelter': await this.buildShelter(); break;
+          case 'gatherAtShelter': await this.gatherAtShelter(); break;
+          default: await this.bot.waitForTicks(40);
         }
       } catch (err) {
         log.error(this.id, 'ReAct error', { error: err.message });
@@ -341,6 +385,10 @@ class BuilderAgent {
 
   async shutdown() {
     this._running = false;
+    if (this._missionSubscriber) {
+      try { await this._missionSubscriber.unsubscribe(); } catch {}
+      try { await this._missionSubscriber.disconnect(); } catch {}
+    }
     try {
       if (this.bot) this.bot.end();
     } catch (err) {
