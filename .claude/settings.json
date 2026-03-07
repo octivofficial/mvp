@@ -49,7 +49,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); echo \"$INPUT\" | grep -q 'git commit' && { MEM=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory; COMMIT=$(git -C /Users/octiv/Octiv_MVP log --oneline -1 2>/dev/null); echo \"- [$(date '+%H:%M')] committed: $COMMIT\" >> $MEM/session-log.md && echo '[AutoMemory] Commit logged to session-log'; } || true"
+            "command": "INPUT=$(cat); echo \"$INPUT\" | grep -q 'git commit' && { MEM=/Users/octiv/.claude/projects/-Users-octiv-Octiv-MVP/memory; COMMIT=$(git -C /Users/octiv/Octiv_MVP log --oneline -1 2>/dev/null); echo \"- [$(date '+%H:%M')] committed: $COMMIT\" >> $MEM/session-log.md && echo '[AutoMemory] Commit logged to session-log'; node /Users/octiv/Octiv_MVP/scripts/vault-sync-cli.js git 2>/dev/null; } || true"
+          },
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); echo \"$INPUT\" | python3 -c \"import sys,json; d=json.load(sys.stdin); cmd=d.get('tool_input',{}).get('command',''); out=d.get('tool_output',''); exit(0 if ('npm test' in cmd or 'node --test' in cmd) and '# tests' in out else 1)\" 2>/dev/null && { INPUT=$(cat); echo \"$INPUT\" | python3 -c \"import sys,json; print(json.load(sys.stdin).get('tool_output',''))\" 2>/dev/null | node /Users/octiv/Octiv_MVP/scripts/vault-sync-cli.js test 2>/dev/null; } || true",
+            "timeout": 15
           }
         ]
       },
@@ -59,6 +64,11 @@
           {
             "type": "command",
             "command": "INPUT=$(cat); FILE=$(echo $INPUT | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"tool_input\",{}).get(\"file_path\",\"\"))' 2>/dev/null); [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE '(agent/.*[.]js|test/.*[.]js)$' && npx prettier --write \"$FILE\" 2>/dev/null && echo \"[AutoFormat] $FILE\" || true",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); echo \"$INPUT\" | grep -q ROADMAP.md && node /Users/octiv/Octiv_MVP/scripts/vault-sync-cli.js roadmap 2>/dev/null && echo \"[VaultSync] Roadmap synced\" || true",
             "timeout": 10
           }
         ]

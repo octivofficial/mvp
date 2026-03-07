@@ -84,11 +84,28 @@ async function syncDashboard(stats) {
       changed = true;
     }
 
-    const testCountRe = /(\|\s*\*\*Test Count\*\*\s*\|)\s*[^|]+\|/;
+    const testCountRe = /(\|\s*\*\*(?:Test Count|Tests)\*\*\s*\|)\s*[^|]+\|/;
     if (testCountRe.test(content) && stats.tests > 0) {
       content = content.replace(testCountRe,
         `$1 ${stats.tests} (${stats.pass} pass, ${stats.fail} fail, ${stats.skip} skip) |`);
       changed = true;
+    }
+
+    // Update COVERAGE stat card
+    if (stats.coverage) {
+      const coverageCardRe = /(>\s*>\s*\[!stat\]\s*COVERAGE\n>\s*>\s*<div[^>]*>)\d+%(<\/div>\n>\s*>\s*<span[^>]*>Lines\s+)[\d.]+\s*\|\s*Branch\s*[\d.]+(<\/span>)/;
+      if (coverageCardRe.test(content)) {
+        content = content.replace(coverageCardRe,
+          `$1${Math.round(stats.coverage.lines)}%$2${stats.coverage.lines} | Branch ${stats.coverage.branches}$3`);
+        changed = true;
+      }
+
+      const coverageRe = /(\|\s*\*\*Coverage\*\*\s*\|)\s*[^|]+\|/;
+      if (coverageRe.test(content)) {
+        content = content.replace(coverageRe,
+          `$1 ${stats.coverage.lines}% lines, ${stats.coverage.branches}% branches, ${stats.coverage.functions}% functions |`);
+        changed = true;
+      }
     }
 
     // Update footer timestamp
@@ -171,4 +188,153 @@ async function syncSessionState(session) {
   }
 }
 
-module.exports = { gatherStats, syncDashboard, syncSessionState, VAULT_DIR, DASHBOARD_PATH, SESSION_SYNC_PATH };
+// ── Test/Coverage Output Parsers ─────────────────────────────────────
+
+/**
+ * Parse Node.js test runner output for test counts.
+ * @param {string} text - Raw test output
+ * @returns {{ tests: number, pass: number, fail: number, skip: number }}
+ */
+function parseTestOutput(text) {
+  const get = (key) => {
+    const m = text.match(new RegExp(`(?:#|ℹ)\\s*${key}\\s+(\\d+)`));
+    return m ? parseInt(m[1]) : 0;
+  };
+  return { tests: get('tests'), pass: get('pass'), fail: get('fail'), skip: get('skipped') };
+}
+
+/**
+ * Parse coverage output from Node.js native coverage or c8.
+ * @param {string} text - Coverage output
+ * @returns {{ lines: number, branches: number, functions: number } | null}
+ */
+function parseCoverage(text) {
+  const m = text.match(/all files\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)/i);
+  if (!m) return null;
+  return { lines: parseFloat(m[1]), branches: parseFloat(m[2]), functions: parseFloat(m[3]) };
+}
+
+// ── ROADMAP Parser ───────────────────────────────────────────────────
+
+/**
+ * Determine status from checkbox counts in text.
+ * @param {string} text
+ * @returns {string}
+ */
+function checkboxStatus(text) {
+  const checked = (text.match(/- \[x\]/g) || []).length;
+  const unchecked = (text.match(/- \[ \]/g) || []).length;
+  const total = checked + unchecked;
+  if (total === 0) return 'Planned';
+  if (checked === total) return 'DONE';
+  if (checked > 0) return 'IN PROGRESS';
+  return 'Planned';
+}
+
+/**
+ * Parse ROADMAP.md phase status from checkbox completion.
+ * @param {string} content - ROADMAP.md content
+ * @returns {Array<{id: string, name: string, status: string}>}
+ */
+function parsePhaseStatus(content) {
+  const phases = [];
+  const phaseHeaderRe = /^## Phase (\d+)\s*(.*?)$/gm;
+  const headers = [...content.matchAll(phaseHeaderRe)];
+  const scheduleIdx = content.indexOf('\n## Schedule');
+  const endIdx = scheduleIdx !== -1 ? scheduleIdx : content.length;
+
+  for (let i = 0; i < headers.length; i++) {
+    const id = headers[i][1];
+    const headerText = headers[i][2];
+
+    let name = 'Foundation';
+    const nameMatch = headerText.match(/[—–-]\s*(.+?)(?:\s*\(.*?\))?\s*$/);
+    if (nameMatch) name = nameMatch[1].trim();
+
+    const sectionStart = headers[i].index + headers[i][0].length;
+    const sectionEnd = i + 1 < headers.length ? headers[i + 1].index : endIdx;
+    const section = content.slice(sectionStart, sectionEnd);
+
+    if (id === '7') {
+      const subRe = /^### (\d+\.\d+)\s+(.+?)$/gm;
+      const subs = [...section.matchAll(subRe)];
+      for (let j = 0; j < subs.length; j++) {
+        const subId = subs[j][1];
+        const subName = subs[j][2]
+          .replace(/\s*\(NEW[^)]*\)/g, '')
+          .replace(/\s*[—–-].*$/g, '')
+          .trim();
+        const subStart = subs[j].index + subs[j][0].length;
+        const subEnd = j + 1 < subs.length ? subs[j + 1].index : section.length;
+        phases.push({ id: subId, name: subName, status: checkboxStatus(section.slice(subStart, subEnd)) });
+      }
+    } else {
+      phases.push({ id, name, status: checkboxStatus(section) });
+    }
+  }
+  return phases;
+}
+
+/**
+ * Sync ROADMAP.md → vault/01-Project/Roadmap.md
+ * @param {object} [opts]
+ * @param {string} [opts.projectRoot]
+ * @returns {boolean}
+ */
+async function syncRoadmap(opts = {}) {
+  const root = opts.projectRoot || path.join(__dirname, '..');
+  const roadmapSrc = path.join(root, 'ROADMAP.md');
+  const roadmapDst = path.join(VAULT_DIR, '01-Project', 'Roadmap.md');
+
+  try {
+    const content = await fsp.readFile(roadmapSrc, 'utf-8');
+    const phases = parsePhaseStatus(content);
+    const date = new Date().toISOString().slice(0, 10);
+
+    const phaseTable = phases.map(p => {
+      const st = p.status === 'DONE' ? 'DONE'
+        : p.status === 'IN PROGRESS' ? '**IN PROGRESS**'
+        : 'Planned';
+      return `| ${p.id} | ${p.name} | ${st} |`;
+    }).join('\n');
+
+    // Parse AC items from headers
+    const acRe = /###\s+\d+\.\d+\s+(AC-\d+):\s+(.+?)(?:\s*[—–-]\s*DONE)?\s*$/gm;
+    const acs = [...content.matchAll(acRe)].map(m => `- [x] ${m[1]}: ${m[2].replace(/\s*\(.*?\)/g, '').trim()}`);
+
+    const output = `---
+tags: [project, roadmap]
+synced: ${date}
+---
+
+# Roadmap
+
+> Auto-synced from [[../../ROADMAP|/ROADMAP.md]] — ${date}
+
+## Phase Status
+
+| Phase | Name | Status |
+|-------|------|--------|
+${phaseTable}
+
+## Acceptance Criteria
+
+${acs.join('\n')}
+
+> All 8 ACs complete.
+`;
+
+    await fsp.writeFile(roadmapDst, output, 'utf-8');
+    log.info('vault-sync', `Roadmap synced: ${phases.length} phases, ${acs.length} ACs`);
+    return true;
+  } catch (err) {
+    log.error('vault-sync', `Roadmap sync failed: ${err.message}`);
+    return false;
+  }
+}
+
+module.exports = {
+  gatherStats, syncDashboard, syncSessionState, syncRoadmap,
+  parseTestOutput, parseCoverage, parsePhaseStatus, checkboxStatus,
+  VAULT_DIR, DASHBOARD_PATH, SESSION_SYNC_PATH,
+};

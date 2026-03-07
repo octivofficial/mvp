@@ -488,12 +488,238 @@ describe("vault-sync — syncSessionState (regex)", () => {
   });
 });
 
+describe("vault-sync — parseTestOutput", () => {
+  const { parseTestOutput } = require("../agent/vault-sync");
+
+  it("parses standard Node.js test runner output", () => {
+    const output = `# tests 1149\n# suites 320\n# pass 1145\n# fail 0\n# cancelled 0\n# skipped 4\n# todo 0\n# duration_ms 12345`;
+    const result = parseTestOutput(output);
+    assert.equal(result.tests, 1149);
+    assert.equal(result.pass, 1145);
+    assert.equal(result.fail, 0);
+    assert.equal(result.skip, 4);
+  });
+
+  it("returns zeros for non-test output", () => {
+    const result = parseTestOutput("hello world");
+    assert.equal(result.tests, 0);
+    assert.equal(result.pass, 0);
+    assert.equal(result.fail, 0);
+    assert.equal(result.skip, 0);
+  });
+
+  it("handles partial output", () => {
+    const result = parseTestOutput("# tests 50\n# pass 48");
+    assert.equal(result.tests, 50);
+    assert.equal(result.pass, 48);
+    assert.equal(result.fail, 0);
+    assert.equal(result.skip, 0);
+  });
+
+  it("parses Node v25 info-symbol format", () => {
+    const output = `ℹ tests 1229\nℹ suites 343\nℹ pass 1225\nℹ fail 0\nℹ cancelled 0\nℹ skipped 4\nℹ todo 0\nℹ duration_ms 166279`;
+    const result = parseTestOutput(output);
+    assert.equal(result.tests, 1229);
+    assert.equal(result.pass, 1225);
+    assert.equal(result.fail, 0);
+    assert.equal(result.skip, 4);
+  });
+});
+
+describe("vault-sync — parseCoverage", () => {
+  const { parseCoverage } = require("../agent/vault-sync");
+
+  it("parses coverage table output", () => {
+    const output = "all files  |   94.41 |   88.52 |   86.85";
+    const result = parseCoverage(output);
+    assert.deepEqual(result, { lines: 94.41, branches: 88.52, functions: 86.85 });
+  });
+
+  it("returns null for non-coverage output", () => {
+    assert.equal(parseCoverage("no coverage here"), null);
+  });
+});
+
+describe("vault-sync — checkboxStatus", () => {
+  const { checkboxStatus } = require("../agent/vault-sync");
+
+  it("returns DONE when all checked", () => {
+    assert.equal(checkboxStatus("- [x] a\n- [x] b\n- [x] c"), "DONE");
+  });
+
+  it("returns IN PROGRESS when partial", () => {
+    assert.equal(checkboxStatus("- [x] a\n- [ ] b\n- [ ] c"), "IN PROGRESS");
+  });
+
+  it("returns Planned when none checked", () => {
+    assert.equal(checkboxStatus("- [ ] a\n- [ ] b"), "Planned");
+  });
+
+  it("returns Planned when no checkboxes", () => {
+    assert.equal(checkboxStatus("no checkboxes here"), "Planned");
+  });
+});
+
+describe("vault-sync — parsePhaseStatus", () => {
+  const { parsePhaseStatus } = require("../agent/vault-sync");
+
+  it("parses simple phases as DONE", () => {
+    const content = `## Phase 1 Deliverables
+- [x] item a
+- [x] item b
+
+## Phase 2 — Core Gameplay
+- [x] AC-1
+- [x] AC-2
+
+## Schedule
+| Phase | Duration |`;
+
+    const phases = parsePhaseStatus(content);
+    assert.equal(phases.length, 2);
+    assert.equal(phases[0].id, "1");
+    assert.equal(phases[0].status, "DONE");
+    assert.equal(phases[1].id, "2");
+    assert.equal(phases[1].name, "Core Gameplay");
+    assert.equal(phases[1].status, "DONE");
+  });
+
+  it("splits Phase 7 into sub-phases", () => {
+    const content = `## Phase 7 — Scale & Extend (partial)
+
+### 7.1 Mission Expansion
+- [x] Week 2: Ore mining
+- [ ] Week 3: Farm automation
+
+### 7.2 Agent Enhancement
+- [ ] Expand agents
+- [ ] Role specialization
+
+### 7.4 Redis Pipeline Optimization
+- [x] Batch operations
+- [x] Optimistic locking
+
+## Schedule
+done`;
+
+    const phases = parsePhaseStatus(content);
+    assert.equal(phases.length, 3);
+    assert.equal(phases[0].id, "7.1");
+    assert.equal(phases[0].status, "IN PROGRESS");
+    assert.equal(phases[1].id, "7.2");
+    assert.equal(phases[1].status, "Planned");
+    assert.equal(phases[2].id, "7.4");
+    assert.equal(phases[2].status, "DONE");
+  });
+
+  it("strips (NEW ...) from sub-phase names", () => {
+    const content = `## Phase 7 — Scale
+### 7.4 Redis Pipeline Optimization (NEW — from TXT 4.md)
+- [x] done
+## Schedule`;
+
+    const phases = parsePhaseStatus(content);
+    assert.equal(phases[0].name, "Redis Pipeline Optimization");
+  });
+});
+
+describe("vault-sync — syncRoadmap", () => {
+  let readMock, writeMock;
+  const mod = require("../agent/vault-sync");
+
+  afterEach(() => {
+    if (readMock) readMock.mock.restore();
+    if (writeMock) writeMock.mock.restore();
+  });
+
+  it("generates vault Roadmap.md from ROADMAP.md", async () => {
+    let written = null;
+    readMock = mock.method(fsp, "readFile", async () => `## Phase 1 Deliverables
+- [x] item
+
+## Phase 2 — Core Gameplay
+- [x] AC-1
+
+### 2.1 AC-1: Wood Collection (16 logs) — DONE
+
+## Schedule`);
+    writeMock = mock.method(fsp, "writeFile", async (_p, content) => {
+      written = content;
+    });
+
+    const result = await mod.syncRoadmap();
+    assert.equal(result, true);
+    assert.ok(written);
+    assert.ok(written.includes("| 1 | Foundation | DONE |"));
+    assert.ok(written.includes("| 2 | Core Gameplay | DONE |"));
+    assert.ok(written.includes("Auto-synced from"));
+    assert.ok(written.includes("AC-1"));
+  });
+
+  it("returns false on file read error", async () => {
+    readMock = mock.method(fsp, "readFile", async () => {
+      throw new Error("ENOENT");
+    });
+    const result = await mod.syncRoadmap();
+    assert.equal(result, false);
+  });
+});
+
+describe("vault-sync — syncDashboard with coverage", () => {
+  let readMock, writeMock;
+  const mod = require("../agent/vault-sync");
+
+  const DASHBOARD_WITH_COVERAGE = `> > [!stat] COVERAGE
+> > <div style="font-size: 2em; font-weight: bold; color: #3fb950;">90%</div>
+> > <span style="font-size: 0.8em; color: gray;">Lines 90.5 | Branch 85.3</span>
+
+| **Coverage** | 90.5% lines, 85.3% branches, 80.0% functions |
+| **Last Session** | 2026-03-04 |`;
+
+  afterEach(() => {
+    if (readMock) readMock.mock.restore();
+    if (writeMock) writeMock.mock.restore();
+  });
+
+  it("updates coverage stat card and table", async () => {
+    let written = null;
+    readMock = mock.method(fsp, "readFile", async () => DASHBOARD_WITH_COVERAGE);
+    writeMock = mock.method(fsp, "writeFile", async (_p, content) => {
+      written = content;
+    });
+
+    const result = await mod.syncDashboard({
+      tests: 0,
+      pass: 0,
+      fail: 0,
+      skip: 0,
+      lastCommit: "unknown",
+      commitMsg: "",
+      date: "2026-03-07",
+      coverage: { lines: 94.41, branches: 88.52, functions: 86.85 },
+    });
+
+    assert.equal(result, true);
+    assert.ok(written.includes("94%"), "should update coverage card percentage");
+    assert.ok(written.includes("Lines 94.41 | Branch 88.52"), "should update coverage card details");
+    assert.ok(
+      written.includes("94.41% lines, 88.52% branches, 86.85% functions"),
+      "should update coverage table",
+    );
+  });
+});
+
 describe("vault-sync — module exports", () => {
   it("exports all expected functions", () => {
     const mod = require("../agent/vault-sync");
     assert.equal(typeof mod.gatherStats, "function");
     assert.equal(typeof mod.syncDashboard, "function");
     assert.equal(typeof mod.syncSessionState, "function");
+    assert.equal(typeof mod.syncRoadmap, "function");
+    assert.equal(typeof mod.parseTestOutput, "function");
+    assert.equal(typeof mod.parseCoverage, "function");
+    assert.equal(typeof mod.parsePhaseStatus, "function");
+    assert.equal(typeof mod.checkboxStatus, "function");
     assert.equal(typeof mod.VAULT_DIR, "string");
     assert.equal(typeof mod.DASHBOARD_PATH, "string");
     assert.equal(typeof mod.SESSION_SYNC_PATH, "string");
