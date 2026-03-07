@@ -1,11 +1,11 @@
+/**
+ * @deprecated Use agent/team.js instead. This single-bot entry point is
+ * superseded by the multi-agent team orchestrator. Kept for E2E smoke tests.
+ */
 const { OctivBot } = require('./OctivBot');
 const T = require('../config/timeouts');
 const { getLogger } = require('./logger');
 const log = getLogger();
-
-/**
- * Octiv Bot Entry Point
- */
 
 const BOT_CONFIG = {
   host: process.env.MC_HOST || 'localhost',

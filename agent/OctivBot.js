@@ -7,7 +7,9 @@ const T = require('../config/timeouts');
 const log = getLogger();
 
 /**
- * OctivBot Class — Core bot logic for Phase 1.2-1.3
+ * @deprecated Legacy single-bot base class from Phase 1.2-1.3.
+ * Production uses BuilderAgent (agent/builder.js) + team.js orchestrator.
+ * Kept for E2E smoke tests and heartbeat/reconnection pattern reference.
  */
 class OctivBot {
     constructor(config, options = {}) {
