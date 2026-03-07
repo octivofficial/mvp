@@ -636,6 +636,162 @@ describe('OctivBot — Edge Cases', () => {
     });
 });
 
+// ── Spawn Safety Tests ──────────────────────────────────────────────
+describe('OctivBot — Spawn Safety', () => {
+    let OctivBot;
+    let logWarnFn;
+
+    before(() => {
+        OctivBot = require('../agent/OctivBot').OctivBot;
+        const { getLogger } = require('../agent/logger');
+        const log = getLogger();
+        logWarnFn = mock.method(log, 'warn');
+    });
+
+    afterEach(() => {
+        logWarnFn.mock.resetCalls();
+    });
+
+    after(() => {
+        logWarnFn.mock.restore();
+        delete require.cache[require.resolve('../agent/OctivBot')];
+    });
+
+    it('_waitForGround returns immediately when on ground', async () => {
+        const mockBot = createMockBot();
+        mockBot.entity.velocity.y = 0;
+        const bot = new OctivBot({ username: 'TestBot-ground' }, {
+            createBotFn: () => mockBot,
+        });
+
+        await bot.start();
+        mockBot.emit('spawn');
+        await new Promise(r => setTimeout(r, 50));
+
+        // waitForTicks should NOT have been called (velocity.y >= 0 on first check)
+        assert.equal(mockBot.waitForTicks.mock.calls.length, 0,
+            'Should not wait when already on ground');
+
+        await bot.shutdown();
+    });
+
+    it('_waitForGround waits while falling then returns when stable', async () => {
+        const mockBot = createMockBot();
+        mockBot.entity.velocity.y = -5;
+
+        // After first waitForTicks call, simulate landing
+        let tickCount = 0;
+        mockBot.waitForTicks = mock.fn(async () => {
+            tickCount++;
+            if (tickCount >= 2) {
+                mockBot.entity.velocity.y = 0;
+            }
+        });
+
+        const bot = new OctivBot({ username: 'TestBot-falling' }, {
+            createBotFn: () => mockBot,
+        });
+
+        await bot.start();
+        await bot._waitForGround();
+
+        assert.ok(mockBot.waitForTicks.mock.calls.length >= 1,
+            'Should have waited at least 1 tick while falling');
+
+        await bot.shutdown();
+    });
+
+    it('_waitForGround times out after SPAWN_GROUND_WAIT_MS', async () => {
+        const mockBot = createMockBot();
+        mockBot.entity.velocity.y = -5; // Stays falling forever
+
+        const bot = new OctivBot({ username: 'TestBot-timeout-ground' }, {
+            createBotFn: () => mockBot,
+        });
+
+        await bot.start();
+
+        const start = Date.now();
+        await bot._waitForGround();
+        const elapsed = Date.now() - start;
+
+        const T = require('../config/timeouts');
+        assert.ok(elapsed >= T.SPAWN_GROUND_WAIT_MS - 50,
+            `Should wait ~${T.SPAWN_GROUND_WAIT_MS}ms, waited ${elapsed}ms`);
+
+        // Should have logged a timeout warning
+        const timeoutWarn = logWarnFn.mock.calls.find(c =>
+            c.arguments[1] && c.arguments[1].includes('Ground wait timeout'));
+        assert.ok(timeoutWarn, 'Should log ground wait timeout warning');
+
+        await bot.shutdown();
+    });
+
+    it('_waitForGround handles null entity gracefully', async () => {
+        const mockBot = createMockBot();
+        mockBot.entity.velocity.y = -5;
+        mockBot.waitForTicks = mock.fn(async () => {
+            // Simulate entity disappearing mid-wait
+            mockBot.entity = null;
+        });
+
+        const bot = new OctivBot({ username: 'TestBot-null-entity' }, {
+            createBotFn: () => mockBot,
+        });
+
+        await bot.start();
+
+        // Should not throw
+        await bot._waitForGround();
+
+        await bot.shutdown();
+    });
+
+    it('_onSpawn logs spawn damage when health < 20', async () => {
+        const mockBot = createMockBot();
+        mockBot.health = 10;
+        mockBot.entity.velocity.y = 0;
+
+        const bot = new OctivBot({ username: 'TestBot-damage' }, {
+            createBotFn: () => mockBot,
+        });
+
+        await bot.start();
+        mockBot.emit('spawn');
+        await new Promise(r => setTimeout(r, 100));
+
+        const damageWarn = logWarnFn.mock.calls.find(c =>
+            c.arguments[1] && c.arguments[1].includes('Spawn damage'));
+        assert.ok(damageWarn, 'Should log spawn damage warning');
+        assert.ok(damageWarn.arguments[1].includes('10.0 HP lost'),
+            `Should show correct HP lost, got: ${damageWarn.arguments[1]}`);
+
+        await bot.shutdown();
+    });
+
+    it('_onSpawn no warning at full health', async () => {
+        const mockBot = createMockBot();
+        mockBot.health = 20;
+        mockBot.entity.velocity.y = 0;
+
+        const bot = new OctivBot({ username: 'TestBot-fullhp' }, {
+            createBotFn: () => mockBot,
+        });
+
+        await bot.start();
+        logWarnFn.mock.resetCalls();
+        mockBot.emit('spawn');
+        await new Promise(r => setTimeout(r, 100));
+
+        const damageWarn = logWarnFn.mock.calls.find(c =>
+            c.arguments[1] && c.arguments[1].includes('Spawn damage'));
+        assert.equal(damageWarn, undefined,
+            'Should not log spawn damage at full health');
+
+        await bot.shutdown();
+    });
+});
+
 // ── AC-5 Self-Improvement Tests ─────────────────────────────────────
 describe('BuilderAgent — Self-Improvement (AC-5)', () => {
     let BuilderAgent;

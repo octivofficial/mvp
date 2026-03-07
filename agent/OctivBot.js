@@ -79,13 +79,35 @@ class OctivBot {
             this.spawnTimeoutTimer = null;
         }
 
+        // Wait for bot to reach stable ground before proceeding
+        await this._waitForGround();
+
         const pos = this.bot.entity?.position;
+        const health = this.bot.health;
         log.info(this.config.username, 'Bot spawned successfully!', pos ? {
-            x: Math.floor(pos.x), y: Math.floor(pos.y), z: Math.floor(pos.z)
+            x: Math.floor(pos.x), y: Math.floor(pos.y), z: Math.floor(pos.z),
+            health,
         } : undefined);
+
+        // Detect spawn fall damage
+        if (health < 20) {
+            log.warn(this.config.username,
+                `Spawn damage: ${(20 - health).toFixed(1)} HP lost (health: ${health.toFixed(1)}/20)`);
+        }
 
         await this._publishStatus('spawned');
         this._startHeartbeat();
+    }
+
+    async _waitForGround() {
+        const maxWait = T.SPAWN_GROUND_WAIT_MS;
+        const start = Date.now();
+        while (Date.now() - start < maxWait) {
+            if (!this.bot?.entity) return;
+            if (this.bot.entity.velocity.y >= 0) return;
+            await this.bot.waitForTicks(1);
+        }
+        log.warn(this.config.username, `Ground wait timeout (${maxWait}ms)`);
     }
 
     _startHeartbeat() {
