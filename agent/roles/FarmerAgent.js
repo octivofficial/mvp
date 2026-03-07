@@ -5,6 +5,14 @@
  */
 const { BaseRole } = require('./BaseRole');
 const { AgentChat } = require('../agent-chat');
+const T = require('../../config/timeouts');
+
+// Lazy-loaded navigation to avoid loading mineflayer-pathfinder at require time
+let _nav = null;
+function getNav() {
+  if (!_nav) _nav = require('../builder-navigation');
+  return _nav;
+}
 
 // Crop definitions with harvest maturity (metadata value at full growth)
 const CROP_TYPES = [
@@ -21,6 +29,7 @@ class FarmerAgent extends BaseRole {
     this.harvested = {};     // { wheat: 5, carrots: 2, ... }
     this.totalHarvested = 0;
     this.chat = new AgentChat(this.board, this.id, 'farmer');
+    this._cachedMovements = null;
   }
 
   async execute(bot) {
@@ -33,7 +42,13 @@ class FarmerAgent extends BaseRole {
       return { success: false, reason: 'no_crops_found', harvested: 0 };
     }
 
-    // 2. Get block
+    // 2. Navigate to crop
+    const navResult = await this.navigateToFarm(bot, cropInfo.position);
+    if (!navResult.success) {
+      return { success: false, reason: navResult.reason, harvested: 0 };
+    }
+
+    // 3. Get block
     const block = bot.blockAt(cropInfo.position);
     if (!block) {
       return { success: false, reason: 'block_disappeared', harvested: 0 };
@@ -138,6 +153,104 @@ class FarmerAgent extends BaseRole {
   async _safeReport(status) {
     try { await this.reportStatus(status); } catch (_) { /* Redis down */ }
   }
+
+  // ── Navigation ──────────────────────────────────────────────────
+
+  async navigateToFarm(bot, cropPos) {
+    try {
+      this.chat.chat('navigating', {
+        type: 'crop', x: cropPos.x, y: cropPos.y, z: cropPos.z,
+      }).catch(() => {});
+
+      const nav = getNav();
+      this._cachedMovements = nav.setupPathfinder(bot, this._cachedMovements);
+      const goal = {
+        x: cropPos.x, y: cropPos.y, z: cropPos.z, rangeSq: 1,
+        isEnd: (node) => {
+          const dx = node.x - cropPos.x;
+          const dy = node.y - cropPos.y;
+          const dz = node.z - cropPos.z;
+          return dx * dx + dy * dy + dz * dz <= 4;
+        },
+        hasChanged: () => false,
+      };
+      await nav.goto(bot, goal, T.FARMING_NAV_TIMEOUT_MS);
+      return { success: true };
+    } catch (err) {
+      const reason = err.message.includes('timeout') ? 'nav_timeout' : 'nav_error';
+      return { success: false, reason };
+    }
+  }
+
+  // ── Session Loop ──────────────────────────────────────────────
+
+  async executeSession(bot) {
+    const startTime = Date.now();
+    let cropsHarvested = 0;
+
+    while (Date.now() - startTime < T.FARMING_SESSION_TIMEOUT_MS) {
+      const quota = await this.checkQuota();
+      if (!quota.hasQuota) break;
+
+      if (this.isInventoryFull(bot)) {
+        this.chat.chat('inventory_full', { total: this._countItems(bot) }).catch(() => {});
+        break;
+      }
+
+      const result = await this.execute(bot);
+      if (!result.success) break;
+      cropsHarvested++;
+    }
+
+    const summary = {
+      cropsHarvested,
+      inventory: this.getInventory(),
+      duration: Date.now() - startTime,
+    };
+    await this.reportFarmingComplete(summary);
+    return summary;
+  }
+
+  // ── Inventory Management ──────────────────────────────────────
+
+  isInventoryFull(bot) {
+    return this._countItems(bot) >= T.FARMING_INVENTORY_THRESHOLD;
+  }
+
+  getInventorySpace(bot) {
+    return T.FARMING_INVENTORY_THRESHOLD - this._countItems(bot);
+  }
+
+  _countItems(bot) {
+    return bot.inventory.items().reduce((sum, item) => sum + item.count, 0);
+  }
+
+  // ── Blackboard Coordination ───────────────────────────────────
+
+  async checkQuota() {
+    try {
+      const quota = await this.board.getConfig('farming:quota');
+      if (!quota) return { hasQuota: true };
+      return {
+        hasQuota: this.totalHarvested < (quota.target ?? Infinity),
+        target: quota.target,
+        progress: this.totalHarvested,
+      };
+    } catch (_) {
+      return { hasQuota: true };
+    }
+  }
+
+  async reportFarmingComplete(summary) {
+    try {
+      await this.board.publish(`agent:${this.id}:farming:complete`, {
+        author: this.id, ...summary, timestamp: Date.now(),
+      });
+    } catch (_) { /* Redis down */ }
+  }
 }
 
-module.exports = { FarmerAgent, CROP_TYPES };
+// Test helper: inject navigation module to avoid loading mineflayer-pathfinder
+function _setNav(navModule) { _nav = navModule; }
+
+module.exports = { FarmerAgent, CROP_TYPES, _setNav };

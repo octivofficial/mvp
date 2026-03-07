@@ -116,6 +116,17 @@ module.exports = {
   /** Inventory item count threshold to consider "full" */
   MINING_INVENTORY_THRESHOLD: parseInt(process.env.MINING_INVENTORY_THRESHOLD) || 32,
 
+  // -- Farming --
+
+  /** Farming session total timeout */
+  FARMING_SESSION_TIMEOUT_MS: parseInt(process.env.FARMING_SESSION_TIMEOUT_MS) || 120000,
+
+  /** Navigation to crop timeout */
+  FARMING_NAV_TIMEOUT_MS: parseInt(process.env.FARMING_NAV_TIMEOUT_MS) || 15000,
+
+  /** Inventory item count threshold to consider "full" */
+  FARMING_INVENTORY_THRESHOLD: parseInt(process.env.FARMING_INVENTORY_THRESHOLD) || 64,
+
   // -- Obsidian Bridge --
 
   /** Throttle window for per-agent vault file writes */

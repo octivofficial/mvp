@@ -6,9 +6,16 @@
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { FarmerAgent, CROP_TYPES } = require('../agent/roles/FarmerAgent');
+const { FarmerAgent, CROP_TYPES, _setNav } = require('../agent/roles/FarmerAgent');
 
 // ── Mock Helpers ────────────────────────────────────────────────────
+
+// Inject mock nav module before any tests run
+const mockNav = {
+  setupPathfinder: mock.fn((bot, cached) => cached || { movements: true }),
+  goto: mock.fn(async () => {}),
+};
+_setNav(mockNav);
 
 function createMockBoard() {
   return {
@@ -17,6 +24,7 @@ function createMockBoard() {
     publish: mock.fn(async () => {}),
     setHashField: mock.fn(async () => {}),
     deleteHashField: mock.fn(async () => {}),
+    getConfig: mock.fn(async () => null),
   };
 }
 
@@ -36,6 +44,10 @@ function createMockBot(overrides = {}) {
     activateBlock: mock.fn(async () => {}),
     inventory: {
       items: mock.fn(() => inventory),
+    },
+    pathfinder: {
+      setMovements: mock.fn(() => {}),
+      goto: mock.fn(async () => {}),
     },
     registry: {
       blocksByName: {
@@ -375,7 +387,7 @@ describe('FarmerAgent — Inventory', () => {
     let callCount = 0;
     const bot = createMockBot({
       findBlocks: [{ x: 105, y: 64, z: 100 }],
-      blockAt: (pos) => {
+      blockAt: (_pos) => {
         callCount++;
         // findMatureCrops calls blockAt, return a valid crop
         // execute() also calls blockAt for the same position — return null the second time
@@ -387,5 +399,320 @@ describe('FarmerAgent — Inventory', () => {
     const result = await agent.execute(bot);
     assert.equal(result.success, false);
     assert.equal(result.reason, 'block_disappeared');
+  });
+});
+
+// ── navigateToFarm() ────────────────────────────────────────────────
+
+describe('FarmerAgent — navigateToFarm()', () => {
+  it('should navigate to crop position successfully', async () => {
+    const { agent } = createAgent();
+    const bot = createMockBot();
+    mockNav.goto.mock.resetCalls();
+    mockNav.setupPathfinder.mock.resetCalls();
+
+    const result = await agent.navigateToFarm(bot, { x: 50, y: 64, z: 50 });
+    assert.equal(result.success, true);
+  });
+
+  it('should call setupPathfinder with cached movements', async () => {
+    const { agent } = createAgent();
+    const bot = createMockBot();
+    mockNav.setupPathfinder.mock.resetCalls();
+
+    await agent.navigateToFarm(bot, { x: 50, y: 64, z: 50 });
+    assert.ok(mockNav.setupPathfinder.mock.callCount() >= 1, 'should call setupPathfinder');
+  });
+
+  it('should return nav_timeout on timeout error', async () => {
+    const { agent } = createAgent();
+    const bot = createMockBot();
+    mockNav.goto.mock.mockImplementationOnce(async () => { throw new Error('timeout reached'); });
+
+    const result = await agent.navigateToFarm(bot, { x: 50, y: 64, z: 50 });
+    assert.equal(result.success, false);
+    assert.equal(result.reason, 'nav_timeout');
+  });
+
+  it('should return nav_error on non-timeout error', async () => {
+    const { agent } = createAgent();
+    const bot = createMockBot();
+    mockNav.goto.mock.mockImplementationOnce(async () => { throw new Error('path blocked'); });
+
+    const result = await agent.navigateToFarm(bot, { x: 50, y: 64, z: 50 });
+    assert.equal(result.success, false);
+    assert.equal(result.reason, 'nav_error');
+  });
+
+  it('should emit chat event when navigating', async () => {
+    const { agent } = createAgent();
+    const bot = createMockBot();
+
+    await agent.navigateToFarm(bot, { x: 50, y: 64, z: 50 });
+    assert.ok(agent.chat.chat.mock.callCount() >= 1, 'should chat about navigation');
+  });
+});
+
+// ── navigateToFarm goal functions ───────────────────────────────────
+
+describe('FarmerAgent — navigateToFarm goal functions', () => {
+  it('should consider isEnd true when within 2 blocks', async () => {
+    const { agent } = createAgent();
+    const bot = createMockBot();
+    let capturedGoal;
+    mockNav.goto.mock.mockImplementationOnce(async (b, goal) => { capturedGoal = goal; });
+
+    await agent.navigateToFarm(bot, { x: 50, y: 64, z: 50 });
+    assert.ok(capturedGoal, 'should capture goal');
+    // within 2 blocks: distance squared <= 4
+    assert.equal(capturedGoal.isEnd({ x: 51, y: 64, z: 50 }), true);
+  });
+
+  it('should consider isEnd false when far away', async () => {
+    const { agent } = createAgent();
+    const bot = createMockBot();
+    let capturedGoal;
+    mockNav.goto.mock.mockImplementationOnce(async (b, goal) => { capturedGoal = goal; });
+
+    await agent.navigateToFarm(bot, { x: 50, y: 64, z: 50 });
+    assert.ok(capturedGoal, 'should capture goal');
+    // far away: distance squared > 4
+    assert.equal(capturedGoal.isEnd({ x: 60, y: 64, z: 60 }), false);
+  });
+});
+
+// ── execute() with navigation ───────────────────────────────────────
+
+describe('FarmerAgent — execute() with navigation', () => {
+  it('should navigate before digging', async () => {
+    const { agent } = createAgent();
+    const callOrder = [];
+    mockNav.goto.mock.mockImplementationOnce(async () => { callOrder.push('nav'); });
+    const bot = createMockBot({
+      findBlocks: [{ x: 105, y: 64, z: 100 }],
+      blockAt: () => ({ name: 'wheat', position: { x: 105, y: 64, z: 100 }, metadata: 7 }),
+    });
+    bot.dig = mock.fn(async () => { callOrder.push('dig'); });
+
+    await agent.execute(bot);
+    assert.deepEqual(callOrder, ['nav', 'dig']);
+  });
+
+  it('should fail if navigation fails', async () => {
+    const { agent } = createAgent();
+    mockNav.goto.mock.mockImplementationOnce(async () => { throw new Error('no path'); });
+    const bot = createMockBot({
+      findBlocks: [{ x: 105, y: 64, z: 100 }],
+      blockAt: () => ({ name: 'wheat', position: { x: 105, y: 64, z: 100 }, metadata: 7 }),
+    });
+
+    const result = await agent.execute(bot);
+    assert.equal(result.success, false);
+    assert.equal(result.reason, 'nav_error');
+  });
+});
+
+// ── Inventory Management ────────────────────────────────────────────
+
+describe('FarmerAgent — Inventory Management', () => {
+  it('should report full when items >= threshold', () => {
+    const { agent } = createAgent();
+    const items = [{ name: 'wheat', count: 64 }];
+    const bot = createMockBot({ inventory: items });
+    assert.equal(agent.isInventoryFull(bot), true);
+  });
+
+  it('should report not full when items < threshold', () => {
+    const { agent } = createAgent();
+    const items = [{ name: 'wheat', count: 10 }];
+    const bot = createMockBot({ inventory: items });
+    assert.equal(agent.isInventoryFull(bot), false);
+  });
+
+  it('should report full when items exceed threshold', () => {
+    const { agent } = createAgent();
+    const items = [{ name: 'wheat', count: 100 }];
+    const bot = createMockBot({ inventory: items });
+    assert.equal(agent.isInventoryFull(bot), true);
+  });
+
+  it('should calculate remaining inventory space', () => {
+    const { agent } = createAgent();
+    const items = [{ name: 'wheat', count: 30 }];
+    const bot = createMockBot({ inventory: items });
+    assert.equal(agent.getInventorySpace(bot), 34); // 64 - 30
+  });
+
+  it('should count total items across all stacks', () => {
+    const { agent } = createAgent();
+    const items = [{ name: 'wheat', count: 20 }, { name: 'carrot', count: 15 }];
+    const bot = createMockBot({ inventory: items });
+    assert.equal(agent._countItems(bot), 35);
+  });
+
+  it('should count zero when inventory is empty', () => {
+    const { agent } = createAgent();
+    const bot = createMockBot({ inventory: [] });
+    assert.equal(agent._countItems(bot), 0);
+  });
+});
+
+// ── executeSession() ────────────────────────────────────────────────
+
+describe('FarmerAgent — executeSession()', () => {
+  it('should harvest multiple crops in a session', async () => {
+    const { agent } = createAgent();
+    let harvestCount = 0;
+    const bot = createMockBot({
+      findBlocks: [{ x: 105, y: 64, z: 100 }],
+      blockAt: () => {
+        harvestCount++;
+        if (harvestCount > 3) return null; // stop after 3 harvests
+        return { name: 'wheat', position: { x: 105, y: 64, z: 100 }, metadata: 7 };
+      },
+    });
+
+    const summary = await agent.executeSession(bot);
+    assert.ok(summary.cropsHarvested >= 1, 'should harvest at least one crop');
+    assert.ok(summary.duration >= 0, 'should track duration');
+  });
+
+  it('should stop when inventory is full', async () => {
+    const { agent } = createAgent();
+    const items = [{ name: 'wheat', count: 100 }]; // over threshold
+    const bot = createMockBot({
+      inventory: items,
+      findBlocks: [{ x: 105, y: 64, z: 100 }],
+      blockAt: () => ({ name: 'wheat', position: { x: 105, y: 64, z: 100 }, metadata: 7 }),
+    });
+
+    const summary = await agent.executeSession(bot);
+    assert.equal(summary.cropsHarvested, 0, 'should not harvest when full');
+  });
+
+  it('should stop when no crops found', async () => {
+    const { agent } = createAgent();
+    const bot = createMockBot({ findBlocks: [] });
+
+    const summary = await agent.executeSession(bot);
+    assert.equal(summary.cropsHarvested, 0);
+  });
+
+  it('should return summary with inventory and duration', async () => {
+    const { agent } = createAgent();
+    const bot = createMockBot({
+      findBlocks: [{ x: 105, y: 64, z: 100 }],
+      blockAt: () => ({ name: 'wheat', position: { x: 105, y: 64, z: 100 }, metadata: 7 }),
+    });
+    // Make execute fail after first to end session
+    let count = 0;
+    bot.blockAt = mock.fn((_pos) => {
+      count++;
+      if (count > 2) return null; // findMatureCrops + execute blockAt = 2 calls per cycle
+      return { name: 'wheat', position: { x: 105, y: 64, z: 100 }, metadata: 7 };
+    });
+
+    const summary = await agent.executeSession(bot);
+    assert.ok('inventory' in summary, 'should have inventory');
+    assert.ok('duration' in summary, 'should have duration');
+    assert.ok('cropsHarvested' in summary, 'should have cropsHarvested');
+  });
+
+  it('should call reportFarmingComplete after session', async () => {
+    const { agent, board } = createAgent();
+    const bot = createMockBot({ findBlocks: [] }); // immediate stop
+
+    await agent.executeSession(bot);
+    const completeCall = board.publish.mock.calls.find(
+      c => c.arguments[0] === 'agent:farmer-01:farming:complete'
+    );
+    assert.ok(completeCall, 'should publish farming complete event');
+  });
+});
+
+// ── Blackboard Coordination ────────────────────────────────────────
+
+describe('FarmerAgent — Blackboard Coordination', () => {
+  it('should return hasQuota=true when no quota set', async () => {
+    const { agent, board } = createAgent();
+    board.getConfig = mock.fn(async () => null);
+
+    const result = await agent.checkQuota();
+    assert.equal(result.hasQuota, true);
+  });
+
+  it('should return hasQuota=false when quota reached', async () => {
+    const { agent, board } = createAgent();
+    agent.totalHarvested = 50;
+    board.getConfig = mock.fn(async () => ({ target: 50 }));
+
+    const result = await agent.checkQuota();
+    assert.equal(result.hasQuota, false);
+  });
+
+  it('should return hasQuota=true when under quota', async () => {
+    const { agent, board } = createAgent();
+    agent.totalHarvested = 10;
+    board.getConfig = mock.fn(async () => ({ target: 50 }));
+
+    const result = await agent.checkQuota();
+    assert.equal(result.hasQuota, true);
+    assert.equal(result.target, 50);
+    assert.equal(result.progress, 10);
+  });
+
+  it('should default hasQuota=true on Redis failure', async () => {
+    const { agent, board } = createAgent();
+    board.getConfig = mock.fn(async () => { throw new Error('Redis down'); });
+
+    const result = await agent.checkQuota();
+    assert.equal(result.hasQuota, true);
+  });
+
+  it('should publish farming complete event', async () => {
+    const { agent, board } = createAgent();
+    const summary = { cropsHarvested: 5, inventory: { wheat: 5 }, duration: 10000 };
+
+    await agent.reportFarmingComplete(summary);
+    const call = board.publish.mock.calls.find(
+      c => c.arguments[0] === 'agent:farmer-01:farming:complete'
+    );
+    assert.ok(call, 'should publish to farming:complete channel');
+    assert.equal(call.arguments[1].author, 'farmer-01');
+    assert.equal(call.arguments[1].cropsHarvested, 5);
+  });
+
+  it('should handle Redis failure in reportFarmingComplete', async () => {
+    const { agent, board } = createAgent();
+    board.publish = mock.fn(async () => { throw new Error('Redis down'); });
+
+    await assert.doesNotReject(() =>
+      agent.reportFarmingComplete({ cropsHarvested: 5, inventory: {}, duration: 1000 })
+    );
+  });
+
+  it('should stop session when quota reached', async () => {
+    const { agent, board } = createAgent();
+    agent.totalHarvested = 50;
+    board.getConfig = mock.fn(async () => ({ target: 50 }));
+
+    const bot = createMockBot({
+      findBlocks: [{ x: 105, y: 64, z: 100 }],
+      blockAt: () => ({ name: 'wheat', position: { x: 105, y: 64, z: 100 }, metadata: 7 }),
+    });
+
+    const summary = await agent.executeSession(bot);
+    assert.equal(summary.cropsHarvested, 0, 'should not harvest when quota reached');
+  });
+
+  it('should include timestamp in farming complete event', async () => {
+    const { agent, board } = createAgent();
+    const summary = { cropsHarvested: 3, inventory: { wheat: 3 }, duration: 5000 };
+
+    await agent.reportFarmingComplete(summary);
+    const call = board.publish.mock.calls.find(
+      c => c.arguments[0] === 'agent:farmer-01:farming:complete'
+    );
+    assert.ok(call.arguments[1].timestamp, 'should have timestamp');
   });
 });
