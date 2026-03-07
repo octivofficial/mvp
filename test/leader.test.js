@@ -124,6 +124,39 @@ describe('LeaderAgent — distributeMission', () => {
   });
 });
 
+// ── distributeSpecialistMission ──────────────────────────────
+
+describe('LeaderAgent — distributeSpecialistMission', () => {
+  it('should assign mine action to miner agent', async () => {
+    const leader = createLeader();
+    const mission = await leader.distributeSpecialistMission('miner-01');
+    assert.equal(mission.action, 'mine');
+    assert.equal(mission.params.priority, 'iron');
+  });
+
+  it('should assign farm action to farmer agent', async () => {
+    const leader = createLeader();
+    const mission = await leader.distributeSpecialistMission('farmer-01');
+    assert.equal(mission.action, 'farm');
+  });
+
+  it('should assign idle to unknown role', async () => {
+    const leader = createLeader();
+    const mission = await leader.distributeSpecialistMission('scout-01');
+    assert.equal(mission.action, 'idle');
+  });
+
+  it('should publish mission to correct channel', async () => {
+    const leader = createLeader();
+    await leader.distributeSpecialistMission('miner-01');
+
+    const call = leader.board.publish.mock.calls[0];
+    assert.equal(call.arguments[0], 'command:miner-01:mission');
+    assert.equal(call.arguments[1].author, 'leader');
+    assert.equal(call.arguments[1].action, 'mine');
+  });
+});
+
 // ── decideMode ───────────────────────────────────────────────
 
 describe('LeaderAgent — decideMode', () => {

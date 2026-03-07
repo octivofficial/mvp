@@ -10,9 +10,10 @@ const T = require('../config/timeouts');
 const log = getLogger();
 
 class LeaderAgent {
-  constructor(teamSize = 3) {
+  constructor(teamSize = 3, specialists = []) {
     this.id = 'leader';
     this.teamSize = teamSize;
+    this.specialists = specialists; // ['miner-01', 'farmer-01']
     this.board = new Blackboard();
     this.votes = [];
     this.mode = 'training'; // training | creative
@@ -54,12 +55,35 @@ class LeaderAgent {
     return mission;
   }
 
+  // Distribute role-specific missions to specialist agents (miner, farmer)
+  async distributeSpecialistMission(agentId) {
+    const role = agentId.replace(/-\d+$/, ''); // 'miner-01' → 'miner'
+    let mission;
+    switch (role) {
+      case 'miner':
+        mission = { ac: 0, action: 'mine', params: { priority: 'iron' } };
+        break;
+      case 'farmer':
+        mission = { ac: 0, action: 'farm', params: {} };
+        break;
+      default:
+        mission = { ac: 0, action: 'idle', params: {} };
+    }
+
+    await this.board.publish(`command:${agentId}:mission`, { author: 'leader', ...mission });
+    log.info(this.id, `specialist mission: ${agentId} → ${mission.action}`);
+    return mission;
+  }
+
   // 3.1: Periodic mission distribution loop
   _startMissionLoop() {
     this._missionTimer = setInterval(async () => {
       try {
         for (let i = 1; i <= this.teamSize; i++) {
           await this.distributeMission(`builder-0${i}`);
+        }
+        for (const specialistId of this.specialists) {
+          await this.distributeSpecialistMission(specialistId);
         }
         await this.decideMode('builder-01');
       } catch (err) {

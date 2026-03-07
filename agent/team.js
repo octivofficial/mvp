@@ -349,8 +349,8 @@ async function main() {
     mission: 'first-day-survival v1.3.1',
   });
 
-  // 1. Start Leader (with learning pipeline)
-  const leader = new LeaderAgent(TEAM_SIZE);
+  // 1. Start Leader (with learning pipeline + specialist roster)
+  const leader = new LeaderAgent(TEAM_SIZE, ['miner-01', 'farmer-01']);
   leader.setLogger(logger);
   leader.setSkillPipeline(pipeline); // accepts null
   await leader.init();
