@@ -6,7 +6,8 @@
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { FarmerAgent, CROP_TYPES, _setNav } = require('../agent/roles/FarmerAgent');
+const { FarmerAgent, CROP_TYPES } = require('../agent/roles/FarmerAgent');
+const { _setNav } = require('../agent/roles/BaseRole');
 
 // ── Mock Helpers ────────────────────────────────────────────────────
 

@@ -7,13 +7,6 @@ const { BaseRole } = require('./BaseRole');
 const { AgentChat } = require('../agent-chat');
 const T = require('../../config/timeouts');
 
-// Lazy-loaded navigation to avoid loading mineflayer-pathfinder at require time
-let _nav = null;
-function getNav() {
-  if (!_nav) _nav = require('../builder-navigation');
-  return _nav;
-}
-
 // Priority order: rarest first (attempt high-value before common)
 const ORE_PRIORITY = ['diamond', 'gold', 'lapis', 'redstone', 'copper', 'iron', 'coal'];
 
@@ -29,13 +22,21 @@ const SMELT_RECIPES = {
 
 class MinerAgent extends BaseRole {
   constructor(config = {}) {
-    super({ ...config, role: 'miner' });
+    super({
+      ...config, role: 'miner',
+      inventoryThreshold: T.MINING_INVENTORY_THRESHOLD,
+      quotaKey: 'mining:quota',
+      activityName: 'mining',
+      sessionTimeoutMs: T.MINING_SESSION_TIMEOUT_MS,
+      navTimeoutMs: T.MINING_NAV_TIMEOUT_MS,
+    });
     this.searchRadius = config.searchRadius || 64;
     this.mined = {};       // { coal: 3, iron: 1, ... }
-    this.totalMined = 0;
     this.chat = new AgentChat(this.board, this.id, 'miner');
-    this._cachedMovements = null;
   }
+
+  get totalMined() { return this.totalCount; }
+  set totalMined(v) { this.totalCount = v; }
 
   async execute(bot) {
     await this._safeReport('mining');
@@ -115,11 +116,6 @@ class MinerAgent extends BaseRole {
     };
   }
 
-  // Status reporting resilient to Redis failures
-  async _safeReport(status) {
-    try { await this.reportStatus(status); } catch (_) { /* Redis down */ }
-  }
-
   /**
    * Search for the highest-priority ore within search radius.
    * Tries each ore type in priority order (diamond first, coal last).
@@ -172,80 +168,20 @@ class MinerAgent extends BaseRole {
 
   // ── Navigation ──────────────────────────────────────────────────
 
-  /**
-   * Navigate to an ore position using pathfinder.
-   * @returns {{ success: boolean, reason?: string }}
-   */
   async navigateToOre(bot, orePos) {
-    try {
-      this.chat.chat('navigating', {
-        type: this._classifyOre(bot.blockAt(orePos)?.name || 'ore'),
-        x: orePos.x, y: orePos.y, z: orePos.z,
-      }).catch(() => {});
-
-      const nav = getNav();
-      this._cachedMovements = nav.setupPathfinder(bot, this._cachedMovements);
-      const goal = { x: orePos.x, y: orePos.y, z: orePos.z, rangeSq: 1, isEnd: (node) => {
-        const dx = node.x - orePos.x;
-        const dy = node.y - orePos.y;
-        const dz = node.z - orePos.z;
-        return dx * dx + dy * dy + dz * dz <= 4; // within ~2 blocks
-      }, hasChanged: () => false };
-      await nav.goto(bot, goal, T.MINING_NAV_TIMEOUT_MS);
-      return { success: true };
-    } catch (err) {
-      const reason = err.message.includes('timeout') ? 'nav_timeout' : 'nav_error';
-      return { success: false, reason };
-    }
+    const type = this._classifyOre(bot.blockAt(orePos)?.name || 'ore');
+    return this.navigateTo(bot, orePos, type, this.navTimeoutMs);
   }
 
-  // ── Session Loop ──────────────────────────────────────────────
+  // ── Session Loop (inherited from BaseRole.executeSession) ──────
 
-  /**
-   * Run a continuous mining session until timeout, inventory full, no ore, or quota reached.
-   * @returns {{ oresMined: number, inventory: object, duration: number }}
-   */
-  async executeSession(bot) {
-    const startTime = Date.now();
-    let oresMined = 0;
-
-    while (Date.now() - startTime < T.MINING_SESSION_TIMEOUT_MS) {
-      // Check quota
-      const quota = await this.checkQuota();
-      if (!quota.hasQuota) break;
-
-      // Check inventory
-      if (this.isInventoryFull(bot)) {
-        this.chat.chat('inventory_full', { total: this._countItems(bot) }).catch(() => {});
-        break;
-      }
-
-      const result = await this.execute(bot);
-      if (!result.success) break;
-      oresMined++;
-    }
-
-    const summary = {
-      oresMined,
-      inventory: this.getInventory(),
-      duration: Date.now() - startTime,
-    };
-    await this.reportMiningComplete(summary);
-    return summary;
+  _buildSessionSummary(count) {
+    return { oresMined: count, inventory: this.getInventory() };
   }
 
-  // ── Inventory Management ──────────────────────────────────────
-
-  isInventoryFull(bot) {
-    return this._countItems(bot) >= T.MINING_INVENTORY_THRESHOLD;
-  }
-
-  getInventorySpace(bot) {
-    return T.MINING_INVENTORY_THRESHOLD - this._countItems(bot);
-  }
-
-  _countItems(bot) {
-    return bot.inventory.items().reduce((sum, item) => sum + item.count, 0);
+  // Alias: reportMiningComplete → reportActivityComplete
+  async reportMiningComplete(summary) {
+    return this.reportActivityComplete(summary);
   }
 
   // ── Smelting ──────────────────────────────────────────────────
@@ -262,15 +198,7 @@ class MinerAgent extends BaseRole {
   }
 
   async smelt(bot, furnacePos) {
-    const nav = getNav();
-    this._cachedMovements = nav.setupPathfinder(bot, this._cachedMovements);
-    const goal = { x: furnacePos.x, y: furnacePos.y, z: furnacePos.z, rangeSq: 1, isEnd: (node) => {
-      const dx = node.x - furnacePos.x;
-      const dy = node.y - furnacePos.y;
-      const dz = node.z - furnacePos.z;
-      return dx * dx + dy * dy + dz * dz <= 4;
-    }, hasChanged: () => false };
-    await nav.goto(bot, goal, T.MINING_NAV_TIMEOUT_MS);
+    await this.navigateTo(bot, furnacePos, 'furnace', T.MINING_NAV_TIMEOUT_MS);
 
     const block = bot.blockAt(furnacePos);
     const furnace = await bot.openFurnace(block);
@@ -280,30 +208,6 @@ class MinerAgent extends BaseRole {
     }
     await furnace.close();
     this.chat.chat('smelting', { count: items.length, type: 'ores' }).catch(() => {});
-  }
-
-  // ── Blackboard Coordination ───────────────────────────────────
-
-  async checkQuota() {
-    try {
-      const quota = await this.board.getConfig('mining:quota');
-      if (!quota) return { hasQuota: true };
-      return {
-        hasQuota: this.totalMined < (quota.target ?? Infinity),
-        target: quota.target,
-        progress: this.totalMined,
-      };
-    } catch (_) {
-      return { hasQuota: true };
-    }
-  }
-
-  async reportMiningComplete(summary) {
-    try {
-      await this.board.publish(`agent:${this.id}:mining:complete`, {
-        author: this.id, ...summary, timestamp: Date.now(),
-      });
-    } catch (_) { /* Redis down */ }
   }
 
   // ── Internal Helpers ──────────────────────────────────────────
@@ -323,7 +227,4 @@ class MinerAgent extends BaseRole {
   }
 }
 
-// Test helper: inject navigation module to avoid loading mineflayer-pathfinder
-function _setNav(navModule) { _nav = navModule; }
-
-module.exports = { MinerAgent, ORE_PRIORITY, PICKAXE_TIER, SMELT_RECIPES, _setNav };
+module.exports = { MinerAgent, ORE_PRIORITY, PICKAXE_TIER, SMELT_RECIPES };

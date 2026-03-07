@@ -6,7 +6,8 @@
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { MinerAgent, ORE_PRIORITY, SMELT_RECIPES, _setNav } = require('../agent/roles/MinerAgent');
+const { MinerAgent, ORE_PRIORITY, SMELT_RECIPES } = require('../agent/roles/MinerAgent');
+const { _setNav } = require('../agent/roles/BaseRole');
 const T = require('../config/timeouts');
 
 // Inject mock navigation module to avoid loading heavy mineflayer-pathfinder
