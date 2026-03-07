@@ -20,6 +20,7 @@ Session shutdown sequence (replaces manual /save-memory):
 3. `git add` changed files + `git commit` with auto-generated message
 4. Save MEMORY.md + session-log with "Changes That Need Verification"
 5. Report: "Memory saved. Next session picks up from [X]"
+6. If phase milestone completed → suggest `/cascade sync` for knowledge refinement
 
 ### `/simplify fix <file>`
 Quick fix workflow:

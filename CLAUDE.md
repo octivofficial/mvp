@@ -35,6 +35,7 @@
 3. Save MEMORY.md + session-log
 4. **NotebookLM sync**: Generate status report → `add_source.py --all` (1기+2기 parallel)
 5. Report: "Memory saved. Next session picks up from [X]"
+6. If phase milestone → suggest `/cascade sync` (2-layer knowledge refinement)
 
 ### Auto-Memory & Hooks (runs without manual intervention)
 - **UserPromptSubmit**: Shows git/redis/docker/memory status on every prompt
@@ -103,6 +104,9 @@ Choose the right pattern for the task at hand:
 | `/loop refactor <file>` | Iterative improvement with verify |
 | `/loop deploy` | Build → test → deploy cycle |
 | `/rc` | Remote control status / Discord bridge |
+| `/cascade query <q>` | 2-layer NotebookLM cascade (1기→2기 with context injection) |
+| `/cascade sync` | Phase completion: source sync + cascade analysis → vault |
+| `/cascade status` | Show recent cascade results |
 | `/auto-memory status` | Show all memory layer stats |
 | `/eval <target>` | Feature completeness evaluation (pass@1 metrics) |
 | `/learn [topic]` | Extract patterns from session → instincts |
@@ -386,6 +390,7 @@ See `~/.claude/skills/{skill-name}/SKILL.md` for details.
 ### NotebookLM Workflow
 - **Source update** (session end / major milestone): `add_source.py --all --source-file report.txt`
 - **Query** (get Gemini analysis): `ask_question.py --notebook-id ID --question "..."`
+- **Cascade** (2-layer refinement): `/cascade query "question"` — 1기→2기 with context injection, Zettelkasten vault output
 - **Sources = knowledge base** (persistent), **Chat = query interface** (ephemeral)
 - **Always parallel**: 1기+2기 source updates run concurrently
 - **Patchright auth**: `~/.claude/skills/notebooklm/.venv/bin/python` (Google login persisted)
