@@ -2,7 +2,7 @@
  * LMStudioClient Tests — cached health, multi-URL failover, <think> stripping, retry
  * Usage: node --test --test-force-exit test/lm-studio-client.test.js
  */
-const { describe, it, before, after, beforeEach, afterEach, mock } = require('node:test');
+const { describe, it, before, after, afterEach, mock } = require('node:test');
 const assert = require('node:assert/strict');
 
 const LM_CLIENT_PATH = require.resolve('../agent/lm-studio-client');
@@ -165,9 +165,7 @@ describe('LMStudioClient — checkHealth', () => {
   });
 
   it('should try URLs in order and pick first healthy', async () => {
-    let callIdx = 0;
     globalThis.fetch = mock.fn(async (url) => {
-      callIdx++;
       if (url.includes('//a:')) throw new Error('down');
       return { ok: true, json: async () => ({ data: [{ id: 'm' }] }) };
     });

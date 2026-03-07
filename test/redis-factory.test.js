@@ -3,11 +3,9 @@
  * Pure unit tests — no live Redis needed. All redis calls are mocked.
  * Usage: node --test --test-force-exit test/redis-factory.test.js
  */
-const { describe, it, before, afterEach, mock } = require("node:test");
+const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 
-// Save original env
-const originalEnv = { ...process.env };
 
 function cleanEnv() {
   delete process.env.REDIS_CLUSTER_NODES;
@@ -70,7 +68,6 @@ describe("redis-factory — fullJitterStrategy", () => {
 
     // Must re-require to pick up new env (timeouts is cached, so we test the factory directly)
     // The factory reads T at require time, so we verify the constants are configurable
-    const T = require("../config/timeouts");
     // Env override won't affect already-cached module. Test the constants directly.
     assert.equal(
       parseInt(process.env.REDIS_RECONNECT_BASE_MS),

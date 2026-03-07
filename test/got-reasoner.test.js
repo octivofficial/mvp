@@ -303,9 +303,6 @@ describe('GoTReasoner — _generateMermaidGraph empty', () => {
     got.vaultDir = tmpDir;
     got.board = createMockBoard();
 
-    // Track whether writeFile is called for Skill-Graph.md
-    let graphWritten = false;
-    const origWriteFile = fsp.writeFile.bind(fsp);
     // Patch fsp on the module level is complex — instead verify via side-effect:
     // _generateMermaidGraph returns undefined early when nodes.length === 0
     const result = await got._generateMermaidGraph();
@@ -331,7 +328,7 @@ describe('GoTReasoner — fullReasoningCycle', () => {
     got.board = createMockBoard();
 
     let published = false;
-    got.board.publish = async (channel, payload) => {
+    got.board.publish = async (channel, _payload) => {
       if (channel === 'got:reasoning-complete') published = true;
     };
 

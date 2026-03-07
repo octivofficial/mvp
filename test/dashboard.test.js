@@ -490,11 +490,10 @@ describe('DashboardServer — _broadcast and _sendJSON', () => {
     it('_handleAPISkillDetail should return 400 for path traversal', async () => {
         const dash = new DashboardServerLocal(0);
         let statusCode = 0;
-        let body = '';
         const mockReq = { url: '/api/skills/../../etc/passwd' };
         const mockRes = {
             writeHead: (code) => { statusCode = code; },
-            end: (data) => { body = data; },
+            end: () => {},
         };
         await dash._handleAPISkillDetail(mockReq, mockRes);
         assert.equal(statusCode, 400);

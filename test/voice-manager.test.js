@@ -428,7 +428,7 @@ describe('VoiceManager — player event handlers', () => {
   });
 
   it('join returns null when joinVoiceChannel throws', () => {
-    const { deps, ...rest } = mockDeps({
+    const { deps } = mockDeps({
       joinVoiceChannel: () => { throw new Error('voice module missing'); },
     });
     const client = { guilds: { cache: { get: () => ({ voiceAdapterCreator: 'x' }) } } };

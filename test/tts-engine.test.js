@@ -6,7 +6,6 @@ const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { Readable } = require('stream');
 
-const os = require('os');
 const { synthesize, voiceForRole, VOICES, DEFAULT_VOICE, _setTtsFactory } = require('../agent/tts-engine');
 const T = require('../config/timeouts');
 
@@ -169,7 +168,7 @@ describe('TTS Engine — synthesize() real Edge TTS path', () => {
 
   it('should return a stream with alternate voice when factory returns a stream', async () => {
     const { Readable } = require('stream');
-    _setTtsFactory(async (text, voice) => {
+    _setTtsFactory(async (text, _voice) => {
       return new Readable({ read() { this.push(Buffer.from(text)); this.push(null); } });
     });
     const stream = await synthesize('alternate voice test', 'en-US-GuyNeural');
@@ -225,7 +224,6 @@ describe('TTS Engine — synthesize() catch block (lines 97-100)', () => {
 // then consume the stream to trigger the 'close' event.
 describe('TTS Engine — synthesize() stream close cleanup (line 94)', () => {
   const { writeFileSync } = require('fs');
-  const path = require('path');
   let originalModule;
   const edgeTtsPath = require.resolve('node-edge-tts');
 

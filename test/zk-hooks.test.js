@@ -179,7 +179,7 @@ describe('ZettelkastenHooks — wireToLeader', () => {
     const logger = {
       logEvent: mock.fn(async (type, data) => { logs.push(data); }),
     };
-    const { hooks, got } = createHooks({ logger });
+    const { hooks } = createHooks({ logger });
     const leader = {
       triggerGroupReflexion: mock.fn(async () => ({ recommendation: 'ok' })),
       processGoTFeedback: mock.fn(async () => {}),

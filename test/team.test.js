@@ -774,10 +774,7 @@ describe("team — gracefulShutdown", () => {
   });
 
   it("should clear explorer interval", async () => {
-    let intervalCleared = false;
-    const interval = setInterval(() => {
-      intervalCleared = false;
-    }, 99999);
+    const interval = setInterval(() => {}, 99999);
 
     const agents = {
       leader: createMockAgent(),
