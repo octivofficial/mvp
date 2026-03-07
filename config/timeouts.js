@@ -124,7 +124,7 @@ module.exports = {
   /** Navigation to crop timeout */
   FARMING_NAV_TIMEOUT_MS: parseInt(process.env.FARMING_NAV_TIMEOUT_MS) || 15000,
 
-  /** Inventory item count threshold to consider "full" */
+  /** Inventory threshold for farming (higher than mining: crops are bulk items) */
   FARMING_INVENTORY_THRESHOLD: parseInt(process.env.FARMING_INVENTORY_THRESHOLD) || 64,
 
   // -- Obsidian Bridge --

@@ -192,8 +192,9 @@ class FarmerAgent extends BaseRole {
       const quota = await this.checkQuota();
       if (!quota.hasQuota) break;
 
-      if (this.isInventoryFull(bot)) {
-        this.chat.chat('inventory_full', { total: this._countItems(bot) }).catch(() => {});
+      const itemCount = this._countItems(bot);
+      if (itemCount >= T.FARMING_INVENTORY_THRESHOLD) {
+        this.chat.chat('inventory_full', { total: itemCount }).catch(() => {});
         break;
       }
 
