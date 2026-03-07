@@ -1328,6 +1328,16 @@ describe('OctivDiscordBot — stop() leaves voice', () => {
 
     await assert.doesNotReject(() => bot.stop());
   });
+
+  it('shutdown() is an alias for stop()', async () => {
+    const bot = new OctivDiscordBot({ token: 'fake', config: {} });
+    bot.voice = null;
+    bot.subscriber = null;
+    bot.board = null;
+    bot.client = { destroy: () => {} };
+    assert.equal(typeof bot.shutdown, 'function');
+    await assert.doesNotReject(() => bot.shutdown());
+  });
 });
 
 describe('OctivDiscordBot — forum tag cache', () => {

@@ -127,6 +127,8 @@ class OctivDiscordBot {
     log.info('discord', 'disconnected');
   }
 
+  async shutdown() { return this.stop(); }
+
   // --- Reconnection ---
 
   async _reconnect() {

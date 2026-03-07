@@ -91,10 +91,11 @@ class ReflexionEngine {
       log.warn('reflexion', `primary (${model}) failed`, { error: primaryErr.message });
     }
 
-    // Fallback to Groq
+    // Fallback to local/Groq
     try {
       const result = await this._callModel(this.config.fallbackModel, prompt);
       this._trackUsage(this.config.fallbackModel);
+      log.info('reflexion', `fallback (${this.config.fallbackModel}) succeeded`);
       return result;
     } catch (fallbackErr) {
       log.error('reflexion', 'fallback failed', { error: fallbackErr.message });
