@@ -84,6 +84,43 @@ function createExplorerLoop(board, explorer, intervalMs = T.EXPLORER_LOOP_INTERV
 }
 
 /**
+ * Create role execution loop — piggyback on builder-01's position via Blackboard.
+ * Generic loop for Miner, Farmer, and other BaseRole-based agents.
+ * @param {object} board - Blackboard instance
+ * @param {object} agent - BaseRole instance (MinerAgent, FarmerAgent)
+ * @param {number} intervalMs - poll interval
+ * @returns {NodeJS.Timeout} interval ID for cleanup
+ */
+function createRoleLoop(board, agent, intervalMs) {
+  let executing = false;
+  return setInterval(async () => {
+    if (executing) return;
+    executing = true;
+    try {
+      const status = await board.get('agent:builder-01:status');
+      if (status?.position) {
+        const mockBot = {
+          entity: { position: status.position },
+          blockAt: () => null,
+          findBlock: () => null,
+          findBlocks: () => [],
+          inventory: { items: () => [] },
+          equip: async () => {},
+          dig: async () => {},
+          placeBlock: async () => {},
+          pathfinder: { setMovements: () => {}, goto: async () => {}, stop: () => {} },
+        };
+        await agent.execute(mockBot);
+      }
+    } catch (err) {
+      log.error(agent.id, 'loop error', { error: err.message });
+    } finally {
+      executing = false;
+    }
+  }, intervalMs);
+}
+
+/**
  * Graceful shutdown — stop all agents and resources.
  * Extracted from main() for testability.
  * @param {object} agents - { leader, safety, explorer, miner, farmer, builders }
@@ -93,6 +130,8 @@ async function gracefulShutdown(agents, resources) {
   log.info('team', 'Team shutting down...');
 
   clearInterval(resources.explorerInterval);
+  clearInterval(resources.minerInterval);
+  clearInterval(resources.farmerInterval);
   resources.logger.logEvent('team', { type: 'shutdown' }).catch(e => log.error('team', 'log persist error', { error: e.message }));
 
   // Parallel agent shutdown — independent agents don't need serial ordering
@@ -358,8 +397,11 @@ async function main() {
   await farmer.init();
   log.info('team', 'Farmer-01 started');
 
-  // Explorer execution loop — piggyback on builder-01's position via Blackboard
+  // Execution loops — piggyback on builder-01's position via Blackboard
   const explorerInterval = createExplorerLoop(board, explorer);
+  const minerInterval = createRoleLoop(board, miner, T.MINER_LOOP_INTERVAL_MS);
+  const farmerInterval = createRoleLoop(board, farmer, T.FARMER_LOOP_INTERVAL_MS);
+  log.info('team', 'Role loops started (explorer, miner, farmer)');
 
   // Subscribe to skills:emergency — handle safety alerts and skill pipeline events
   const emergencySubscriber = await board.createSubscriber();
@@ -396,7 +438,7 @@ async function main() {
 
     await gracefulShutdown(
       { leader, safety, explorer, miner, farmer, builders },
-      { explorerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger, apiClients },
+      { explorerInterval, minerInterval, farmerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger, apiClients },
     );
 
     clearTimeout(forceExit);
@@ -421,5 +463,5 @@ if (require.main === module) {
 
 module.exports = {
   monitorGathering, main, shouldProcessEmergency, setupRemoteControl,
-  handleEmergencyEvent, createExplorerLoop, gracefulShutdown,
+  handleEmergencyEvent, createExplorerLoop, createRoleLoop, gracefulShutdown,
 };

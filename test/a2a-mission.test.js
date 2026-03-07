@@ -5,7 +5,7 @@
  *
  * Usage: node --test --test-force-exit test/a2a-mission.test.js
  */
-const { describe, it, before, after, beforeEach, mock } = require('node:test');
+const { describe, it, mock } = require('node:test');
 const assert = require('node:assert/strict');
 const EventEmitter = require('node:events');
 const { Vec3 } = require('vec3');
@@ -29,8 +29,7 @@ function createMockBlackboard() {
         disconnect: mock.fn(async () => {}),
         _handlers: {},
       };
-      // Store handler for testing — simulates Redis pub/sub
-      const origSubscribe = sub.subscribe;
+      // Override subscribe to capture handlers for testing
       sub.subscribe = mock.fn(async (channel, handler) => {
         sub._handlers[channel] = handler;
       });

@@ -11,6 +11,7 @@ const {
   setupRemoteControl,
   handleEmergencyEvent,
   createExplorerLoop,
+  createRoleLoop,
   gracefulShutdown,
 } = require("../agent/team");
 
@@ -555,6 +556,135 @@ describe("team — createExplorerLoop", () => {
   });
 });
 
+// ── createRoleLoop ──────────────────────────────────────────
+
+describe("team — createRoleLoop", () => {
+  const intervals = [];
+  after(() => {
+    for (const id of intervals) clearInterval(id);
+  });
+
+  it("should return interval ID", () => {
+    const board = { get: mock.fn(async () => null) };
+    const agent = { id: "miner-01", execute: mock.fn(async () => {}) };
+    const id = createRoleLoop(board, agent, 50000);
+    assert.ok(id);
+    clearInterval(id);
+  });
+
+  it("should call agent.execute when position available", async () => {
+    const board = {
+      get: mock.fn(async () => ({
+        position: { x: 10, y: 64, z: 20 },
+      })),
+    };
+    const agent = { id: "miner-01", execute: mock.fn(async () => {}) };
+
+    await new Promise((resolve) => {
+      const id = createRoleLoop(board, agent, 20);
+      intervals.push(id);
+      setTimeout(() => {
+        clearInterval(id);
+        assert.ok(agent.execute.mock.callCount() >= 1);
+        resolve();
+      }, 100);
+    });
+  });
+
+  it("should pass mockBot with required methods to agent.execute", async () => {
+    let capturedBot = null;
+    const board = {
+      get: mock.fn(async () => ({
+        position: { x: 5, y: 60, z: 15 },
+      })),
+    };
+    const agent = {
+      id: "farmer-01",
+      execute: mock.fn(async (bot) => {
+        capturedBot = bot;
+      }),
+    };
+
+    await new Promise((resolve) => {
+      const id = createRoleLoop(board, agent, 20);
+      intervals.push(id);
+      setTimeout(() => {
+        clearInterval(id);
+        assert.ok(capturedBot, "bot should be passed");
+        assert.ok(capturedBot.entity.position, "should have position");
+        assert.equal(typeof capturedBot.findBlock, "function");
+        assert.equal(typeof capturedBot.findBlocks, "function");
+        assert.equal(typeof capturedBot.dig, "function");
+        assert.equal(typeof capturedBot.equip, "function");
+        resolve();
+      }, 100);
+    });
+  });
+
+  it("should skip when no position in status", async () => {
+    const board = { get: mock.fn(async () => ({ status: "idle" })) };
+    const agent = { id: "miner-01", execute: mock.fn(async () => {}) };
+
+    await new Promise((resolve) => {
+      const id = createRoleLoop(board, agent, 20);
+      intervals.push(id);
+      setTimeout(() => {
+        clearInterval(id);
+        assert.equal(agent.execute.mock.callCount(), 0);
+        resolve();
+      }, 100);
+    });
+  });
+
+  it("should handle errors gracefully", async () => {
+    const board = {
+      get: mock.fn(async () => {
+        throw new Error("Redis timeout");
+      }),
+    };
+    const agent = { id: "farmer-01", execute: mock.fn(async () => {}) };
+
+    await new Promise((resolve) => {
+      const id = createRoleLoop(board, agent, 20);
+      intervals.push(id);
+      setTimeout(() => {
+        clearInterval(id);
+        assert.ok(board.get.mock.callCount() >= 1);
+        resolve();
+      }, 100);
+    });
+  });
+
+  it("should prevent concurrent execution", async () => {
+    let concurrentCalls = 0;
+    let maxConcurrent = 0;
+    const board = {
+      get: mock.fn(async () => ({
+        position: { x: 0, y: 64, z: 0 },
+      })),
+    };
+    const agent = {
+      id: "miner-01",
+      execute: mock.fn(async () => {
+        concurrentCalls++;
+        maxConcurrent = Math.max(maxConcurrent, concurrentCalls);
+        await new Promise((r) => setTimeout(r, 50));
+        concurrentCalls--;
+      }),
+    };
+
+    await new Promise((resolve) => {
+      const id = createRoleLoop(board, agent, 10);
+      intervals.push(id);
+      setTimeout(() => {
+        clearInterval(id);
+        assert.equal(maxConcurrent, 1, "should never exceed 1 concurrent call");
+        resolve();
+      }, 200);
+    });
+  });
+});
+
 // ── gracefulShutdown ──────────────────────────────────────────
 
 describe("team — gracefulShutdown", () => {
@@ -573,6 +703,8 @@ describe("team — gracefulShutdown", () => {
     };
     const resources = {
       explorerInterval: setInterval(() => {}, 99999),
+      minerInterval: setInterval(() => {}, 99999),
+      farmerInterval: setInterval(() => {}, 99999),
       emergencySubscriber: {
         unsubscribe: mock.fn(async () => {}),
         disconnect: mock.fn(async () => {}),
@@ -618,6 +750,8 @@ describe("team — gracefulShutdown", () => {
     };
     const resources = {
       explorerInterval: setInterval(() => {}, 99999),
+      minerInterval: setInterval(() => {}, 99999),
+      farmerInterval: setInterval(() => {}, 99999),
       emergencySubscriber: {
         unsubscribe: mock.fn(async () => {}),
         disconnect: mock.fn(async () => {}),
@@ -685,6 +819,8 @@ describe("team — gracefulShutdown", () => {
     };
     const resources = {
       explorerInterval: setInterval(() => {}, 99999),
+      minerInterval: setInterval(() => {}, 99999),
+      farmerInterval: setInterval(() => {}, 99999),
       emergencySubscriber: {
         unsubscribe: mock.fn(async () => {
           throw new Error("unsubscribe fail");
@@ -720,6 +856,8 @@ describe("team — gracefulShutdown", () => {
     };
     const resources = {
       explorerInterval: setInterval(() => {}, 99999),
+      minerInterval: setInterval(() => {}, 99999),
+      farmerInterval: setInterval(() => {}, 99999),
       emergencySubscriber: {
         unsubscribe: mock.fn(async () => {}),
         disconnect: mock.fn(async () => {}),
@@ -753,6 +891,8 @@ describe("team — gracefulShutdown", () => {
     const apiClients = { shutdown: mock.fn(() => {}) };
     const resources = {
       explorerInterval: setInterval(() => {}, 99999),
+      minerInterval: setInterval(() => {}, 99999),
+      farmerInterval: setInterval(() => {}, 99999),
       emergencySubscriber: {
         unsubscribe: mock.fn(async () => {}),
         disconnect: mock.fn(async () => {}),
@@ -783,6 +923,8 @@ describe("team — gracefulShutdown", () => {
     };
     const resources = {
       explorerInterval: setInterval(() => {}, 99999),
+      minerInterval: setInterval(() => {}, 99999),
+      farmerInterval: setInterval(() => {}, 99999),
       emergencySubscriber: {
         unsubscribe: mock.fn(async () => {}),
         disconnect: mock.fn(async () => {}),

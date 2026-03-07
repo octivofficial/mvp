@@ -37,6 +37,12 @@ module.exports = {
   /** Explorer execution loop interval */
   EXPLORER_LOOP_INTERVAL_MS: 15000,
 
+  /** Miner execution loop interval (ore search cycle) */
+  MINER_LOOP_INTERVAL_MS: 20000,
+
+  /** Farmer execution loop interval (crop harvest cycle) */
+  FARMER_LOOP_INTERVAL_MS: 25000,
+
   /** Team status logging interval */
   STATUS_LOG_INTERVAL_MS: 30000,
 
