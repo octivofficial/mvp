@@ -223,6 +223,110 @@ describe('LeaderAgent — decideMode', () => {
   });
 });
 
+// ── decideMode with idol metrics ─────────────────────────────
+
+describe('LeaderAgent — decideMode with idol metrics', () => {
+  it('should switch to creative when avgLevel >= 3', async () => {
+    const leader = createLeader();
+    leader.board.getACProgress = mock.fn(async () => ({
+      'AC-1': JSON.stringify({ status: 'done' }),
+      'AC-2': JSON.stringify({ status: 'in_progress' }),
+      'AC-3': JSON.stringify({ status: 'in_progress' }),
+      'AC-4': JSON.stringify({ status: 'in_progress' }),
+    }));
+
+    // Simulate team metrics with high levels
+    const { IdolMetrics } = require('../agent/idol-metrics');
+    const m1 = new IdolMetrics('a1');
+    m1.totalXP = 400; // level 3
+    const m2 = new IdolMetrics('a2');
+    m2.totalXP = 350; // level 3
+    leader.teamIdolMetrics = [m1, m2];
+
+    const mode = await leader.decideMode('builder-01');
+    assert.equal(mode, 'creative');
+  });
+
+  it('should stay training when avgLevel < 3 and progress < 70%', async () => {
+    const leader = createLeader();
+    leader.board.getACProgress = mock.fn(async () => ({
+      'AC-1': JSON.stringify({ status: 'done' }),
+      'AC-2': JSON.stringify({ status: 'in_progress' }),
+      'AC-3': JSON.stringify({ status: 'in_progress' }),
+      'AC-4': JSON.stringify({ status: 'in_progress' }),
+    }));
+
+    const { IdolMetrics } = require('../agent/idol-metrics');
+    const m1 = new IdolMetrics('a1');
+    m1.totalXP = 50; // level 1
+    leader.teamIdolMetrics = [m1];
+
+    const mode = await leader.decideMode('builder-01');
+    assert.equal(mode, 'training');
+  });
+
+  it('should publish idol-overview when teamIdolMetrics set', async () => {
+    const leader = createLeader();
+    leader.board.getACProgress = mock.fn(async () => ({}));
+
+    const { IdolMetrics } = require('../agent/idol-metrics');
+    leader.teamIdolMetrics = [new IdolMetrics('a1')];
+
+    await leader.decideMode('builder-01');
+
+    const overviewCall = leader.board.publish.mock.calls.find(
+      c => c.arguments[0] === 'leader:idol-overview'
+    );
+    assert.ok(overviewCall, 'should publish idol-overview');
+    assert.equal(overviewCall.arguments[1].author, 'leader');
+  });
+});
+
+// ── filterContextForMode ─────────────────────────────────────
+
+describe('LeaderAgent — filterContextForMode', () => {
+  it('should filter channels by training mode domains', () => {
+    const leader = createLeader();
+    leader.mode = 'training';
+
+    const channels = [
+      'agent:builder-01:status',   // survival → included
+      'command:builder-01:mission', // command → included
+      'safety:threat',              // system → included
+      'agent:builder-01:idol-stats', // creative → excluded
+      'skills:emergency',           // learning → excluded
+    ];
+
+    const filtered = leader.filterContextForMode(channels);
+    assert.ok(filtered.includes('agent:builder-01:status'));
+    assert.ok(filtered.includes('command:builder-01:mission'));
+    assert.ok(filtered.includes('safety:threat'));
+    assert.ok(!filtered.includes('agent:builder-01:idol-stats'));
+  });
+
+  it('should include creative domain in creative mode', () => {
+    const leader = createLeader();
+    leader.mode = 'creative';
+
+    const channels = [
+      'agent:builder-01:idol-stats', // creative → included
+      'skills:emergency',            // learning → included
+      'agent:builder-01:chat',       // social → included
+    ];
+
+    const filtered = leader.filterContextForMode(channels);
+    assert.equal(filtered.length, 3);
+  });
+
+  it('should include unknown domains by default', () => {
+    const leader = createLeader();
+    leader.mode = 'training';
+
+    const filtered = leader.filterContextForMode(['completely:random:channel']);
+    assert.equal(filtered.length, 1);
+  });
+});
+
 // ── collectVote ──────────────────────────────────────────────
 
 describe('LeaderAgent — collectVote', () => {
