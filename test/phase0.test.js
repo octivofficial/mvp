@@ -458,9 +458,9 @@ describe('Sandbox Migration — node:vm (Task E)', () => {
     const pipeline = new SkillPipeline(null);
     await pipeline.init();
 
-    // Code that tries to access process — should fail because context is isolated
+    // Code referencing process is now rejected by pre-compilation banned pattern check
     const valid = await pipeline.validateSkill('if (typeof process !== "undefined") throw new Error("leaked");');
-    assert.equal(valid, true, 'process should not be accessible in sandbox');
+    assert.equal(valid, false, 'process reference should be caught by banned pattern filter');
 
     await pipeline.shutdown();
   });

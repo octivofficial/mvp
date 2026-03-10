@@ -5,6 +5,7 @@
 const { Blackboard } = require('./blackboard');
 const { getLogger } = require('./logger');
 const { AgentChat } = require('./agent-chat');
+const { ChannelRegistry } = require('./channel-registry');
 const T = require('../config/timeouts');
 
 const log = getLogger();
@@ -21,6 +22,8 @@ class LeaderAgent {
     this.logger = null;
     this.skillPipeline = null;
     this.chat = new AgentChat(this.board, this.id, 'leader');
+    this.channelRegistry = new ChannelRegistry();
+    this.teamIdolMetrics = []; // optional: IdolMetrics instances per agent
   }
 
   setLogger(logger) { this.logger = logger; }
@@ -92,7 +95,7 @@ class LeaderAgent {
     }, T.MISSION_LOOP_INTERVAL_MS);
   }
 
-  // Decide mode based on AC progress
+  // Decide mode based on AC progress + idol metrics
   async decideMode(agentId) {
     const acData = await this.board.getACProgress(agentId);
     const total = Object.keys(acData).length;
@@ -101,7 +104,18 @@ class LeaderAgent {
     }).length;
     const progress = total > 0 ? done / total : 0;
 
-    this.mode = (progress >= 0.7 || this.votes.length >= Math.ceil(this.teamSize * 2 / 3))
+    // Factor in idol metrics: avgLevel >= 3 → creative mode
+    let avgLevel = 0;
+    if (this.teamIdolMetrics.length > 0) {
+      const { IdolMetrics } = require('./idol-metrics');
+      const overview = IdolMetrics.getTeamOverview(this.teamIdolMetrics);
+      avgLevel = overview.avgLevel;
+      await this.board.publish('leader:idol-overview', {
+        author: 'leader', ...overview, timestamp: Date.now(),
+      });
+    }
+
+    this.mode = (progress >= 0.7 || avgLevel >= 3 || this.votes.length >= Math.ceil(this.teamSize * 2 / 3))
       ? 'creative'
       : 'training';
 
@@ -230,6 +244,15 @@ class LeaderAgent {
     }
     log.info(this.id, `injected: ${tag}`);
     return { tag, totalSkills: skills.length };
+  }
+
+  // Filter channels relevant to current mode (read-only filter)
+  filterContextForMode(channels) {
+    const domains = this.channelRegistry.getDomainsForPhase(this.mode);
+    return channels.filter(ch => {
+      const domain = this.channelRegistry.categorize(ch);
+      return domains.includes(domain) || domain === 'unknown';
+    });
   }
 
   // Check if team failures warrant Group Reflexion

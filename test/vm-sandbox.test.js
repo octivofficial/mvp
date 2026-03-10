@@ -192,6 +192,57 @@ describe('vm-sandbox — malicious code patterns', () => {
   });
 });
 
+// ── Banned Pattern Pre-Check ────────────────────────────────────────
+
+describe('vm-sandbox — banned pattern pre-check', () => {
+  it('should reject require() before compilation', async () => {
+    const result = await validateCode('const fs = require("fs"); fs.readFileSync("/etc/passwd");');
+    assert.equal(result.valid, false);
+    assert.ok(result.error.includes('banned pattern'), `Expected banned pattern error, got: ${result.error}`);
+    assert.equal(result.attempt, 0, 'Should fail before any VM attempt');
+  });
+
+  it('should reject eval usage before compilation', async () => {
+    const code = 'ev' + 'al("malicious code")';
+    const result = await validateCode(code);
+    assert.equal(result.valid, false);
+    assert.ok(result.error.includes('banned pattern'));
+  });
+
+  it('should reject process access before compilation', async () => {
+    const result = await validateCode('const p = process; p.exit(1);');
+    assert.equal(result.valid, false);
+    assert.ok(result.error.includes('banned pattern'));
+  });
+
+  it('should reject __proto__ manipulation before compilation', async () => {
+    const result = await validateCode('x.__proto__.polluted = true;');
+    assert.equal(result.valid, false);
+    assert.ok(result.error.includes('banned pattern'));
+  });
+
+  it('should reject constructor.constructor escape', async () => {
+    const result = await validateCode('this.constructor.constructor("return process")()');
+    assert.equal(result.valid, false);
+    assert.ok(result.error.includes('banned pattern'));
+  });
+
+  it('should reject child_process import', async () => {
+    const result = await validateCode('require("child_process").exec("rm -rf /")');
+    assert.equal(result.valid, false);
+  });
+
+  it('should reject Function constructor', async () => {
+    const result = await validateCode('new Function("return process")()');
+    assert.equal(result.valid, false);
+  });
+
+  it('should allow safe code through pre-check', async () => {
+    const result = await validateCode('const x = [1,2,3].map(n => n * 2);');
+    assert.deepEqual(result, { valid: true });
+  });
+});
+
 // ── Multi-Attempt Behavior ───────────────────────────────────────────
 
 describe('vm-sandbox — multi-attempt validation', () => {

@@ -4,8 +4,17 @@
  */
 const vm = require('node:vm');
 const T = require('../config/timeouts');
+const { SkillAuditor } = require('./skill-auditor');
+
+const _auditor = new SkillAuditor();
 
 async function validateCode(code, attempts = 3, timeoutMs = T.VM_TIMEOUT_MS) {
+  // Pre-compilation banned pattern check
+  const patternCheck = _auditor.filterBannedPatterns(code);
+  if (!patternCheck.safe) {
+    return { valid: false, error: `banned pattern: ${patternCheck.pattern}`, attempt: 0 };
+  }
+
   for (let i = 1; i <= attempts; i++) {
     try {
       const context = vm.createContext(Object.create(null));

@@ -56,8 +56,12 @@ Untitled Kanban.md
 
 # Generated files (local only)
 *.docx
+*.png
 setup-claude.sh
 claude_desktop_config.json
+
+# Tools (local dev scripts)
+tools/
 
 # API key test files (never commit hardcoded keys)
 test_gemini_api.js

@@ -199,6 +199,42 @@ class SafetyAgent {
     return { safe: true, reason: null, sanitized: text };
   }
 
+  // Output-side filtering for skill execution results
+  filterSkillOutput(output) {
+    if (!output || typeof output !== 'string') {
+      return { safe: true, sanitized: output ?? '' };
+    }
+
+    // Check for leaked sensitive data patterns
+    const sensitivePatterns = [
+      /\b(ANTHROPIC|OPENAI|DISCORD|REDIS)_[A-Z_]*KEY\b/i,
+      /\bsk-[a-zA-Z0-9]{20,}\b/,          // API keys
+      /\b(password|secret|token)\s*[:=]\s*\S+/i,
+      /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+\b/, // IP:port
+      /\/home\/\w+\/\.ssh/,                 // SSH paths
+      /-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/, // private keys
+    ];
+
+    for (const pattern of sensitivePatterns) {
+      if (pattern.test(output)) {
+        log.warn(this.id, `sensitive data in skill output: ${pattern.source}`);
+        return {
+          safe: false,
+          reason: `sensitive_data: ${pattern.source}`,
+          sanitized: output.replace(pattern, '[REDACTED]'),
+        };
+      }
+    }
+
+    // Also check for prompt injection in output
+    const injection = this.filterPromptInjection(output);
+    if (!injection.safe) {
+      return injection;
+    }
+
+    return { safe: true, sanitized: output };
+  }
+
   async shutdown() {
     if (this.subscriber) {
       await this.subscriber.pUnsubscribe();

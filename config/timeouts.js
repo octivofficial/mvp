@@ -100,6 +100,9 @@ module.exports = {
   /** Daily skill reset interval (24h) */
   SKILL_DAILY_RESET_MS: 24 * 60 * 60 * 1000,
 
+  /** Skill audit pre-compilation timeout */
+  SKILL_AUDIT_TIMEOUT_MS: parseInt(process.env.SKILL_AUDIT_TIMEOUT_MS) || 5000,
+
   // -- Remote Control --
 
   /** RC command response timeout */

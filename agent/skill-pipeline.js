@@ -7,6 +7,7 @@
  */
 const { Blackboard } = require('./blackboard');
 const { validateCode } = require('./vm-sandbox');
+const { SkillAuditor } = require('./skill-auditor');
 const T = require('../config/timeouts');
 const { getLogger } = require('./logger');
 const log = getLogger();
@@ -18,6 +19,7 @@ class SkillPipeline {
   constructor(llmClient = null) {
     this.board = new Blackboard();
     this.llmClient = llmClient; // injected LLM client (ReflexionEngine)
+    this.auditor = new SkillAuditor();
     this.dailyCount = 0;
     this.dailyResetAt = Date.now() + T.SKILL_DAILY_RESET_MS;
   }
@@ -53,11 +55,23 @@ class SkillPipeline {
       return { success: false, reason: 'invalid_skill_json' };
     }
 
+    // Pre-compilation pattern audit
+    const audit = this.auditor.filterBannedPatterns(skillJson.code);
+    if (!audit.safe) {
+      log.warn('skill-pipeline', `banned pattern in generated skill: ${audit.pattern}`);
+      return { success: false, reason: 'banned_pattern', pattern: audit.pattern };
+    }
+
     // node:vm 3x validation
     const valid = await this.validateSkill(skillJson.code);
     if (!valid) {
       return { success: false, reason: 'vm_validation_failed' };
     }
+
+    // Hash + audit trail
+    const hash = this.auditor.hashSkill(skillJson.code);
+    this.auditor.auditExecution(skillJson.name, hash);
+    skillJson.hash = hash;
 
     // Deploy to library
     await this.deploySkill(skillJson);

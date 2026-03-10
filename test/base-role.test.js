@@ -349,6 +349,48 @@ describe('BaseRole — reportActivityComplete()', () => {
   });
 });
 
+// ── idol-stats emission ──────────────────────────────────────────
+
+describe('BaseRole — idol-stats emission', () => {
+  it('should emit idol-stats when idolMetrics is set', async () => {
+    const { agent, board } = createAgent({ activityName: 'ore_mining' });
+    const { IdolMetrics } = require('../agent/idol-metrics');
+    agent.idolMetrics = new IdolMetrics('test-01');
+
+    await agent.reportActivityComplete({ oresMined: 5 });
+
+    const idolCall = board.publish.mock.calls.find(
+      c => c.arguments[0] === 'agent:test-01:idol-stats'
+    );
+    assert.ok(idolCall, 'should publish idol-stats');
+    assert.equal(idolCall.arguments[1].agentId, 'test-01');
+    assert.ok(idolCall.arguments[1].totalXP > 0, 'should have XP');
+  });
+
+  it('should NOT emit idol-stats when idolMetrics is null', async () => {
+    const { agent, board } = createAgent({ activityName: 'mining' });
+    assert.equal(agent.idolMetrics, null);
+
+    await agent.reportActivityComplete({ count: 1 });
+
+    const idolCall = board.publish.mock.calls.find(
+      c => c.arguments[0]?.includes('idol-stats')
+    );
+    assert.equal(idolCall, undefined, 'should not publish idol-stats');
+  });
+
+  it('should accumulate XP across multiple reports', async () => {
+    const { agent } = createAgent({ activityName: 'ore_mining' });
+    const { IdolMetrics } = require('../agent/idol-metrics');
+    agent.idolMetrics = new IdolMetrics('test-01');
+
+    await agent.reportActivityComplete({ count: 1 });
+    await agent.reportActivityComplete({ count: 2 });
+
+    assert.equal(agent.idolMetrics.totalXP, 30); // 15 * 2
+  });
+});
+
 // ── executeSession() ──────────────────────────────────────────────
 
 describe('BaseRole — executeSession()', () => {

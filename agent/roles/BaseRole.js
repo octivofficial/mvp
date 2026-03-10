@@ -29,6 +29,7 @@ class BaseRole {
     this.sessionTimeoutMs = config.sessionTimeoutMs ?? 120000;
     this.navTimeoutMs = config.navTimeoutMs ?? 15000;
     this.totalCount = 0;
+    this.idolMetrics = null; // optional IdolMetrics instance
   }
 
   async init() {
@@ -117,6 +118,13 @@ class BaseRole {
       await this.board.publish(`agent:${this.id}:${this.activityName}:complete`, {
         author: this.id, ...summary, timestamp: Date.now(),
       });
+      // Emit idol stats if metrics enabled
+      if (this.idolMetrics) {
+        this.idolMetrics.addXP(this.activityName);
+        await this.board.publish(`agent:${this.id}:idol-stats`, {
+          author: this.id, ...this.idolMetrics.getStats(),
+        });
+      }
     } catch (_) { /* Redis down */ }
   }
 
