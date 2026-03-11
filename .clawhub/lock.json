@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "minecraft-monitor-skill": {
+      "version": "0.1.0",
+      "installedAt": 1773186246248
+    },
+    "discord-hub": {
+      "version": "1.1.0",
+      "installedAt": 1773186249933
+    },
+    "obsidian-cli-official": {
+      "version": "4.0.2",
+      "installedAt": 1773186984158
+    }
+  }
+}

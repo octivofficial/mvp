@@ -17,6 +17,7 @@ const { SkillZettelkasten } = require('./skill-zettelkasten');
 const { RuminationEngine } = require('./rumination-engine');
 const { GoTReasoner } = require('./got-reasoner');
 const { ZettelkastenHooks } = require('./zettelkasten-hooks');
+const { MCPOrchestrator } = require('./mcp-orchestrator');
 const { getLogger } = require('./logger');
 const T = require('../config/timeouts');
 
@@ -124,7 +125,7 @@ function createRoleLoop(board, agent, intervalMs) {
  * Graceful shutdown — stop all agents and resources.
  * Extracted from main() for testability.
  * @param {object} agents - { leader, safety, explorer, miner, farmer, builders }
- * @param {object} resources - { explorerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger }
+ * @param {object} resources - { explorerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger, orchestrator }
  */
 async function gracefulShutdown(agents, resources) {
   log.info('team', 'Team shutting down...');
@@ -133,6 +134,22 @@ async function gracefulShutdown(agents, resources) {
   clearInterval(resources.minerInterval);
   clearInterval(resources.farmerInterval);
   resources.logger.logEvent('team', { type: 'shutdown' }).catch(e => log.error('team', 'log persist error', { error: e.message }));
+
+  // Deregister agents from orchestrator before shutdown
+  if (resources.orchestrator) {
+    try {
+      await resources.orchestrator.deregisterAgent('leader-01');
+      await resources.orchestrator.deregisterAgent('safety-01');
+      await resources.orchestrator.deregisterAgent('explorer-01');
+      await resources.orchestrator.deregisterAgent('miner-01');
+      await resources.orchestrator.deregisterAgent('farmer-01');
+      for (let i = 1; i <= agents.builders.length; i++) {
+        await resources.orchestrator.deregisterAgent(`builder-0${i}`);
+      }
+    } catch (err) {
+      log.error('team', 'orchestrator deregister error', { error: err.message });
+    }
+  }
 
   // Parallel agent shutdown — independent agents don't need serial ordering
   const agentResults = await Promise.allSettled([
@@ -166,6 +183,11 @@ async function gracefulShutdown(agents, resources) {
   }
   if (resources.reflexion) {
     try { await resources.reflexion.shutdown(); } catch (err) { log.error('team', 'reflexion shutdown error', { error: err.message }); }
+  }
+
+  // Shutdown orchestrator
+  if (resources.orchestrator) {
+    try { await resources.orchestrator.shutdown(); } catch (err) { log.error('team', 'orchestrator shutdown error', { error: err.message }); }
   }
 
   // Shutdown API clients after all consumers — stops LM Studio health monitor timer
@@ -315,6 +337,11 @@ async function main() {
   // Task A: Create API clients from environment (Anthropic primary, Groq fallback)
   const apiClients = createApiClients();
 
+  // US-4: Initialize MCP Orchestrator for agent registry
+  const orchestrator = new MCPOrchestrator();
+  await orchestrator.init();
+  log.info('team', 'MCP Orchestrator initialized');
+
   // Learning pipeline: ReflexionEngine → SkillPipeline → Zettelkasten
   // Wrapped in try/catch — bots run without LLM skill generation if this fails
   let reflexion = null, pipeline = null;
@@ -354,12 +381,14 @@ async function main() {
   leader.setLogger(logger);
   leader.setSkillPipeline(pipeline); // accepts null
   await leader.init();
+  await orchestrator.registerAgent('leader-01', 'leader');
   if (zkHooks) zkHooks.wireToLeader(leader);
 
   // 2. Start Safety (with logger)
   const safety = new SafetyAgent();
   safety.setLogger(logger);
   await safety.init();
+  await orchestrator.registerAgent('safety-01', 'safety');
 
   // 3. Start Builder team (sequentially to prevent server overload)
   const builders = [];
@@ -370,6 +399,7 @@ async function main() {
     builder.setSkillPipeline(pipeline); // accepts null — bots work without skills
     try {
       await builder.init();
+      await orchestrator.registerAgent(`builder-0${i}`, 'builder');
       if (zkHooks) zkHooks.wireToBuilder(builder);
       builders.push(builder);
       log.info('team', `Builder-0${i} started`);
@@ -386,15 +416,18 @@ async function main() {
   // 4. Start Explorer (world scout — uses Blackboard, not direct mineflayer)
   const explorer = new ExplorerAgent({ id: 'explorer-01', maxRadius: 200 });
   await explorer.init();
+  await orchestrator.registerAgent('explorer-01', 'explorer');
   log.info('team', 'Explorer-01 started');
 
   // 5. Start Miner + Farmer (specialized roles — Phase 7.2)
   const miner = new MinerAgent({ id: 'miner-01' });
   await miner.init();
+  await orchestrator.registerAgent('miner-01', 'miner');
   log.info('team', 'Miner-01 started');
 
   const farmer = new FarmerAgent({ id: 'farmer-01' });
   await farmer.init();
+  await orchestrator.registerAgent('farmer-01', 'farmer');
   log.info('team', 'Farmer-01 started');
 
   // Execution loops — piggyback on builder-01's position via Blackboard
@@ -438,7 +471,7 @@ async function main() {
 
     await gracefulShutdown(
       { leader, safety, explorer, miner, farmer, builders },
-      { explorerInterval, minerInterval, farmerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger, apiClients },
+      { explorerInterval, minerInterval, farmerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger, apiClients, orchestrator },
     );
 
     clearTimeout(forceExit);

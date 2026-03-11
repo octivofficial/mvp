@@ -29,6 +29,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.19.0",
+    "isolated-vm": "^6.1.0",
     "minecraft-data": "^3.105.0",
     "mineflayer": "^4.35.0",
     "mineflayer-collectblock": "^1.6.0",
