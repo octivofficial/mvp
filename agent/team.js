@@ -22,7 +22,7 @@ const { getLogger } = require('./logger');
 const T = require('../config/timeouts');
 
 const log = getLogger();
-const TEAM_SIZE = 3; // number of builder agents
+const TEAM_SIZE = 5; // number of builder agents (expanded from 3 to 5)
 
 /**
  * Handle emergency event from skills:emergency subscription.
@@ -320,7 +320,7 @@ async function main() {
   log.info('team', 'Octiv Agent Team starting', {
     papermc: `${process.env.MC_HOST || 'localhost'}:${process.env.MC_PORT || 25565}`,
     redis: redisDisplay,
-    composition: 'Leader + Builder x3 + Safety + Explorer + Miner + Farmer',
+    composition: 'Leader + Builder x5 + Safety + Explorer + Miner + Farmer',
   });
 
   const board = new Blackboard();
@@ -372,7 +372,7 @@ async function main() {
   await board.publish('team:status', {
     author: 'team',
     status: 'initializing',
-    members: ['leader', 'builder-01', 'builder-02', 'builder-03', 'safety', 'explorer', 'miner-01', 'farmer-01'],
+    members: ['leader', 'builder-01', 'builder-02', 'builder-03', 'builder-04', 'builder-05', 'safety', 'explorer', 'miner-01', 'farmer-01'],
     mission: 'first-day-survival v1.3.1',
   });
 

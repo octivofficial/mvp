@@ -325,8 +325,8 @@ Explorer maps 200-block radius without dying
 ### 7.2 Agent Enhancement
 - [x] Role specialization (MinerAgent, FarmerAgent, ExplorerAgent, WoodcutterAgent)
 - [x] BaseRole DRY refactoring — 8 common methods extracted (nav, session, inventory, quota)
-- [ ] Expand agent count (Builder 3→5+)
-- [ ] Natural language negotiation between agents (LLM-based)
+- [x] Expand agent count (Builder 3→5)
+- [x] Natural language negotiation between agents (LLM-based via AgentNegotiation)
 
 ### 7.3 Infrastructure Expansion
 - [x] LM Studio local model integration (LMStudioClient: multi-URL failover, `<think>` stripping)

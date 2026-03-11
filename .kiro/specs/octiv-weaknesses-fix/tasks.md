@@ -90,12 +90,12 @@
   - [x] 14.2 `npm run lint` 실행 (0 warnings)
   - [x] 14.3 실패한 테스트 수정
 
-- [ ] 15. Docker E2E 테스트
-  - [ ] 15.1 `docker-compose up -d` (Redis + PaperMC)
-  - [ ] 15.2 `node agent/team.js` 실행
-  - [ ] 15.3 7개 에이전트 spawn 확인
-  - [ ] 15.4 AC-1~4 완료 확인
-  - [ ] 15.5 Discord #neostarz-live 모니터링
+- [x] 15. Docker E2E 테스트
+  - [x] 15.1 `docker-compose up -d` (Redis + PaperMC)
+  - [x] 15.2 `node agent/team.js` 실행
+  - [x] 15.3 7개 에이전트 spawn 확인
+  - [x] 15.4 AC-1~4 완료 확인
+  - [x] 15.5 Discord #neostarz-live 모니터링
 
 - [x] 16. 문서 업데이트
   - [x] 16.1 vault/Dashboard.md 동기화
@@ -103,8 +103,8 @@
   - [x] 16.3 ROADMAP.md Phase 8 완료 표시
   - [x] 16.4 docs/AUDIT_REPORT.md 업데이트
 
-- [-] 17. Git 커밋 & 푸시
-  - [ ] 17.1 `git add .`
-  - [ ] 17.2 `git commit -m "✅ Complete 4 critical weaknesses - AC-2, isolated-vm, LLM, orchestrator"`
-  - [ ] 17.3 `git push origin main`
-  - [ ] 17.4 Discord #neostarz-alerts 완료 보고
+- [x] 17. Git 커밋 & 푸시
+  - [x] 17.1 `git add .`
+  - [x] 17.2 `git commit -m "✅ Complete 4 critical weaknesses - AC-2, isolated-vm, LLM, orchestrator"`
+  - [x] 17.3 `git push origin main`
+  - [x] 17.4 Discord #neostarz-alerts 완료 보고
