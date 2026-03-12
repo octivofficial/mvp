@@ -151,17 +151,22 @@ describe('ReflexionEngine — callLLM secondary fallback', () => {
     assert.equal(modelArg, 'claude-sonnet-4-6');
   });
 
-  it('uses ultraModel for critical severity as secondary', async () => {
-    const googleCall = mock.fn(async () => { throw new Error('fail'); });
-    const anthropicCall = mock.fn(async () => 'ok');
+  it('uses ultraModel for critical severity as secondary (when escalation fails)', async () => {
+    // critical severity: Stage 1 = escalationModel, Stage 2 = ultraModel
+    const anthropicCall = mock.fn(async (model) => {
+      if (model === 'claude-sonnet-4-6') throw new Error('escalation down');
+      return 'ok'; // ultraModel succeeds
+    });
 
-    const engine = makeEngine({ google: { call: googleCall }, anthropic: { call: anthropicCall } });
-    engine.config.model = 'gemini-3.0-flash';
+    const engine = makeEngine({ anthropic: { call: anthropicCall } });
+    engine.config.escalationModel = 'claude-sonnet-4-6';
     engine.config.ultraModel = 'claude-opus-4-6';
 
     await engine.callLLM('prompt', 'critical');
 
-    const [modelArg] = anthropicCall.mock.calls[0].arguments;
+    // First call = escalation (fails), second call = ultraModel
+    assert.equal(anthropicCall.mock.callCount(), 2);
+    const [modelArg] = anthropicCall.mock.calls[1].arguments;
     assert.equal(modelArg, 'claude-opus-4-6');
   });
 });

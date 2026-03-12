@@ -120,9 +120,11 @@ Return ONLY a JSON: { "intent": "RESEARCH"|"AUTOMATION"|"VIBE"|"CHAT", "payload"
 
     // Determine target models based on severity
     const primaryModel = this.config.model;
-    let secondaryModel = this.config.escalationModel; 
+    let secondaryModel = this.config.escalationModel;
     let forceLocal = severity === 'local';
-    
+    // For critical severity, skip Gemini and use escalation model directly
+    let effectivePrimary = severity === 'critical' ? this.config.escalationModel : primaryModel;
+
     if (severity === 'critical') {
       secondaryModel = this.config.ultraModel;
     } else if (severity === 'light') {
@@ -144,11 +146,11 @@ Return ONLY a JSON: { "intent": "RESEARCH"|"AUTOMATION"|"VIBE"|"CHAT", "payload"
     // Stage 1: Primary (Cloud) - SKIP if forceLocal
     if (!forceLocal) {
       try {
-        const result = await this._callModel(primaryModel, augmentedPrompt);
-        this._trackUsage(primaryModel);
+        const result = await this._callModel(effectivePrimary, augmentedPrompt);
+        this._trackUsage(effectivePrimary);
         return result;
       } catch (err) {
-        log.warn('reflexion', `primary (${primaryModel}) failed, falling back to Claude (${secondaryModel})`, { error: err.message });
+        log.warn('reflexion', `primary (${effectivePrimary}) failed, falling back to (${secondaryModel})`, { error: err.message });
       }
 
       // Stage 2: Claude Fallback (Opus/Sonnet/Haiku)

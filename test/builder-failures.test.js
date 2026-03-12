@@ -323,16 +323,18 @@ describe('Builder Failures — GatherAtShelter', () => {
   });
 
   it('should throw when shelter coordinates not in Blackboard', async () => {
-    // Clean any stale shelter key from previous runs
-    await redisClient.del('octiv:builder:shelter:latest');
-
     const builder = new BuilderAgent({ id: 'builder-gather-fail' });
-    await builder.board.connect();
+    // Use mock board to avoid Redis race conditions with other test files
+    builder.board = {
+      connect: async () => {},
+      disconnect: async () => {},
+      get: async () => null,  // simulates no shelter data
+      publish: async () => {},
+      updateAC: async () => {},
+    };
     const mockBot = createMockBot();
     builder.bot = mockBot;
     builder._setupPathfinder = () => {};
-
-    // Don't publish any shelter coords — board.get returns null
 
     await assert.rejects(
       () => builder.gatherAtShelter(),
@@ -343,7 +345,6 @@ describe('Builder Failures — GatherAtShelter', () => {
     );
     // AC-4 should NOT be marked done
     assert.equal(builder.acProgress[4], false, 'AC-4 should remain incomplete');
-    await builder.board.disconnect();
   });
 
   it('should propagate pathfinder failure during gather', async () => {

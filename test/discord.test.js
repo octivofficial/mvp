@@ -856,10 +856,11 @@ describe('OctivDiscordBot — Pub/Sub Bridge', { skip: !process.env.CI && !isRed
     let sentData = null;
     bot.channels.status = { send: async (d) => { sentData = d; } };
 
-    // Subscribe like the real bot does
+    // Subscribe like the real bot does; filter by agentId to prevent cross-test contamination
     await subscriber.pSubscribe(Blackboard.PREFIX + '*:status', (message) => {
       try {
         const data = JSON.parse(message);
+        if (data.agentId !== 'builder-01') return;
         bot._postStatusEmbed('', data);
       } catch { /* ignore */ }
     });
