@@ -101,21 +101,28 @@ class TelegramDevelopmentBot {
   }
 
   async analyzeFeasibility(requestText) {
-    if (!this.config.openClawEndpoint) {
-      throw new Error('OpenClaw endpoint not configured');
+    // Primary: use ReflexionEngine if available (no external endpoint needed)
+    if (this.reflexion) {
+      const prompt = `Analyze feasibility and generate a PRD for this idea:\n\n${requestText}\n\nRespond with: title, scope, and key requirements.`;
+      const result = await this.reflexion.callLLM(prompt, 'normal');
+      return result || `PRD draft for: ${requestText}`;
     }
-    
-    // Proxy the request to Cloud OpenClaw Webhook
+
+    // Fallback: external OpenClaw endpoint
+    if (!this.config.openClawEndpoint) {
+      return `PRD draft for: ${requestText}`;
+    }
+
     const response = await fetch(this.config.openClawEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: requestText })
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to reach OpenClaw reasoning engine');
     }
-    
+
     const data = await response.json();
     return data.response;
   }
