@@ -539,6 +539,7 @@ async function main() {
 
   // 3. Start Builder team (sequentially to prevent server overload)
   const builders = [];
+  const failedBuilderIds = [];
   for (let i = 1; i <= TEAM_SIZE; i++) {
     await new Promise(r => setTimeout(r, T.BUILDER_SPAWN_INTERVAL_MS));
     const builder = new BuilderAgent({ id: `builder-0${i}` });
@@ -552,6 +553,27 @@ async function main() {
       log.info('team', `Builder-0${i} started`);
     } catch (err) {
       log.error('team', `Builder-0${i} failed to start`, { error: err.message });
+      failedBuilderIds.push(i);
+    }
+  }
+
+  // Retry failed builders once after a cooldown (server chunk load spike)
+  if (failedBuilderIds.length > 0) {
+    log.info('team', `Retrying ${failedBuilderIds.length} failed builder(s) in 30s...`);
+    await new Promise(r => setTimeout(r, 30_000));
+    for (const i of failedBuilderIds) {
+      const builder = new BuilderAgent({ id: `builder-0${i}` });
+      builder.setLogger(logger);
+      builder.setSkillPipeline(pipeline);
+      try {
+        await builder.init();
+        await orchestrator.registerAgent(`builder-0${i}`, 'builder');
+        if (zkHooks) zkHooks.wireToBuilder(builder);
+        builders.push(builder);
+        log.info('team', `Builder-0${i} started (retry)`);
+      } catch (err) {
+        log.warn('team', `Builder-0${i} retry failed — running without`, { error: err.message });
+      }
     }
   }
 
