@@ -215,7 +215,7 @@ describe('KnowledgeRouter', () => {
       const q = 'This is a longer question that definitely exceeds fifty characters in total length';
       const answer = await router.route(q);
       assert.equal(claude.call.mock.calls.length, 1, 'claude.call should be called once');
-      assert.equal(claude.call.mock.calls[0].arguments[0], 'claude-haiku-4-5', 'correct model');
+      assert.equal(claude.call.mock.calls[0].arguments[0], 'claude-haiku-4-5-20251001', 'correct model');
       assert.equal(claude.call.mock.calls[0].arguments[1], q, 'question passed to claude');
       assert.deepEqual(claude.call.mock.calls[0].arguments[2], {}, 'empty config object');
       assert.equal(answer, 'claude-response');
