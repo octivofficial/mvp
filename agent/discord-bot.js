@@ -69,11 +69,12 @@ function loadConfig() {
 }
 
 class OctivDiscordBot {
-  constructor(options = {}) {
+  constructor(options = {}, reflexion = null) {
     this.token = options.token || process.env.DISCORD_TOKEN;
     this.guildId = options.guildId || process.env.DISCORD_GUILD_ID;
     this.config = options.config || loadConfig();
     this.redisUrl = options.redisUrl || process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380';
+    this.reflexion = reflexion;
 
     this.client = new Client({
       intents: [
@@ -327,6 +328,10 @@ class OctivDiscordBot {
         this._postShinmungo(data).catch(err =>
           log.error('discord', 'failed to post shinmungo', { error: err.message })
         );
+        // Persist for summarization (limit to last 50)
+        this.board.client.lPush(PREFIX + 'confessions:recent', JSON.stringify({ ...data, timestamp: Date.now() }))
+          .then(() => this.board.client.lTrim(PREFIX + 'confessions:recent', 0, 49))
+          .catch(err => log.error('discord', 'failed to persist confession', { error: err.message }));
       } catch (err) {
         log.error('discord', 'failed to parse confess message', { error: err.message });
       }
@@ -629,6 +634,8 @@ class OctivDiscordBot {
         return this._cmdRc(msg, args);
       case 'voice':
         return this._cmdVoice(msg, args);
+      case 'summarize':
+        return this._cmdSummarize(msg, args);
       default:
         return; // ignore unknown commands
     }
@@ -647,6 +654,7 @@ class OctivDiscordBot {
         { name: '!reflexion', value: 'Trigger group reflexion cycle', inline: false },
         { name: '!rc <subcmd>', value: 'Remote control: status, test, ac, log, agents', inline: false },
         { name: '!confess <message>', value: 'Post to the Shinmungo forum', inline: false },
+        { name: '!summarize', value: 'Summarize recent status/confessions using local intelligence', inline: false },
         { name: '!voice <subcmd>', value: 'Voice: join, leave, say, mute, status', inline: false }
       )
       .setTimestamp();
@@ -851,6 +859,60 @@ class OctivDiscordBot {
       }
       default:
         return;
+    }
+  }
+
+  async _cmdSummarize(msg) {
+    if (!this.reflexion) {
+      return msg.reply('Summarization not available: Reflexion engine not linked.');
+    }
+
+    try {
+      // 1. Get recent status
+      const registry = await this.board.getHash('agents:registry');
+      const statuses = [];
+      if (registry) {
+        for (const id of Object.keys(registry)) {
+          const s = await this.board.get(`agent:${id}:status`);
+          if (s) statuses.push(`${s.agentId}: ${s.status} (HP: ${s.health})`);
+        }
+      }
+
+      // 2. Get recent confessions (Shinmungo)
+      const confessionsRaw = await this.board.client.lRange(PREFIX + 'confessions:recent', 0, 9);
+      const confessions = confessionsRaw.map(r => {
+        try {
+          const d = JSON.parse(r);
+          return `- [${d.agentId}]: ${d.message || d.text}`;
+        } catch { return null; }
+      }).filter(Boolean);
+
+      const prompt = [
+        '### TASK: TEAM INTELLIGENCE SUMMARY ###',
+        'Analyze the recent activity and anonymous confessions below.',
+        'Group confessions by sentiment and provide a 3-line actionable summary.',
+        '',
+        '**AGENT STATUSES:**',
+        statuses.join('\n') || 'None online.',
+        '',
+        '**ANONYMOUS CONFESSIONS (SHINMUNGO):**',
+        confessions.join('\n') || 'No recent confessions.',
+        '',
+        'Summary (3 lines max):'
+      ].join('\n');
+      
+      // Use 'local' severity to force local LLM for maximum privacy of private community data
+      const summary = await this.reflexion.callLLM(prompt, 'local');
+      
+      const embed = new EmbedBuilder()
+        .setTitle('Team Summary (Local Intelligence)')
+        .setColor(0x1abc9c)
+        .setDescription(summary || 'Could not generate summary.')
+        .setTimestamp();
+
+      msg.reply({ embeds: [embed] });
+    } catch (err) {
+      msg.reply(`Summarization error: ${err.message}`);
     }
   }
 

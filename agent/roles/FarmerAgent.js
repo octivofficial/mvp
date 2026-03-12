@@ -1,8 +1,4 @@
-/**
- * Octiv Farmer Role — Phase 7.2 Agent Expansion
- * Specialized farming agent: finds mature crops, harvests, replants.
- * Reports progress via Blackboard and chats about harvests.
- */
+// FarmerAgent.js
 const { BaseRole } = require('./BaseRole');
 const { AgentChat } = require('../agent-chat');
 const T = require('../../config/timeouts');

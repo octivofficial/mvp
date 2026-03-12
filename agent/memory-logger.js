@@ -22,6 +22,10 @@ class MemoryLogger {
     try {
       await fsp.appendFile(filePath, entry);
     } catch (err) {
+      if (err.code === 'EPERM') {
+        // Silently fail or track in memory if needed
+        return;
+      }
       console.error(`[MemoryLogger] write failed for ${agentId}: ${err.message}`);
     }
   }

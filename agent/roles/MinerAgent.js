@@ -1,19 +1,11 @@
-/**
- * Octiv Miner Role — Phase 7.2 Agent Expansion
- * Specialized ore mining agent with priority-based ore selection.
- * Searches for ores, equips best pickaxe, mines, and reports via Blackboard.
- */
+// MinerAgent.js
 const { BaseRole } = require('./BaseRole');
 const { AgentChat } = require('../agent-chat');
 const T = require('../../config/timeouts');
 
-// Priority order: rarest first (attempt high-value before common)
-const ORE_PRIORITY = ['diamond', 'gold', 'lapis', 'redstone', 'copper', 'iron', 'coal'];
-
-// Pickaxe tier: higher index = better tool
-const PICKAXE_TIER = ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'golden_pickaxe', 'diamond_pickaxe', 'netherite_pickaxe'];
-
-// Smelting recipes: raw ore name -> ingot name
+// Lazy-loaded priority/tier
+let ORE_PRIORITY = ['diamond', 'gold', 'lapis', 'redstone', 'copper', 'iron', 'coal'];
+let PICKAXE_TIER = ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'golden_pickaxe', 'diamond_pickaxe', 'netherite_pickaxe'];
 const SMELT_RECIPES = {
   raw_iron: 'iron_ingot',
   raw_gold: 'gold_ingot',

@@ -65,6 +65,10 @@ tools/
 
 # API key test files (never commit hardcoded keys)
 test_gemini_api.js
+check_telegram.js
+
+# Bot config (contains secrets — local only)
+config/bot-config.json
 
 # Coverage reports
 coverage/

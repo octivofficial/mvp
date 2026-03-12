@@ -13,6 +13,7 @@ describe('AC-2: Shelter Building', () => {
   let builder;
   let mockBot;
   let placedBlocks;
+  let shelterOrigin; // Track the shelter origin for coordinate checks
 
   beforeEach(async () => {
     board = new Blackboard();
@@ -43,6 +44,7 @@ describe('AC-2: Shelter Building', () => {
     builder._goto = async () => {};
 
     placedBlocks = [];
+    shelterOrigin = null;
     mockBot = {
       entity: { 
         position: new Vec3(0, 64, 0),
@@ -52,8 +54,10 @@ describe('AC-2: Shelter Building', () => {
         const placed = placedBlocks.find(b => `${b.x},${b.y},${b.z}` === key);
         if (placed) return { name: 'oak_planks', boundingBox: 'block', position: pos };
         
-        // Ground blocks
-        if (pos.y === 63) return { name: 'stone', boundingBox: 'block', position: pos };
+        // Ground blocks - make a large flat area to ensure predictable origin
+        if (pos.y === 63 && pos.x >= -10 && pos.x <= 10 && pos.z >= -10 && pos.z <= 10) {
+          return { name: 'stone', boundingBox: 'block', position: pos };
+        }
         
         // Air blocks
         return { name: 'air', boundingBox: 'empty', position: pos };
@@ -65,6 +69,11 @@ describe('AC-2: Shelter Building', () => {
           y: newPos.y,
           z: newPos.z,
         });
+        
+        // Track the first floor block as origin
+        if (!shelterOrigin && newPos.y === 64) {
+          shelterOrigin = new Vec3(newPos.x, newPos.y, newPos.z);
+        }
       },
       findBlock: () => ({ position: new Vec3(0, 63, 0) }), // ground
       pathfinder: {
@@ -99,12 +108,15 @@ describe('AC-2: Shelter Building', () => {
 
   // Property 2: Hollow structure
   it('should create hollow interior (no blocks inside)', async () => {
-    await builder.buildShelter(mockBot);
+    await builder.buildShelter();
     
-    // Interior should be empty (center column at x=1, z=1)
-    // Floor (y=0) and roof (y=3) will have blocks, but walls (y=1,2) should not
+    // Interior should be empty (center column at dx=1, dz=1 relative to origin)
+    // Floor (dy=0) and roof (dy=3) will have blocks, but walls (dy=1,2) should not
+    const centerX = shelterOrigin.x + 1;
+    const centerZ = shelterOrigin.z + 1;
     const interiorWalls = placedBlocks.filter(b => 
-      b.x === 1 && b.z === 1 && (b.y === 1 || b.y === 2)
+      b.x === centerX && b.z === centerZ && 
+      (b.y === shelterOrigin.y + 1 || b.y === shelterOrigin.y + 2)
     );
     
     assert.strictEqual(interiorWalls.length, 0, 'Interior walls must be hollow');
@@ -112,28 +124,35 @@ describe('AC-2: Shelter Building', () => {
 
   // Property 3: Door opening
   it('should leave 2-block door opening on one wall', async () => {
-    await builder.buildShelter(mockBot);
+    await builder.buildShelter();
     
-    // Door is at dx=1, dz=0, dy=1,2 (south wall, center)
-    // Check that door position has no blocks
+    // Door is at dx=1, dz=0, dy=1,2 (south wall, center) relative to origin
+    const doorX = shelterOrigin.x + 1;
+    const doorZ = shelterOrigin.z + 0;
     const doorBlocks = placedBlocks.filter(b => 
-      b.x === 1 && b.z === 0 && (b.y === 1 || b.y === 2)
+      b.x === doorX && b.z === doorZ && 
+      (b.y === shelterOrigin.y + 1 || b.y === shelterOrigin.y + 2)
     );
     
     assert.strictEqual(doorBlocks.length, 0, 'Door opening must be empty');
     
-    // Verify walls exist around door
-    const wallBlocks = placedBlocks.filter(b => 
-      (b.y === 1 || b.y === 2) && 
-      ((b.x === 0 || b.x === 2) || (b.z === 0 || b.z === 2))
-    );
+    // Verify walls exist around door (should be 14 wall blocks total)
+    const wallBlocks = placedBlocks.filter(b => {
+      const dy = b.y - shelterOrigin.y;
+      const dx = b.x - shelterOrigin.x;
+      const dz = b.z - shelterOrigin.z;
+      
+      // Wall layers (dy=1,2) at edge positions
+      return (dy === 1 || dy === 2) && 
+             ((dx === 0 || dx === 2) || (dz === 0 || dz === 2));
+    });
     
-    assert.ok(wallBlocks.length >= 10, 'Wall blocks should exist around door');
+    assert.strictEqual(wallBlocks.length, 14, 'Should have exactly 14 wall blocks (excluding door)');
   });
 
   // Property 4: Blackboard publish
   it('should publish shelter coordinates to Blackboard', async () => {
-    await builder.buildShelter(mockBot);
+    await builder.buildShelter();
     
     const shelterData = await board.get('builder:shelter');
     assert.ok(shelterData, 'Shelter data must be published');

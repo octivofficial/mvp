@@ -2,6 +2,13 @@
 
 > AI Agent Sandbox powered by OpenClaw + PaperMC
 
+## Recent Updates
+
+### Connection Stability Fix (2026-03-11)
+- Fixed keepalive timeout issue causing agents to disconnect after 30 seconds
+- Increased `checkTimeoutInterval` to 60 seconds for better PaperMC 1.21.11 compatibility
+- Enabled explicit keepalive packets for stable long-running agent connections
+
 ## Structure
 ```
 Octiv/

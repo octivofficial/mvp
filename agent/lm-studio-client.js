@@ -22,6 +22,7 @@ class LMStudioClient {
    * @param {Object} [options.board] - Blackboard instance with publish()
    */
   constructor(options = {}) {
+    this.config = options.config || {};
     this.urls = options.urls
       || (process.env.LM_STUDIO_URLS
         ? process.env.LM_STUDIO_URLS.split(',').map(u => u.trim()).filter(Boolean)
@@ -147,8 +148,8 @@ class LMStudioClient {
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1024,
-        temperature: 0.7,
+        max_tokens: this.config?.maxTokens || 1024,
+        temperature: this.config?.temperature !== undefined ? this.config.temperature : 0.7,
       }),
       signal: AbortSignal.timeout(T.LM_STUDIO_INFERENCE_TIMEOUT_MS),
     });

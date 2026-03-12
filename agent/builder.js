@@ -1,24 +1,49 @@
-/**
- * Octiv Builder Agent — thin orchestrator
- * Delegates to: builder-navigation, builder-shelter, builder-adaptation
- * Bot control: wood collection, shelter construction, tool crafting
- *
- * A2A: Subscribes to Leader missions via `command:{id}:mission` pub/sub.
- * Falls back to hardcoded AC progression when no leader mission available.
- */
-const mineflayer = require('mineflayer');
-const { pathfinder, goals } = require('mineflayer-pathfinder');
+// agent/builder.js
 const { Blackboard } = require('./blackboard');
-const { setupPathfinder, goto } = require('./builder-navigation');
-const { buildShelter: buildShelterImpl } = require('./builder-shelter');
-const { classifyError, selfImprove, tryLearnedSkill } = require('./builder-adaptation');
 const T = require('../config/timeouts');
 const { getLogger } = require('./logger');
 const { AgentChat } = require('./agent-chat');
 const log = getLogger();
 
-const { GoalNear, GoalBlock, GoalXZ } = goals;
-const collectBlock = require('mineflayer-collectblock');
+// Lazy-loaded dependencies
+let mineflayer = null;
+let pathfinder = null;
+let goals = null;
+let collectBlock = null;
+let setupPathfinder = null;
+let goto = null;
+let buildShelterImpl = null;
+let classifyError = null;
+let selfImprove = null;
+let tryLearnedSkill = null;
+
+function _loadDeps() {
+  if (!mineflayer) {
+    try {
+      mineflayer = require('mineflayer');
+      const pf = require('mineflayer-pathfinder');
+      pathfinder = pf.pathfinder;
+      goals = pf.goals;
+      collectBlock = require('mineflayer-collectblock');
+      
+      const nav = require('./builder-navigation');
+      setupPathfinder = nav.setupPathfinder;
+      goto = nav.goto;
+      
+      const shelter = require('./builder-shelter');
+      buildShelterImpl = shelter.buildShelter;
+      
+      const adapt = require('./builder-adaptation');
+      classifyError = adapt.classifyError;
+      selfImprove = adapt.selfImprove;
+      tryLearnedSkill = adapt.tryLearnedSkill;
+    } catch (err) {
+      log.warn('builder', 'Missing mineflayer dependencies. Role will be disabled.', { error: err.message });
+      return false;
+    }
+  }
+  return true;
+}
 
 const MAX_WANDER_ATTEMPTS = 15;
 const WANDER_DISTANCE = 75; // blocks
@@ -55,6 +80,11 @@ class BuilderAgent {
   setSkillPipeline(pipeline) { this.skillPipeline = pipeline; }
 
   async init() {
+    if (!_loadDeps()) {
+      throw new Error('Required mineflayer dependencies not found');
+    }
+    const { GoalNear, GoalBlock, GoalXZ } = goals; // localized usage
+    
     await this.board.connect();
     this.bot = mineflayer.createBot({
       host: process.env.MC_HOST || 'localhost',
@@ -62,6 +92,8 @@ class BuilderAgent {
       username: `Octiv_${this.id}`,
       version: process.env.MC_VERSION || '1.21.11',
       auth: 'offline',
+      checkTimeoutInterval: 60000, 
+      keepAlive: true,
     });
 
     this.bot.loadPlugin(pathfinder);
@@ -87,6 +119,7 @@ class BuilderAgent {
     this.bot.on('chat', (user, msg) => this._onChat(user, msg));
     this.bot.on('health', () => this._onHealthChange());
     this.bot.on('error', (err) => log.error(this.id, 'bot error', { error: err.message }));
+    this.bot.on('death', () => this._onDeath());
 
     await this._onSpawn();
   }
@@ -114,6 +147,7 @@ class BuilderAgent {
 
   // ── AC-1: Collect wood ──────────────────────────────────────────
   async collectWood(count = 16) {
+    const { GoalNear, GoalBlock, GoalXZ } = goals;
     log.info(this.id, `starting wood collection (target: ${count})`);
     const LOG_TYPES = [
       'oak_log', 'spruce_log', 'birch_log', 'jungle_log',
@@ -180,6 +214,7 @@ class BuilderAgent {
 
   // ── AC-2: Build shelter (delegates to builder-shelter) ─────────
   async buildShelter() {
+    if (!buildShelterImpl) _loadDeps();
     await buildShelterImpl({
       bot: this.bot,
       mcData: this.mcData,
@@ -201,6 +236,7 @@ class BuilderAgent {
     const shelterData = await this.board.get('builder:shelter');
     if (!shelterData?.position) throw new Error('No shelter coordinates found');
 
+    const { GoalNear, GoalBlock, GoalXZ } = goals;
     const { x, y, z } = shelterData.position;
     this._setupPathfinder();
     await this._goto(new GoalNear(x + 1, y + 1, z + 1, 2));
@@ -267,6 +303,7 @@ class BuilderAgent {
     const dx = Math.round(Math.cos(angle) * WANDER_DISTANCE);
     const dz = Math.round(Math.sin(angle) * WANDER_DISTANCE);
 
+    const { GoalNear, GoalBlock, GoalXZ } = goals;
     log.info(this.id, `wandering to (${pos.x + dx}, ${pos.z + dz})`);
     this._setupPathfinder();
 
@@ -333,6 +370,35 @@ class BuilderAgent {
       position: this.bot.entity?.position,
       velocity: this.bot.entity?.velocity,
     });
+  }
+
+  async _onDeath() {
+    const deathPos = this.bot.entity?.position;
+    const nearbyMobs = this.bot.entities ? Object.values(this.bot.entities)
+      .filter(e => e.type === 'mob' && e.position && deathPos && e.position.distanceTo(deathPos) < 15)
+      .map(e => ({ type: e.name, distance: e.position.distanceTo(deathPos).toFixed(1) })) : [];
+    
+    const deathReport = {
+      author: this.id,
+      event: 'death',
+      position: deathPos ? { x: Math.floor(deathPos.x), y: Math.floor(deathPos.y), z: Math.floor(deathPos.z) } : null,
+      time: Date.now(),
+      timeOfDay: this.bot.time?.timeOfDay || 'unknown',
+      nearbyMobs,
+      metacognition: this._analyzeDeathCause(nearbyMobs)
+    };
+
+    await this.board.publish(`agent:${this.id}:death`, deathReport);
+    await this.board.publish('safety:death', deathReport);
+    log.error(this.id, 'died', deathReport);
+  }
+
+  _analyzeDeathCause(nearbyMobs) {
+    if (nearbyMobs.length === 0) {
+      return 'Unknown cause - no mobs nearby. Possibly fall damage or environmental hazard.';
+    }
+    const threats = nearbyMobs.map(m => m.type).join(', ');
+    return `Likely killed by: ${threats}. Need better combat awareness and retreat strategy.`;
   }
 
   _onChat(username, message) {

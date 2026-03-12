@@ -15,12 +15,19 @@ const { FarmerAgent } = require('./roles/FarmerAgent');
 const { createApiClients } = require('./api-clients');
 const { SkillZettelkasten } = require('./skill-zettelkasten');
 const { RuminationEngine } = require('./rumination-engine');
+const { MCPOrchestrator } = require('./mcp-orchestrator');
 const { GoTReasoner } = require('./got-reasoner');
 const { ZettelkastenHooks } = require('./zettelkasten-hooks');
-const { MCPOrchestrator } = require('./mcp-orchestrator');
 const { getLogger } = require('./logger');
+const { MCPServer } = require('./mcp-server');
+const { ObsidianCLIAgent } = require('./obsidian-cli-agent');
 const T = require('../config/timeouts');
-
+let botConfig = {};
+try {
+  botConfig = require('../config/bot-config.json');
+} catch (e) {
+  // Config optional
+}
 const log = getLogger();
 const TEAM_SIZE = 5; // number of builder agents (expanded from 3 to 5)
 
@@ -135,6 +142,17 @@ async function gracefulShutdown(agents, resources) {
   clearInterval(resources.farmerInterval);
   resources.logger.logEvent('team', { type: 'shutdown' }).catch(e => log.error('team', 'log persist error', { error: e.message }));
 
+  // Shutdown new bots
+  if (agents.telegramBot && agents.telegramBot.client) {
+    try { await agents.telegramBot.client.stopPolling(); } catch (e) {}
+  }
+  if (agents.obsidianAgent && agents.obsidianAgent.watcher) {
+    try { await agents.obsidianAgent.watcher.close(); } catch (e) {}
+  }
+  if (agents.discordBot) {
+    try { await agents.discordBot.stop(); } catch (e) {}
+  }
+
   // Deregister agents from orchestrator before shutdown
   if (resources.orchestrator) {
     try {
@@ -159,6 +177,7 @@ async function gracefulShutdown(agents, resources) {
     agents.miner.shutdown(),
     agents.farmer.shutdown(),
     ...agents.builders.map(b => b.shutdown()),
+    agents.obsidianCliAgent ? agents.obsidianCliAgent.shutdown() : Promise.resolve(),
   ]);
   for (const r of agentResults) {
     if (r.status === 'rejected') log.error('team', 'agent shutdown error', { error: r.reason?.message });
@@ -185,6 +204,10 @@ async function gracefulShutdown(agents, resources) {
     try { await resources.reflexion.shutdown(); } catch (err) { log.error('team', 'reflexion shutdown error', { error: err.message }); }
   }
 
+  if (resources.mcpServer) {
+    try { await resources.mcpServer.stop(); } catch (err) { log.error('team', 'mcpServer shutdown error', { error: err.message }); }
+  }
+  
   // Shutdown orchestrator
   if (resources.orchestrator) {
     try { await resources.orchestrator.shutdown(); } catch (err) { log.error('team', 'orchestrator shutdown error', { error: err.message }); }
@@ -337,10 +360,19 @@ async function main() {
   // Task A: Create API clients from environment (Anthropic primary, Groq fallback)
   const apiClients = createApiClients();
 
-  // US-4: Initialize MCP Orchestrator for agent registry
   const orchestrator = new MCPOrchestrator();
   await orchestrator.init();
   log.info('team', 'MCP Orchestrator initialized');
+
+  const mcpServer = new MCPServer();
+  try {
+    await mcpServer.start();
+    log.info('team', 'MCP Server started on port 3001');
+  } catch (err) {
+    log.warn('team', 'MCP Server failed to start', { error: err.message });
+  }
+
+
 
   // Learning pipeline: ReflexionEngine → SkillPipeline → Zettelkasten
   // Wrapped in try/catch — bots run without LLM skill generation if this fails
@@ -366,6 +398,106 @@ async function main() {
     log.info('team', 'Learning pipeline initialized');
   } catch (err) {
     log.warn('team', 'Learning pipeline unavailable — bots will run without skill generation', { error: err.message });
+  }
+
+  // Initialize new Telegram and Obsidian Integration bots (Phase 2)
+  // These bots now use the reflexion engine for cost-aware local routing
+  let telegramBot = null;
+  let obsidianAgent = null;
+  try {
+    const TelegramDevelopmentBot = require('./telegram-bot');
+    telegramBot = new TelegramDevelopmentBot({
+      telegramToken: botConfig.telegramToken || process.env.TELEGRAM_BOT_TOKEN,
+      telegramChannelUrl: botConfig.telegramChannelUrl || process.env.TELEGRAM_CHANNEL_URL,
+      openClawEndpoint: botConfig.openClawEndpoint || process.env.OPENCLAW_ENDPOINT || 'https://api.dantelabs.com/openclaw/1.0',
+      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380',
+      authorizedUsers: botConfig.authorizedUsers || []
+    }, board, reflexion);
+    telegramBot.startPolling();
+    log.info('team', 'TelegramDevelopmentBot initialized and polling');
+  } catch (err) {
+    log.warn('team', 'TelegramDevelopmentBot disabled — missing configuration or dependencies', { error: err.message });
+  }
+
+  try {
+    const ObsidianOrganizer = require('./obsidian-agent');
+    obsidianAgent = new ObsidianOrganizer({
+      vaultPath: botConfig.obsidianVaultPath || process.env.OBSIDIAN_VAULT_PATH || './vault',
+      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380'
+    }, board, reflexion);
+    obsidianAgent.startWatcher();
+    log.info('team', 'ObsidianOrganizer initialized and watching vault');
+  } catch (err) {
+    log.warn('team', 'ObsidianOrganizer disabled — missing configuration or dependencies', { error: err.message });
+  }
+
+  let discordBot = null;
+  try {
+    const { OctivDiscordBot } = require('./discord-bot');
+    const discordConfig = require('../config/discord.json');
+    discordBot = new OctivDiscordBot({
+      token: botConfig.discordToken || process.env.DISCORD_TOKEN,
+      guildId: botConfig.discordGuildId || process.env.DISCORD_GUILD_ID,
+      config: discordConfig
+    }, reflexion);
+    await discordBot.start();
+    log.info('team', 'OctivDiscordBot initialized');
+  } catch (err) {
+    log.warn('team', 'OctivDiscordBot disabled — missing configuration or dependencies', { error: err.message });
+  }
+
+  // --- Cloud Hub Hub Agents (Crawler, Google) ---
+  let crawlerAgent = null;
+  try {
+    const { CrawlerAgent } = require('./crawler-agent');
+    crawlerAgent = new CrawlerAgent({
+      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL
+    }, board);
+    await crawlerAgent.init();
+    log.info('team', 'CrawlerAgent initialized');
+  } catch (err) {
+    log.warn('team', 'CrawlerAgent disabled — missing configuration or dependencies', { error: err.message });
+  }
+
+  let workspaceAgent = null;
+  try {
+    const { WorkspaceAgent } = require('./workspace-agent.js');
+    workspaceAgent = new WorkspaceAgent({
+      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL
+    }, board);
+    await workspaceAgent.init();
+    log.info('team', 'WorkspaceAgent initialized');
+  } catch (err) {
+    log.warn('team', 'WorkspaceAgent disabled — missing configuration or dependencies', { error: err.message });
+  }
+
+  let notebookAgent = null;
+  try {
+    const { NotebookLMAgent } = require('./notebook-lm-agent.js');
+    notebookAgent = new NotebookLMAgent({}, board, reflexion);
+    await notebookAgent.init();
+    log.info('team', 'NotebookLMAgent initialized');
+  } catch (err) {
+    log.warn('team', 'NotebookLMAgent disabled', { error: err.message });
+  }
+
+  let youtubeAgent = null;
+  try {
+    const { YouTubeAgent } = require('./youtube-agent.js');
+    youtubeAgent = new YouTubeAgent({}, board, reflexion);
+    await youtubeAgent.init();
+    log.info('team', 'YouTubeAgent initialized');
+  } catch (err) {
+    log.warn('team', 'YouTubeAgent disabled', { error: err.message });
+  }
+
+  let obsidianCliAgent = null;
+  try {
+    obsidianCliAgent = new ObsidianCLIAgent({ vaultPath: process.env.OBSIDIAN_VAULT_PATH || '/Users/octiv/Octiv_MVP' }, board);
+    await obsidianCliAgent.init();
+    log.info('team', 'Obsidian CLI Agent initialized');
+  } catch (err) {
+    log.warn('team', 'Obsidian CLI Agent disabled', { error: err.message });
   }
 
   // Record Octiv team initialization state
@@ -409,31 +541,45 @@ async function main() {
   }
 
   if (builders.length === 0) {
-    log.error('team', 'FATAL: No builders started. Exiting.');
-    process.exit(1);
+    log.warn('team', 'No builders started - System running in Management-only mode.');
   }
 
   // 4. Start Explorer (world scout — uses Blackboard, not direct mineflayer)
-  const explorer = new ExplorerAgent({ id: 'explorer-01', maxRadius: 200 });
-  await explorer.init();
-  await orchestrator.registerAgent('explorer-01', 'explorer');
-  log.info('team', 'Explorer-01 started');
+  let explorer = null;
+  try {
+    explorer = new ExplorerAgent({ id: 'explorer-01', maxRadius: 200 });
+    await explorer.init();
+    await orchestrator.registerAgent('explorer-01', 'explorer');
+    log.info('team', 'Explorer started');
+  } catch (err) {
+    log.warn('team', 'Explorer failed to start', { error: err.message });
+  }
 
-  // 5. Start Miner + Farmer (specialized roles — Phase 7.2)
-  const miner = new MinerAgent({ id: 'miner-01' });
-  await miner.init();
-  await orchestrator.registerAgent('miner-01', 'miner');
-  log.info('team', 'Miner-01 started');
+  // 5. Start Specialists (Miner, Farmer)
+  let miner = null;
+  try {
+    miner = new MinerAgent({ id: 'miner-01' });
+    await miner.init();
+    await orchestrator.registerAgent('miner-01', 'miner');
+    log.info('team', 'Miner-01 started');
+  } catch (err) {
+    log.warn('team', 'Miner-01 failed to start', { error: err.message });
+  }
 
-  const farmer = new FarmerAgent({ id: 'farmer-01' });
-  await farmer.init();
-  await orchestrator.registerAgent('farmer-01', 'farmer');
-  log.info('team', 'Farmer-01 started');
+  let farmer = null;
+  try {
+    farmer = new FarmerAgent({ id: 'farmer-01' });
+    await farmer.init();
+    await orchestrator.registerAgent('farmer-01', 'farmer');
+    log.info('team', 'Farmer-01 started');
+  } catch (err) {
+    log.warn('team', 'Farmer-01 failed to start', { error: err.message });
+  }
 
   // Execution loops — piggyback on builder-01's position via Blackboard
-  const explorerInterval = createExplorerLoop(board, explorer);
-  const minerInterval = createRoleLoop(board, miner, T.MINER_LOOP_INTERVAL_MS);
-  const farmerInterval = createRoleLoop(board, farmer, T.FARMER_LOOP_INTERVAL_MS);
+  const explorerInterval = explorer ? createExplorerLoop(board, explorer) : null;
+  const minerInterval = miner ? createRoleLoop(board, miner, T.MINER_LOOP_INTERVAL_MS) : null;
+  const farmerInterval = farmer ? createRoleLoop(board, farmer, T.FARMER_LOOP_INTERVAL_MS) : null;
   log.info('team', 'Role loops started (explorer, miner, farmer)');
 
   // Subscribe to skills:emergency — handle safety alerts and skill pipeline events
@@ -470,7 +616,7 @@ async function main() {
     }, T.SHUTDOWN_TIMEOUT_MS);
 
     await gracefulShutdown(
-      { leader, safety, explorer, miner, farmer, builders },
+      { leader, safety, explorer, miner, farmer, builders, telegramBot, obsidianAgent, discordBot, crawlerAgent, workspaceAgent, notebookAgent, youtubeAgent, mcpServer, obsidianCliAgent },
       { explorerInterval, minerInterval, farmerInterval, emergencySubscriber, zkHooks, got, rumination, zettelkasten, pipeline, reflexion, board, logger, apiClients, orchestrator },
     );
 

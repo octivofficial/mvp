@@ -16,12 +16,14 @@ class MCPServer {
     this.board = new Blackboard();
     this.server = null;
     this.tools = {
-      getStatus: this._getStatus.bind(this),
-      moveTo: this._moveTo.bind(this),
-      chopTree: this._chopTree.bind(this),
-      inventory: this._inventory.bind(this),
-      setLLMConfig: this._setLLMConfig.bind(this),
       getLLMConfig: this._getLLMConfig.bind(this),
+      analyzeYouTube: this._analyzeYouTube.bind(this),
+      notebookDeepResearch: this._notebookDeepResearch.bind(this),
+      createDriveFolder: this._createDriveFolder.bind(this),
+      exportToGoogleDoc: this._exportToGoogleDoc.bind(this),
+      controlObsidian: this._controlObsidian.bind(this),
+      getAgentStats: this._getAgentStats.bind(this),
+      getReflexionLogs: this._getReflexionLogs.bind(this),
     };
   }
 
@@ -200,6 +202,103 @@ class MCPServer {
     this._validateAgentId(agentId);
     const inv = await this.board.get(`agent:${agentId}:inventory`);
     return { agentId, inventory: inv || {} };
+  }
+
+  // --- YouTube & Research Tools ---
+
+  /**
+   * analyzeYouTube: Extract transcript and analyze video
+   */
+  async _analyzeYouTube(params) {
+    const { url } = params;
+    if (!url) throw new Error('Required: url');
+    await this.board.publish('youtube:task', { action: 'analyze', url, author: 'mcp-server' });
+    return { url, command: 'analyzeYouTube', status: 'dispatched' };
+  }
+
+  /**
+   * notebookDeepResearch: Trigger complex research in NotebookLM
+   */
+  async _notebookDeepResearch(params) {
+    const { sources, notebookId } = params;
+    await this.board.publish('notebook:task', { 
+      action: 'deep_research', 
+      sources, 
+      notebookId,
+      author: 'mcp-server' 
+    });
+    return { notebookId, command: 'notebookDeepResearch', status: 'dispatched' };
+  }
+
+  // --- Workspace Tools ---
+
+  /**
+   * createDriveFolder: Create a folder in Google Drive
+   */
+  async _createDriveFolder(params) {
+    const { name } = params;
+    if (!name) throw new Error('Required: name');
+    await this.board.publish('workspace:task', { 
+      action: 'create_folder', 
+      name,
+      author: 'mcp-server' 
+    });
+    return { folderName: name, command: 'createDriveFolder', status: 'dispatched' };
+  }
+
+  /**
+   * exportToGoogleDoc: Create a Google Doc with PRD/content
+   */
+  async _exportToGoogleDoc(params) {
+    const { title, content } = params;
+    if (!title) throw new Error('Required: title');
+    await this.board.publish('workspace:task', { 
+      action: 'export_prd', 
+      title,
+      content,
+      author: 'mcp-server' 
+    });
+    return { title, command: 'exportToGoogleDoc', status: 'dispatched' };
+  }
+
+  // --- Obsidian CLI Tools ---
+
+  /**
+   * controlObsidian: Execute a command via Obsidian URI/CLI
+   */
+  async _controlObsidian(params) {
+    const { action, file, command } = params;
+    if (!action) throw new Error('Required: action (open|search|new)');
+    await this.board.publish('obsidian:cli:task', { 
+      action, 
+      file, 
+      command,
+      author: 'mcp-server' 
+    });
+    return { action, status: 'dispatched' };
+  }
+
+  // --- Observability Tools (Phase 19) ---
+
+  async _getAgentStats(_params) {
+    const status = await this.board.get('team:status');
+    // Aggregate data from synced state
+    return {
+        team: status,
+        agents: this.syncedState,
+        ts: Date.now()
+    };
+  }
+
+  async _getReflexionLogs(params) {
+    const agentId = params.agentId || 'leader-01';
+    const logs = await this.board.getListRange(`agent:${agentId}:reflexion`, 0, 19);
+    return {
+        agentId,
+        logs: logs.map(l => {
+            try { return JSON.parse(l); } catch { return l; }
+        })
+    };
   }
 }
 

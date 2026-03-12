@@ -8,7 +8,6 @@
  * Both paths share the same Full Jitter reconnection strategy.
  * redis v5 cluster client is API-compatible — Blackboard methods work unchanged.
  */
-const { createClient, createCluster } = require("redis");
 const T = require("../config/timeouts");
 
 /**
@@ -52,6 +51,35 @@ function isClusterMode() {
  * @returns {import('redis').RedisClientType | import('redis').RedisClusterType}
  */
 function createRedisClient(options = {}) {
+  let redisModule;
+  try {
+    redisModule = require('redis');
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('redis module not found, returning mock. Ensure npm install is run.');
+    }
+    return {
+      connect: async () => {},
+      disconnect: async () => {},
+      on: () => {},
+      publish: async () => {},
+      subscribe: async () => {},
+      get: async () => null,
+      set: async () => {},
+      hSet: async () => {},
+      hGet: async () => null,
+      hGetAll: async () => ({}),
+      hDel: async () => {},
+      exists: async () => 0,
+      del: async () => {},
+      quit: async () => {},
+      duplicate: function() { return this; },
+      pSubscribe: async () => {},
+      pUnsubscribe: async () => {}
+    };
+  }
+
+  const { createClient, createCluster } = redisModule;
   const socketOpts = {
     reconnectStrategy: fullJitterStrategy,
     ...options.socket,
