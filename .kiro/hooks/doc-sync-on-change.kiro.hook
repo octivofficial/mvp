@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "name": "Auto-Update Docs on Code Change",
+  "description": "Monitors JavaScript source files and prompts agent to update README.md or docs/ folder when code changes are detected",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "*.js",
+      "agent/**/*.js",
+      "test/**/*.js",
+      "config/**/*.js",
+      "scripts/**/*.js",
+      "package.json"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A source file was just modified. Review the changes and update the relevant documentation in README.md or the docs/ folder if needed. Focus on: API changes, new features, configuration updates, or architectural changes that users/developers should know about."
+  }
+}

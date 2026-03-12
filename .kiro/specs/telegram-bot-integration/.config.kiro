@@ -1,0 +1,7 @@
+{
+  "specType": "feature",
+  "workflowType": "requirements-first",
+  "featureName": "telegram-bot-integration",
+  "createdAt": "2026-03-11T10:30:00.000Z",
+  "status": "ready-for-implementation"
+}

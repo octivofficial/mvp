@@ -4,9 +4,11 @@ node_modules/
 # Environment — contains secrets, never commit
 .env
 
-# PaperMC server runtime files (only jar is version-controlled)
+# PaperMC server runtime files (only jar + yml configs are version-controlled)
 server/server.properties
 server/octiv-world/
+server/octiv-world_nether/
+server/octiv-world_the_end/
 server/cache/
 server/libraries/
 server/logs/
@@ -17,6 +19,21 @@ server/generated/
 server/bundler/
 server/*.log
 server/session.lock
+server/banned-ips.json
+server/banned-players.json
+server/ops.json
+server/usercache.json
+server/whitelist.json
+server/version_history.json
+server/paper-1.21.1.jar.backup
+server/paper-1.21.11.jar
+server/config/DIM-1/
+server/config/level.dat
+server/config/level.dat_old
+server/config/session.lock
+
+# npm cache (CI artifact, not source)
+npm-cache/
 
 # OpenClaw runtime state
 agent/.openclaw/
