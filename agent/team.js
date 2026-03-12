@@ -99,6 +99,20 @@ function createExplorerLoop(board, explorer, intervalMs = T.EXPLORER_LOOP_INTERV
  * @param {number} intervalMs - poll interval
  * @returns {NodeJS.Timeout} interval ID for cleanup
  */
+// Lazy-load minecraft-data registry for role loop mockBot
+let _mcRegistry = null;
+function _getMcRegistry() {
+  if (!_mcRegistry) {
+    try {
+      const mcData = require('minecraft-data');
+      _mcRegistry = mcData(process.env.MC_VERSION || '1.21.1');
+    } catch (_) {
+      _mcRegistry = { blocksByName: {}, itemsByName: {} };
+    }
+  }
+  return _mcRegistry;
+}
+
 function createRoleLoop(board, agent, intervalMs) {
   let executing = false;
   return setInterval(async () => {
@@ -117,6 +131,7 @@ function createRoleLoop(board, agent, intervalMs) {
           dig: async () => {},
           placeBlock: async () => {},
           pathfinder: { setMovements: () => {}, goto: async () => {}, stop: () => {} },
+          registry: _getMcRegistry(),
         };
         await agent.execute(mockBot);
       }
