@@ -7,10 +7,18 @@ const { getLogger } = require('./logger');
 const log = getLogger();
 
 class MCPOrchestrator {
-  constructor({ heartbeatValidator } = {}) {
+  constructor({
+    heartbeatValidator,
+    serverManager,
+    loadBalancer,
+    knowledgeRouter,
+  } = {}) {
     this.board = new Blackboard();
     this.agents = new Map(); // agentId -> { role, status, registeredAt }
     this.heartbeatValidator = heartbeatValidator || null;
+    this.serverManager = serverManager || null;
+    this.loadBalancer = loadBalancer || null;
+    this.knowledgeRouter = knowledgeRouter || null;
   }
 
   async init() {
@@ -32,8 +40,33 @@ class MCPOrchestrator {
     if (this.heartbeatValidator) {
       await this.heartbeatValidator.recordHeartbeat(agentId);
     }
+    // Select server via load balancer if available
+    if (this.loadBalancer) {
+      const server = this.loadBalancer.selectServer();
+      if (server) {
+        this.loadBalancer.addAgent(server.id);
+        entry.serverId = server.id;
+        if (this.serverManager) {
+          await this.serverManager.connect(server.id);
+        }
+      }
+    }
     log.info('orchestrator', `registered: ${agentId} (${role})`);
     return entry;
+  }
+
+  /**
+   * Route a question through the knowledge system.
+   * Requires knowledgeRouter to be injected.
+   * @param {string} question
+   * @returns {Promise<string|null>}
+   */
+  async query(question) {
+    if (!this.knowledgeRouter) {
+      log.warn('orchestrator', 'query() called but no knowledgeRouter injected');
+      return null;
+    }
+    return this.knowledgeRouter.route(question);
   }
 
   async deregisterAgent(agentId) {
