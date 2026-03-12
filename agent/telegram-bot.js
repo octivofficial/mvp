@@ -57,7 +57,7 @@ const SPEC_PROMPT = (idea, clarification, taste, systemContext) =>
   `Then add a brief warm closing in gyopo style (English + brief Korean).`;
 
 class TelegramDevelopmentBot {
-  constructor(config = {}, board = null, reflexion = null, clientFactory = null) {
+  constructor(config = {}, board = null, reflexion = null, clientFactory = null, context = null) {
     if (!config || Object.keys(config).length === 0) {
       throw new Error('Missing configuration');
     }
@@ -65,6 +65,7 @@ class TelegramDevelopmentBot {
     this.board = board;
     this.reflexion = reflexion;
     this.clientFactory = clientFactory;
+    this.context = context; // OctiviaContext — shared memory layer
     this._sessions = new Map(); // chatId → { stage, idea, clarification, taste, author, notes[] }
     this.client = null;
 
@@ -165,7 +166,7 @@ class TelegramDevelopmentBot {
 
   async _vibeConversation(chatId, text, from) {
     const author = from?.username || from?.first_name || 'anonymous';
-    const session = this._sessions.get(chatId) || { stage: 0, notes: [] };
+    const session = await this._loadSession(chatId);
 
     // Silent notes — Octivia always records everything
     session.notes = session.notes || [];
@@ -174,7 +175,7 @@ class TelegramDevelopmentBot {
     if (session.stage === 0) {
       session.idea = text;
       session.author = author;
-      this._sessions.set(chatId, { ...session, stage: 1 });
+      await this._saveSession(chatId, { ...session, stage: 1 });
 
       await this.board.publish('telegram:idea', {
         author, text, chatId, timestamp: new Date().toISOString(),
@@ -185,14 +186,14 @@ class TelegramDevelopmentBot {
 
     } else if (session.stage === 1) {
       session.clarification = text;
-      this._sessions.set(chatId, { ...session, stage: 2 });
+      await this._saveSession(chatId, { ...session, stage: 2 });
 
       const response = await this._llmCall(VIBE_PROMPT(session.idea, text));
       this.client?.sendMessage(chatId, response);
 
     } else if (session.stage === 2) {
       session.taste = text;
-      this._sessions.set(chatId, { stage: 0, notes: [] });
+      await this._saveSession(chatId, { stage: 0, notes: [] });
 
       // Octivia quietly compiles everything
       this.client?.sendMessage(chatId, "Got it — putting this together for you.");
@@ -218,9 +219,39 @@ class TelegramDevelopmentBot {
     return "I need a moment to think — no LLM available right now. 잠깐만요.";
   }
 
+  // ── Session Persistence (Redis-backed, in-memory fallback) ────
+
+  async _loadSession(chatId) {
+    // Try Redis first for persistence across restarts
+    try {
+      if (this.board?.getConfig) {
+        const saved = await this.board.getConfig('octivia:session:' + chatId);
+        if (saved && typeof saved === 'object') return saved;
+      }
+    } catch {}
+    return this._sessions.get(chatId) || { stage: 0, notes: [] };
+  }
+
+  async _saveSession(chatId, session) {
+    this._sessions.set(chatId, session); // always keep in-memory
+    try {
+      if (this.board?.setConfig) {
+        await this.board.setConfig('octivia:session:' + chatId, session);
+      }
+    } catch {}
+  }
+
   // ── Context & Memory ─────────────────────────────────────
 
   async _getSystemContext() {
+    // If OctiviaContext is available, use rich aggregated state
+    if (this.context) {
+      try {
+        const ctx = await this.context.gather();
+        return this.context.format(ctx);
+      } catch {}
+    }
+    // Fallback: just MEMORY.md
     try {
       const raw = await fs.promises.readFile(MEMORY_PATH, 'utf8').catch(() => '');
       return raw.slice(0, 2500);
