@@ -9,6 +9,8 @@
  * redis v5 cluster client is API-compatible — Blackboard methods work unchanged.
  */
 const T = require("../config/timeouts");
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 /**
  * Full Jitter exponential backoff — avoids thundering herd.
@@ -56,7 +58,7 @@ function createRedisClient(options = {}) {
     redisModule = require('redis');
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
-      console.warn('redis module not found, returning mock. Ensure npm install is run.');
+      log.warn('redis-factory', 'redis module not found, returning mock. Ensure npm install is run.');
     }
     return {
       connect: async () => {},
