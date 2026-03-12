@@ -7,6 +7,14 @@ describe('TelegramBot -> Cloud OpenClaw Proxy', () => {
     mock.restoreAll();
   });
 
+  it('should throw when OpenClaw endpoint is unreachable', async () => {
+    global.fetch = mock.fn(async () => { throw new Error('Network error'); });
+    const config = { telegramToken: 'dummy', blackboardUrl: 'dummy', openClawEndpoint: 'https://example.com' };
+    const mockBoard = { connect: async () => {}, publish: async () => {} };
+    const bot = new TelegramDevelopmentBot(config, mockBoard);
+    await assert.rejects(() => bot.analyzeFeasibility('test'), /Network error/);
+  });
+
   it('should forward complex requests to OpenClaw via fetch', async () => {
     const mockResponse = {
       ok: true,

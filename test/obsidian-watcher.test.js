@@ -3,6 +3,10 @@ const assert = require('node:assert');
 const ObsidianOrganizer = require('../agent/obsidian-agent.js');
 
 describe('ObsidianAgent -> Vault Watcher', () => {
+  it('should throw if vaultPath is missing in config', () => {
+    assert.throws(() => new ObsidianOrganizer({}, null), /Missing vault path/);
+  });
+
   it('should initialize watcher on vaultPath', async () => {
     const mockWatcher = {
       on: mock.fn(() => mockWatcher)

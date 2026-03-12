@@ -83,8 +83,6 @@ class BuilderAgent {
     if (!_loadDeps()) {
       throw new Error('Required mineflayer dependencies not found');
     }
-    const { GoalNear, GoalBlock, GoalXZ } = goals; // localized usage
-    
     await this.board.connect();
     this.bot = mineflayer.createBot({
       host: process.env.MC_HOST || 'localhost',
@@ -147,7 +145,7 @@ class BuilderAgent {
 
   // ── AC-1: Collect wood ──────────────────────────────────────────
   async collectWood(count = 16) {
-    const { GoalNear, GoalBlock, GoalXZ } = goals;
+    const { GoalBlock } = goals;
     log.info(this.id, `starting wood collection (target: ${count})`);
     const LOG_TYPES = [
       'oak_log', 'spruce_log', 'birch_log', 'jungle_log',
@@ -236,7 +234,7 @@ class BuilderAgent {
     const shelterData = await this.board.get('builder:shelter');
     if (!shelterData?.position) throw new Error('No shelter coordinates found');
 
-    const { GoalNear, GoalBlock, GoalXZ } = goals;
+    const { GoalNear } = goals;
     const { x, y, z } = shelterData.position;
     this._setupPathfinder();
     await this._goto(new GoalNear(x + 1, y + 1, z + 1, 2));
@@ -303,7 +301,7 @@ class BuilderAgent {
     const dx = Math.round(Math.cos(angle) * WANDER_DISTANCE);
     const dz = Math.round(Math.sin(angle) * WANDER_DISTANCE);
 
-    const { GoalNear, GoalBlock, GoalXZ } = goals;
+    const { GoalXZ } = goals;
     log.info(this.id, `wandering to (${pos.x + dx}, ${pos.z + dz})`);
     this._setupPathfinder();
 

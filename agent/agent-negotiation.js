@@ -4,7 +4,6 @@
  * using natural language via Anthropic/Groq API
  */
 const { getLogger } = require('./logger');
-const T = require('../config/timeouts');
 const log = getLogger();
 
 // ── Negotiation message types ──────────────────────────────────────
@@ -151,7 +150,6 @@ class AgentNegotiation {
     try {
       // Get current status
       const status = await this.board.get(`agent:${this.agentId}:status`);
-      const acProgress = await this.board.getACProgress(this.agentId);
 
       const capabilities = this._getCapabilities();
       

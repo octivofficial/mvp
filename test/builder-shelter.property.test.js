@@ -21,7 +21,6 @@ if (SKIP_PROPERTY_TESTS) {
 }
 
 const fc = require('fast-check');
-const { Vec3 } = require('vec3');
 
 /**
  * Validates if a shelter structure meets the 3x3x3 configuration requirements.

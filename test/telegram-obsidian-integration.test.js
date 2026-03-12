@@ -4,6 +4,15 @@ const TelegramDevelopmentBot = require('../agent/telegram-bot.js');
 const ObsidianOrganizer = require('../agent/obsidian-agent.js');
 
 describe('Pub/Sub Integration', () => {
+  it('should propagate board publish failure', async () => {
+    const mockBoard = {
+      publish: mock.fn(async () => { throw new Error('Redis connection refused'); }),
+      connect: mock.fn(async () => {})
+    };
+    const bot = new TelegramDevelopmentBot({ telegramToken: 'dummy', blackboardUrl: 'dummy' }, mockBoard);
+    await assert.rejects(() => bot.publishPRD({ title: 'Test' }), /Redis connection refused/);
+  });
+
   it('should allow Telegram bot to publish PRD to Blackboard', async () => {
     const mockBoard = {
       publish: mock.fn(async () => {}),

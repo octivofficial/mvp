@@ -5,8 +5,6 @@
  * No Proxy escape vulnerability, proper timeout enforcement.
  */
 const ivm = require('isolated-vm');
-const { getLogger } = require('./logger');
-const log = getLogger();
 
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_MEMORY_LIMIT_MB = 128;
