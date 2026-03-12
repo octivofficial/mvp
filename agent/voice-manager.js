@@ -227,7 +227,12 @@ class VoiceManager {
       }
       this._player.play(resource);
     } catch (err) {
-      log.error('voice', 'failed to play TTS', { error: err.message });
+      // Downgrade to debug if voice is disabled (e.g. cloud VM without FFmpeg)
+      if (process.env.DISCORD_VOICE_ENABLED === 'false') {
+        log.debug('voice', 'TTS skipped (DISCORD_VOICE_ENABLED=false)', { error: err.message });
+      } else {
+        log.error('voice', 'failed to play TTS', { error: err.message });
+      }
       this._playing = false;
       this._processQueue();
     }

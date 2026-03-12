@@ -74,7 +74,10 @@ class LMStudioClient {
     this._activeUrl = null;
     this._models = [];
     this._lastHealthCheck = Date.now();
-    log.warn('lm-studio', 'All URLs unreachable', { urls: this.urls });
+    // Suppress warning if LM Studio is intentionally disabled (e.g. cloud VM)
+    if (process.env.LM_STUDIO_ENABLED !== 'false') {
+      log.warn('lm-studio', 'All URLs unreachable', { urls: this.urls });
+    }
     this._publishHealth(false);
   }
 
