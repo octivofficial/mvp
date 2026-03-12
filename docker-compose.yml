@@ -3,8 +3,9 @@
 # docker compose up -d
 #
 # Services:
-#   redis     : Blackboard (port 6379)
+#   redis     : Blackboard (port 6379 → host 6380)
 #   minecraft : PaperMC 1.21.11 (port 25565, RCON 25575)
+#   bot       : Octiv agent team (node agent/team.js)
 
 services:
 
@@ -60,6 +61,30 @@ services:
       retries: 5
       start_period: 120s    # extra time for PaperMC first-run download
 
+  bot:
+    build: .
+    container_name: octiv-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Override localhost refs to use Docker service names
+      MC_HOST: minecraft
+      MC_PORT: "25565"
+      RCON_HOST: minecraft
+      RCON_PORT: "25575"
+      BLACKBOARD_REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    depends_on:
+      redis:
+        condition: service_healthy
+      minecraft:
+        condition: service_healthy
+    volumes:
+      - vault-data:/app/vault
+    ports:
+      - "3000:3000"   # Web dashboard
+
 volumes:
   redis-data:
   mc-data:
+  vault-data:
