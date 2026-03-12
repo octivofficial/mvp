@@ -3,6 +3,8 @@
  * Manages multi-server connection state and publishes status updates
  * to the Blackboard for agent coordination.
  */
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 class ServerManager {
   /**
@@ -50,6 +52,7 @@ class ServerManager {
     const status = 'connected';
     this.statusMap[serverId] = status;
     await this.publishStatus(serverId, status);
+    log.info('server-manager', `connected to ${serverId}`);
     return { serverId, status };
   }
 

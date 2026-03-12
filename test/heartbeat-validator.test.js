@@ -325,7 +325,6 @@ describe('HeartbeatValidator — start and stop', () => {
 
   it('should not create duplicate timers on repeated start() calls', () => {
     hv.start();
-    const firstTimer = hv._timer;
     hv.start(); // second call
     // The second start should clear the first and create new, or be idempotent
     // Either way, _timer should be set (not null)

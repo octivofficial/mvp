@@ -2,6 +2,8 @@
  * LoadBalancer — selects Minecraft servers for new agents based on current load.
  * Supports load-ratio-based selection, per-server agent tracking, and rebalance suggestions.
  */
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 class LoadBalancer {
   /**
@@ -67,6 +69,7 @@ class LoadBalancer {
     const server = this.servers.get(serverId);
     if (!server) throw new Error(`Server not found: ${serverId}`);
     server.agentCount += 1;
+    log.info('load-balancer', `agent added to ${serverId} (count=${server.agentCount})`);
     return server.agentCount;
   }
 

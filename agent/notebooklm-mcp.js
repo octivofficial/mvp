@@ -19,6 +19,8 @@
  */
 
 const defaultHttp = require('http');
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 class NotebookLMMCP {
   /**
@@ -52,6 +54,7 @@ class NotebookLMMCP {
     const server = this._http.createServer();
     await new Promise((resolve) => server.listen(this.port, () => resolve()));
     this.server = server;
+    log.info('notebooklm-mcp', `MCP server started on port ${this.port}`);
     return { port: this.port, status: 'running' };
   }
 

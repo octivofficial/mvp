@@ -9,6 +9,8 @@
  */
 
 'use strict';
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 class KubeJSPlugin {
   /**
@@ -54,6 +56,7 @@ class KubeJSPlugin {
    * @returns {{ valid: boolean, errors: string[] }}
    */
   validateScript(filename, content) {
+    log.info('kubejs-plugin', `validating script: ${filename}`);
     const errors = [];
 
     if (content.includes('require(')) {

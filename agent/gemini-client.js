@@ -1,4 +1,6 @@
 'use strict';
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 /**
  * GeminiClient — Phase 7 Knowledge Bridge
@@ -64,6 +66,7 @@ class GeminiClient {
 
     const response = await this.httpClient.post(question);
     this.dailyCostUsd += this.costPerCallUsd;
+    log.info('gemini-client', `ask() cost $${this.dailyCostUsd.toFixed(4)} / $${this.dailyLimitUsd}`);
     return response;
   }
 

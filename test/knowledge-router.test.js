@@ -199,7 +199,7 @@ describe('KnowledgeRouter', () => {
     });
 
     it('routes document question to notebookLmClient.searchDocs()', async () => {
-      const answer = await router.route('What is mentioned in the doc?');
+      await router.route('What is mentioned in the doc?');
       assert.equal(notebook.searchDocs.mock.calls.length, 1, 'searchDocs should be called once');
       assert.equal(notebook.searchDocs.mock.calls[0].arguments[0], 'What is mentioned in the doc?');
       assert.equal(notebook.searchDocs.mock.calls[0].arguments[1], 3, 'limit should be 3');

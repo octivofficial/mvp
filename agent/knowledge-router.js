@@ -3,6 +3,8 @@
  * Routes questions to the appropriate knowledge service based on classification.
  * Fallback chain: Gemini → NotebookLM → Claude
  */
+const { getLogger } = require('./logger');
+const log = getLogger();
 
 /** Keywords that indicate a "complex" question requiring Claude */
 const COMPLEX_KEYWORDS = ['explain', 'analyze', 'compare', 'why', 'how does', 'what is the difference'];
@@ -63,6 +65,7 @@ class KnowledgeRouter {
    */
   async route(question) {
     const type = this.classifyQuestion(question);
+    log.info('knowledge-router', `routing question (type=${type})`);
 
     // Ordered list of attempts: primary service first, then fallbacks
     const attempts = this._buildAttemptChain(type, question);
