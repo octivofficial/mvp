@@ -1,4 +1,4 @@
-const { test, describe, it, mock } = require('node:test');
+const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 const TelegramDevelopmentBot = require('../agent/telegram-bot.js');
 const ObsidianOrganizer = require('../agent/obsidian-agent.js');

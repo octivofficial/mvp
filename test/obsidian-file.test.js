@@ -1,7 +1,6 @@
 const { describe, it, mock, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs/promises');
-const path = require('path');
 const ObsidianOrganizer = require('../agent/obsidian-agent.js');
 
 describe('ObsidianAgent -> File Handling', () => {
@@ -15,7 +14,7 @@ describe('ObsidianAgent -> File Handling', () => {
     mock.method(fs, 'mkdir', async () => {});
 
     const config = { vaultPath: '/tmp/vault', blackboardUrl: 'dummy' };
-    const mockBoard = { connect: async () => {}, createSubscriber: async () => ({}) };
+    const mockBoard = { connect: async () => {}, createSubscriber: async () => ({}), publish: async () => {} };
     const agent = new ObsidianOrganizer(config, mockBoard);
 
     const prdData = {

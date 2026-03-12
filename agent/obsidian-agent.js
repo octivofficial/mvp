@@ -111,6 +111,14 @@ class ObsidianOrganizer {
 
     await fs.writeFile(filePath, content, 'utf-8');
     log.info('obsidian-agent', `PRD saved to 01-Requirements/${slug}.md`);
+
+    if (this.board) {
+      await this.board.publish('obsidian:confirm', {
+        message: `PRD saved: ${slug}.md`,
+        path: filePath,
+        author: 'obsidian-agent'
+      });
+    }
   }
 
   async handleImport(data) {
