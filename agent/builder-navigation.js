@@ -30,17 +30,21 @@ function setupPathfinder(bot, cachedMovements) {
  * @param {number} timeoutMs - base timeout override (default from config)
  * @returns {Promise<void>}
  */
-function goto(bot, goal, timeoutMs = T.PATHFINDER_TIMEOUT_MS) {
-  // Scale timeout by distance to goal (when position available)
-  let effectiveTimeout = timeoutMs;
-  const pos = bot.entity?.position;
-  if (pos) {
-    const dx = (goal.x != null ? goal.x : pos.x) - pos.x;
-    const dy = (goal.y != null ? goal.y : pos.y) - pos.y;
-    const dz = (goal.z != null ? goal.z : pos.z) - pos.z;
-    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    const scaledTimeout = Math.min(120000, Math.max(30000, dist * 500));
-    effectiveTimeout = Math.max(timeoutMs, scaledTimeout);
+function goto(bot, goal, timeoutMs = null) {
+  const explicitTimeout = timeoutMs !== null;
+  const baseTimeout = timeoutMs ?? T.PATHFINDER_TIMEOUT_MS;
+  // Only apply distance scaling when no explicit timeout is provided
+  let effectiveTimeout = baseTimeout;
+  if (!explicitTimeout) {
+    const pos = bot.entity?.position;
+    if (pos) {
+      const dx = (goal.x != null ? goal.x : pos.x) - pos.x;
+      const dy = (goal.y != null ? goal.y : pos.y) - pos.y;
+      const dz = (goal.z != null ? goal.z : pos.z) - pos.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const scaledTimeout = Math.min(120000, Math.max(baseTimeout, dist * 500));
+      effectiveTimeout = scaledTimeout;
+    }
   }
 
   return new Promise((resolve, reject) => {

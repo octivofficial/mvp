@@ -5,17 +5,28 @@ const { getLogger } = require('./logger');
 const { AgentChat } = require('./agent-chat');
 const log = getLogger();
 
-// Lazy-loaded dependencies
-let mineflayer = null;
-let pathfinder = null;
+// builder-adaptation has no mineflayer dependency — load at top level
+const { classifyError, selfImprove, tryLearnedSkill } = require('./builder-adaptation');
+
+// builder-navigation and goals need only the package installed, not a live connection
 let goals = null;
-let collectBlock = null;
 let setupPathfinder = null;
 let goto = null;
 let buildShelterImpl = null;
-let classifyError = null;
-let selfImprove = null;
-let tryLearnedSkill = null;
+try {
+  const pf = require('mineflayer-pathfinder');
+  goals = pf.goals;
+  const nav = require('./builder-navigation');
+  setupPathfinder = nav.setupPathfinder;
+  goto = nav.goto;
+  const shelter = require('./builder-shelter');
+  buildShelterImpl = shelter.buildShelter;
+} catch {}
+
+// Lazy-loaded mineflayer connection dependencies
+let mineflayer = null;
+let pathfinder = null;
+let collectBlock = null;
 
 function _loadDeps() {
   if (!mineflayer) {
@@ -23,20 +34,8 @@ function _loadDeps() {
       mineflayer = require('mineflayer');
       const pf = require('mineflayer-pathfinder');
       pathfinder = pf.pathfinder;
-      goals = pf.goals;
       collectBlock = require('mineflayer-collectblock');
-      
-      const nav = require('./builder-navigation');
-      setupPathfinder = nav.setupPathfinder;
-      goto = nav.goto;
-      
-      const shelter = require('./builder-shelter');
-      buildShelterImpl = shelter.buildShelter;
-      
-      const adapt = require('./builder-adaptation');
-      classifyError = adapt.classifyError;
-      selfImprove = adapt.selfImprove;
-      tryLearnedSkill = adapt.tryLearnedSkill;
+      // goals, goto, setupPathfinder, buildShelterImpl already loaded at top level
     } catch (err) {
       log.warn('builder', 'Missing mineflayer dependencies. Role will be disabled.', { error: err.message });
       return false;

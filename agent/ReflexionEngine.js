@@ -61,7 +61,13 @@ class ReflexionEngine {
 
     if (!response) return null;
 
-    return null;
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return null;
+      return JSON.parse(jsonMatch[0]);
+    } catch {
+      return null;
+    }
   }
 
   /**

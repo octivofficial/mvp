@@ -16,6 +16,11 @@ class MCPServer {
     this.board = new Blackboard();
     this.server = null;
     this.tools = {
+      getStatus: this._getStatus.bind(this),
+      moveTo: this._moveTo.bind(this),
+      chopTree: this._chopTree.bind(this),
+      inventory: this._inventory.bind(this),
+      setLLMConfig: this._setLLMConfig.bind(this),
       getLLMConfig: this._getLLMConfig.bind(this),
       analyzeYouTube: this._analyzeYouTube.bind(this),
       notebookDeepResearch: this._notebookDeepResearch.bind(this),
