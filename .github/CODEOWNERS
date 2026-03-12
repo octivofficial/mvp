@@ -1,0 +1,21 @@
+# Octiv CODEOWNERS
+# Each line is a file pattern followed by one or more owners.
+# Order matters — last matching pattern takes precedence.
+
+# Default: Claude owns everything
+* @octivofficial/claude
+
+# Agent code: Claude leads
+/agent/ @octivofficial/claude
+/test/ @octivofficial/claude
+/config/ @octivofficial/claude
+/scripts/ @octivofficial/claude
+
+# Minecraft server: Anti-Gravity owns game design
+/server/kubejs/ @octivofficial/anti-gravity
+/server/server.properties @octivofficial/anti-gravity
+
+# Shared ownership: docs and CI require both
+/docs/ @octivofficial/claude @octivofficial/anti-gravity
+/README.md @octivofficial/claude @octivofficial/anti-gravity
+/.github/workflows/ @octivofficial/claude @octivofficial/anti-gravity
