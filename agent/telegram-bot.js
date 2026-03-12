@@ -1,4 +1,4 @@
-// agent/telegram-bot.js — Octivia, Vibe Translator (Blueprint Phase 1)
+// agent/telegram-bot.js — Octivia, Vibe Translator (Blueprint Phase 1+)
 //
 // Personality: A brilliant bilingual assistant who listens deeply,
 // notes everything internally, and translates human vibes into
@@ -7,7 +7,10 @@
 // Flow: Free talk → Octivia absorbs + asks one natural follow-up →
 //       silently collects → produces Build Spec → vault/00-Vibes/ → Blackboard
 //
-// Independence: NO Minecraft. Only Blackboard + LLM.
+// Party Mode: accumulate ideas → /build → compile all → BMAD BUILD BRIEF
+// Build Mode: Claude Code reads Obsidian → BMAD team builds
+//
+// Independence: NO Minecraft. Only Blackboard + LLM + Obsidian vault.
 const fs = require('fs');
 const path = require('path');
 const { getLogger } = require('./logger');
@@ -15,6 +18,31 @@ const log = getLogger();
 
 const VAULT_VIBES_DIR = path.join(__dirname, '..', 'vault', '00-Vibes');
 const MEMORY_PATH = path.join(__dirname, '..', 'vault', 'MEMORY.md');
+
+// ── Octivia's Team Capability Map ─────────────────────────
+// She knows exactly what her team can do. This context is injected
+// into every LLM call so the BUILD SPEC is directly actionable.
+
+const TEAM_CAPABILITIES = `
+Build Team (BMAD — what Claude Code can execute):
+- pm-agent: Requirements, AC tasks, priorities, success criteria
+- planner: Step-by-step breakdown, file changes, dependencies
+- architect: System design, Redis patterns, mineflayer architecture
+- dev-agent: Write actual code — Node.js, mineflayer, Redis, Discord.js
+- tdd-guide: Write tests FIRST. Node.js native test runner, mocks, Blackboard stubs
+- code-reviewer: Quality review, security, patterns
+- debug-agent: Systematic debugging when things break
+- github-agent: Commit, push, CI verification
+
+Key Skills Available:
+- /brainstorming → explore intent before building
+- /writing-plans → structured implementation plan
+- /tdd-workflow → Red-Green-Refactor cycle
+- /systematic-debugging → 4-stage debug methodology
+- /dispatching-parallel-agents → parallel independent tasks
+- /verification-loop → 6-phase verification before PR
+- obsidian-sync → vault read/write, Dashboard.md, Session-Sync.md
+`.trim();
 
 // ── Octivia's internal LLM prompts ───────────────────────────
 // These are invisible to the user — she "thinks" before responding.
@@ -31,6 +59,7 @@ NEVER say "Socratic question 1/2" or any stage labels. Just be present, warm, cu
 You are taking SILENT NOTES of everything said — you never tell the user this.
 Your questions help YOU gather what you need, not interrogate the user.
 
+You bridge between the human (Tony) and the dev team (JARVIS). You know what the team can build.
 Keep responses SHORT. One thought, one question (if needed). Never more than 3 sentences.`;
 
 const FOLLOW_UP_PROMPT = (idea) =>
@@ -46,15 +75,47 @@ const VIBE_PROMPT = (idea, clarification) =>
 const SPEC_PROMPT = (idea, clarification, taste, systemContext) =>
   `You are Octivia, a vibe translator. Synthesize this conversation into a BUILD SPEC for Claude Code.\n\n` +
   `Conversation collected:\n- Idea: ${idea}\n- Context: ${clarification}\n- Feel: ${taste}\n\n` +
-  `Current system:\n${systemContext}\n\n` +
+  `Current system reality:\n${systemContext}\n\n` +
+  `Team capabilities:\n${TEAM_CAPABILITIES}\n\n` +
   `Output a BUILD SPEC in this exact format:\n\n` +
   `## Build Spec: [Feature Name]\n\n` +
   `**Intent**: [what this wants to accomplish — 1 sentence]\n` +
   `**Vibe**: [how it should feel — adjectives]\n` +
   `**Gap**: [what's missing from current system — be specific]\n` +
   `**Approach**: [1-2 sentence implementation plan using existing architecture]\n` +
-  `**Files**: [which agent/*.js files to create or modify]\n\n` +
+  `**Files**: [which agent/*.js files to create or modify]\n` +
+  `**Skills**: [which /skills to invoke, e.g. /brainstorming /tdd-workflow]\n\n` +
   `Then add a brief warm closing in gyopo style (English + brief Korean).`;
+
+// Used by /build — compiles ALL accumulated vibes into a BMAD BUILD BRIEF
+const BMAD_BRIEF_PROMPT = (accumulatedIdeas, systemContext) =>
+  `You are Octivia, bridge between human vision and the development team.\n\n` +
+  `Accumulated ideas from our conversations:\n${accumulatedIdeas}\n\n` +
+  `Current system reality:\n${systemContext}\n\n` +
+  `Team capabilities:\n${TEAM_CAPABILITIES}\n\n` +
+  `Compile everything into a BMAD BUILD BRIEF that the dev team can execute immediately.\n\n` +
+  `Use this exact format:\n\n` +
+  `## Build Brief: [Overarching Feature/Theme]\n\n` +
+  `**Vision**: [1-2 sentences: what we're building and why it matters]\n` +
+  `**Vibe**: [adjectives: how it should feel when done]\n\n` +
+  `### Gap Analysis\n` +
+  `**What exists**: [bullet list of relevant existing pieces]\n` +
+  `**What's missing**: [specific gaps — be surgical]\n` +
+  `**Complexity**: [1 day | 1 week | 1 month]\n\n` +
+  `### BMAD Execution Plan\n\n` +
+  `**pm-agent** — Requirements:\n` +
+  `- [ ] AC-X: [acceptance criterion]\n\n` +
+  `**planner** — Steps:\n` +
+  `1. [concrete step]\n\n` +
+  `**architect** — Design:\n` +
+  `- [key design decision]\n\n` +
+  `**dev-agent** — Files:\n` +
+  `- \`agent/xxx.js\` — create/modify\n\n` +
+  `**tdd-guide** — Tests:\n` +
+  `- \`test/xxx.test.js\` — N tests\n\n` +
+  `### Skills to Invoke\n` +
+  `- [list relevant skills from the skills index]\n\n` +
+  `Close with: "All yours, 팀. 빌드 시작해요." in gyopo style.`;
 
 class TelegramDevelopmentBot {
   constructor(config = {}, board = null, reflexion = null, clientFactory = null, context = null) {
@@ -113,13 +174,15 @@ class TelegramDevelopmentBot {
         "/start — intro\n" +
         "/status — system snapshot\n" +
         "/context <idea> — check against what we have\n" +
+        "/build — compile all vibes → BMAD brief for the dev team\n" +
         "/reset — start fresh\n\n" +
-        "Or just talk — I'm listening. 그냥 말해요."
+        "Or just talk — I'm always listening. 그냥 말해요."
       );
     }
 
     if (text === '/reset') {
       this._sessions.delete(chatId);
+      await this._saveSession(chatId, { stage: 0, notes: [] }).catch(() => {});
       return this.client?.sendMessage(chatId,
         "Fresh start. What are you thinking? Conversation state reset."
       );
@@ -128,6 +191,10 @@ class TelegramDevelopmentBot {
     if (text === '/status') {
       const snap = await this._systemSnapshot();
       return this.client?.sendMessage(chatId, snap);
+    }
+
+    if (text === '/build') {
+      return this._handleBuild(chatId, msg.from);
     }
 
     if (text.startsWith('/context ')) {
@@ -159,6 +226,71 @@ class TelegramDevelopmentBot {
           this.client?.sendMessage(chatId, `PRD published.\nTitle: ${prdData.title}`);
         }
       }
+    }
+  }
+
+  // ── /build — Compile all accumulated vibes → BMAD BUILD BRIEF ──
+
+  async _handleBuild(chatId, from) {
+    const author = from?.username || from?.first_name || 'octivia';
+    const ideas = await this._accumulateRecentVibes();
+    if (!ideas) {
+      return this.client?.sendMessage(chatId,
+        "No vibes accumulated yet. Tell me your ideas first — I'll gather them. 아이디어 먼저요!"
+      );
+    }
+    this.client?.sendMessage(chatId, "Compiling everything into a build brief... 잠깐만요 ✨");
+    const systemContext = await this._getSystemContext();
+    const brief = await this._llmCall(BMAD_BRIEF_PROMPT(ideas, systemContext));
+    await this._saveBuildBrief(brief, author);
+    await this.board.publish('octivia:build-brief', {
+      author, brief, chatId, timestamp: Date.now(),
+    }).catch(() => {});
+    return this.client?.sendMessage(chatId,
+      brief + '\n\n> Saved to vault/00-Vibes/ · Claude Code ready to build'
+    );
+  }
+
+  async _accumulateRecentVibes() {
+    try {
+      const files = await fs.promises.readdir(VAULT_VIBES_DIR).catch(() => []);
+      const mdFiles = files
+        .filter(f => f.endsWith('.md') && f !== 'README.md' && !f.startsWith('BUILD-'))
+        .sort()
+        .slice(-10); // last 10 vibes
+      if (mdFiles.length === 0) return null;
+      const parts = [];
+      for (const f of mdFiles) {
+        const raw = await fs.promises.readFile(path.join(VAULT_VIBES_DIR, f), 'utf8').catch(() => '');
+        const idea = raw.match(/\*\*Idea\*\*: (.+)/)?.[1] || '';
+        const context = raw.match(/\*\*Context\*\*: (.+)/)?.[1] || '';
+        const vibe = raw.match(/\*\*Vibe\*\*: (.+)/)?.[1] || '';
+        if (idea) parts.push(`### ${f.slice(0, 10)}: ${idea}\nContext: ${context}\nVibe: ${vibe}`);
+      }
+      return parts.length > 0 ? parts.join('\n\n') : null;
+    } catch { return null; }
+  }
+
+  async _saveBuildBrief(brief, author = 'octivia') {
+    try {
+      await fs.promises.mkdir(VAULT_VIBES_DIR, { recursive: true });
+      const date = new Date().toISOString().slice(0, 10);
+      const filename = `BUILD-BRIEF-${date}.md`;
+      const content = [
+        '---',
+        'type: build-brief',
+        'status: ready',
+        `created: ${date}`,
+        `author: ${author}`,
+        'tags: [build-brief, bmad, ready]',
+        '---',
+        '',
+        brief,
+      ].join('\n');
+      await fs.promises.writeFile(path.join(VAULT_VIBES_DIR, filename), content, 'utf8');
+      log.info('telegram-bot', `Build brief saved: vault/00-Vibes/${filename}`);
+    } catch (err) {
+      log.warn('telegram-bot', 'Build brief save failed', { error: err.message });
     }
   }
 
@@ -269,14 +401,26 @@ class TelegramDevelopmentBot {
       const reg = await this.board.get('agents:registry');
       if (reg) lines.push(`Active agents: ${Object.keys(reg).join(', ')}`);
     } catch {}
+    try {
+      const vibesCount = await this._countVibes();
+      if (vibesCount > 0) lines.push(`Vibes accumulated: ${vibesCount} (use /build to compile)`);
+    } catch {}
     lines.push(`VM: 34.94.165.1 (LA)\n${new Date().toISOString()}`);
     return lines.join('\n\n') || 'System snapshot unavailable.';
+  }
+
+  async _countVibes() {
+    const files = await fs.promises.readdir(VAULT_VIBES_DIR).catch(() => []);
+    return files.filter(f => f.endsWith('.md') && f !== 'README.md' && !f.startsWith('BUILD-')).length;
   }
 
   async _crossReference(idea) {
     const memory = await this._getSystemContext();
     if (this.reflexion && memory) {
-      const prompt = `${SYSTEM_PROMPT}\n\nUser is checking this idea: "${idea}"\n\nCurrent system:\n${memory}\n\nIn your natural gyopo voice, briefly say:\n- What already exists that helps\n- What's missing (the gap)\n- How hard to build (1 day / 1 week / 1 month)\nKeep it conversational and short.`;
+      const prompt = `${SYSTEM_PROMPT}\n\nUser is checking this idea: "${idea}"\n\nCurrent system:\n${memory}\n\n` +
+        `Team capabilities:\n${TEAM_CAPABILITIES}\n\n` +
+        `In your natural gyopo voice, briefly say:\n- What already exists that helps\n- What's missing (the gap)\n` +
+        `- How hard to build (1 day / 1 week / 1 month)\n- Which agents/skills would handle it\nKeep it conversational and short.`;
       return await this.reflexion.callLLM(prompt, 'normal').catch(() => `Can't cross-ref right now. 나중에 다시 해봐요.`);
     }
     return `Cross-reference unavailable — no LLM or MEMORY.md. "${idea}"`;
@@ -289,8 +433,16 @@ class TelegramDevelopmentBot {
       const slug = (session.idea || 'vibe').slice(0, 30).replace(/[^\w가-힣\s]/g, '').trim().replace(/\s+/g, '-');
       const filename = `${date}-${slug || 'idea'}.md`;
       const content = [
+        '---',
+        'type: vibe',
+        'status: idea',
+        `created: ${date}`,
+        `author: ${session.author || 'anonymous'}`,
+        'tags: [vibe, idea, octivia]',
+        'source: telegram',
+        '---',
+        '',
         `# ${session.idea}`,
-        `> ${date} | @${session.author}`,
         '',
         '## Conversation',
         `**Idea**: ${session.idea}`,
@@ -360,6 +512,12 @@ class TelegramDevelopmentBot {
           if (data.context?.chatId) {
             this.client?.sendMessage(data.context.chatId, `Doc created:\n${data.docUrl}`);
           }
+        } catch {}
+      });
+      sub.subscribe('octivia:build-brief', async (msg) => {
+        try {
+          const data = JSON.parse(msg);
+          log.info('telegram-bot', 'Build brief ready for Claude Code', { chatId: data.chatId });
         } catch {}
       });
     } catch (err) {
