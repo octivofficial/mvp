@@ -142,6 +142,10 @@ class TelegramDevelopmentBot {
     this.client = new BotApi(this.config.telegramToken, { polling: true });
     this.client.on('message', async (msg) => {
       if (msg.text) await this._routeMessage(msg);
+      // Log when bot is added to a group (so owner can add group ID to authorizedGroups)
+      if (msg.new_chat_members?.some(m => m.is_bot)) {
+        log.info('telegram-bot', `Added to group: chatId=${msg.chat.id} title="${msg.chat.title}"`);
+      }
     });
     this.listenForUpdates();
     log.info('telegram-bot', 'Octivia online');
@@ -149,17 +153,67 @@ class TelegramDevelopmentBot {
 
   // ── Routing ───────────────────────────────────────────────
 
+  _isGroupChat(msg) {
+    return ['group', 'supergroup'].includes(msg.chat?.type);
+  }
+
   async _routeMessage(msg) {
     const chatId = msg.chat.id;
     const text = msg.text.trim();
+    const fromId = msg.from?.id;
+    const isGroup = this._isGroupChat(msg);
 
+    // ── Authorization ─────────────────────────────────────
     const authUsers = this.config.authorizedUsers || [];
-    if (authUsers.length > 0 && !authUsers.includes(chatId)) {
-      this.client?.sendMessage(chatId, 'Unauthorized — you\'re not on the list. 연락해줘요.');
+    const authGroups = this.config.authorizedGroups || [];
+
+    if (isGroup) {
+      // Groups: check authorizedGroups list (if configured), or open to all
+      if (authGroups.length > 0 && !authGroups.includes(chatId)) {
+        return; // silently ignore — not an authorized group
+      }
+    } else {
+      // DM: authorize by user ID (chatId === user's ID in private chats)
+      const dmId = fromId || chatId;
+      if (authUsers.length > 0 && !authUsers.includes(dmId) && !authUsers.includes(chatId)) {
+        this.client?.sendMessage(chatId, 'Unauthorized — you\'re not on the list. 연락해줘요.');
+        return;
+      }
+    }
+
+    // ── Group: silent listen + respond only on @mention ───
+    if (isGroup && !text.startsWith('/')) {
+      const botUsername = this.config.botUsername || 'Octivia_bot';
+      const isMentioned = text.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
+
+      // Always record silently — Octivia takes notes of the whole room
+      await this._recordGroupMessage(chatId, msg);
+
+      if (!isMentioned) return; // not addressed to Octivia — stay silent
+
+      // @mentioned → respond as vibe translator
+      const cleanText = text.replace(new RegExp(`@${botUsername}`, 'gi'), '').trim();
+      if (cleanText) {
+        if (this.reflexion) {
+          await this._vibeConversation(chatId, cleanText, msg.from);
+        } else {
+          const prdData = await this.handleMessage(cleanText);
+          if (prdData?.title) this.client?.sendMessage(chatId, `PRD published.\nTitle: ${prdData.title}`);
+        }
+      }
       return;
     }
 
     if (text === '/start') {
+      if (isGroup) {
+        return this.client?.sendMessage(chatId,
+          "Hi everyone — I'm Octivia, your vibe translator.\n\n" +
+          "I'll silently take notes of your discussions.\n" +
+          "Mention @Octivia_bot anytime you want me to weigh in.\n" +
+          "Use /build when you're ready to compile ideas into a build brief.\n\n" +
+          "안녕하세요 다들! 잘 듣고 있을게요 👂"
+        );
+      }
       return this.client?.sendMessage(chatId,
         "Welcome to Octiv — I'm Octivia, your vibe translator.\n\n" +
         "Tell me what you're thinking. Rough idea, half-baked thought, whatever. " +
@@ -176,7 +230,7 @@ class TelegramDevelopmentBot {
         "/context <idea> — check against what we have\n" +
         "/build — compile all vibes → BMAD brief for the dev team\n" +
         "/reset — start fresh\n\n" +
-        "Or just talk — I'm always listening. 그냥 말해요."
+        (isGroup ? "Mention @Octivia_bot to talk with me. 그냥 불러요." : "Or just talk — I'm always listening. 그냥 말해요.")
       );
     }
 
@@ -233,7 +287,12 @@ class TelegramDevelopmentBot {
 
   async _handleBuild(chatId, from) {
     const author = from?.username || from?.first_name || 'octivia';
-    const ideas = await this._accumulateRecentVibes();
+    // Collect vault vibes + group session notes
+    const [vaultIdeas, groupNotes] = await Promise.all([
+      this._accumulateRecentVibes(),
+      this._accumulateGroupNotes(chatId),
+    ]);
+    const ideas = [vaultIdeas, groupNotes].filter(Boolean).join('\n\n---\n\n') || null;
     if (!ideas) {
       return this.client?.sendMessage(chatId,
         "No vibes accumulated yet. Tell me your ideas first — I'll gather them. 아이디어 먼저요!"
@@ -249,6 +308,24 @@ class TelegramDevelopmentBot {
     return this.client?.sendMessage(chatId,
       brief + '\n\n> Saved to vault/00-Vibes/ · Claude Code ready to build'
     );
+  }
+
+  // ── Group: silent message recorder ───────────────────────
+
+  async _recordGroupMessage(chatId, msg) {
+    try {
+      const session = await this._loadSession(chatId);
+      session.notes = session.notes || [];
+      session.notes.push({
+        author: msg.from?.username || msg.from?.first_name || 'anonymous',
+        text: msg.text,
+        ts: Date.now(),
+        type: 'group',
+      });
+      // Keep last 200 messages per group (memory limit)
+      if (session.notes.length > 200) session.notes = session.notes.slice(-200);
+      await this._saveSession(chatId, session);
+    } catch {}
   }
 
   async _accumulateRecentVibes() {
@@ -268,6 +345,17 @@ class TelegramDevelopmentBot {
         if (idea) parts.push(`### ${f.slice(0, 10)}: ${idea}\nContext: ${context}\nVibe: ${vibe}`);
       }
       return parts.length > 0 ? parts.join('\n\n') : null;
+    } catch { return null; }
+  }
+
+  // Compile recent group conversation notes into a text summary
+  async _accumulateGroupNotes(chatId) {
+    try {
+      const session = await this._loadSession(chatId);
+      const notes = (session.notes || []).filter(n => n.type === 'group').slice(-50);
+      if (notes.length === 0) return null;
+      const lines = notes.map(n => `[${n.author}]: ${n.text}`);
+      return `### Group Conversation (${notes.length} messages)\n${lines.join('\n')}`;
     } catch { return null; }
   }
 

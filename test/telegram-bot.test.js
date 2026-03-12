@@ -358,6 +358,102 @@ describe('TelegramDevelopmentBot _routeMessage()', () => {
   });
 });
 
+describe('TelegramDevelopmentBot group chat', () => {
+  const makeClient = () => ({ sendMessage: mock.fn(() => {}) });
+
+  it('silently records group message without responding', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    bot._recordGroupMessage = mock.fn(async () => {});
+    const msg = {
+      chat: { id: -100123456, type: 'group' },
+      text: 'Let\'s build something cool',
+      from: { id: 999, username: 'friend1' }
+    };
+    await bot._routeMessage(msg);
+    // Should record but NOT send any message
+    assert.strictEqual(bot.client.sendMessage.mock.calls.length, 0);
+    assert.strictEqual(bot._recordGroupMessage.mock.calls.length, 1);
+  });
+
+  it('responds in group when @Octivia_bot is mentioned', async () => {
+    const board = makeBoard();
+    const reflexion = makeReflexion('Great idea! 좋아요');
+    const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
+    bot.client = makeClient();
+    bot._recordGroupMessage = mock.fn(async () => {});
+    const msg = {
+      chat: { id: -100123456, type: 'group' },
+      text: '@Octivia_bot what do you think about this feature?',
+      from: { id: 999, username: 'friend1' }
+    };
+    await bot._routeMessage(msg);
+    assert.strictEqual(bot._recordGroupMessage.mock.calls.length, 1);
+    // Should have responded since @mentioned
+    assert.ok(bot.client.sendMessage.mock.calls.length >= 1);
+  });
+
+  it('rejects unauthorized group silently (no message sent)', async () => {
+    const config = { ...baseConfig(), authorizedGroups: [-999] };
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(config, board);
+    bot.client = makeClient();
+    const msg = {
+      chat: { id: -100111999, type: 'group' }, // different from authorized -999
+      text: '/start',
+      from: { id: 777 }
+    };
+    await bot._routeMessage(msg);
+    // Unauthorized group: silently ignored, no message sent
+    assert.strictEqual(bot.client.sendMessage.mock.calls.length, 0);
+  });
+
+  it('allows group when authorizedGroups is empty', async () => {
+    const config = { ...baseConfig(), authorizedGroups: [] };
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(config, board);
+    bot.client = makeClient();
+    bot._recordGroupMessage = mock.fn(async () => {});
+    const msg = {
+      chat: { id: -100123456, type: 'group' },
+      text: '/start',
+      from: { id: 999, username: 'anyone' }
+    };
+    await bot._routeMessage(msg);
+    // /start in group sends group welcome
+    assert.ok(bot.client.sendMessage.mock.calls.length >= 1);
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes("Hi everyone") || text.includes("Octivia"));
+  });
+
+  it('sends group-specific welcome for /start in group', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    const msg = { chat: { id: -100123, type: 'group' }, text: '/start', from: { id: 42 } };
+    await bot._routeMessage(msg);
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('Hi everyone'));
+  });
+
+  it('_recordGroupMessage stores message in session notes', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    const msg = {
+      chat: { id: -100123 },
+      text: 'this is a group message',
+      from: { id: 99, username: 'groupuser' }
+    };
+    await bot._recordGroupMessage(-100123, msg);
+    const session = bot._sessions.get(-100123);
+    assert.ok(session?.notes?.length >= 1);
+    assert.strictEqual(session.notes[0].author, 'groupuser');
+    assert.strictEqual(session.notes[0].text, 'this is a group message');
+    assert.strictEqual(session.notes[0].type, 'group');
+  });
+});
+
 describe('TelegramDevelopmentBot _accumulateRecentVibes()', () => {
   it('returns null when vault dir is empty', async () => {
     const bot = new TelegramDevelopmentBot(baseConfig(), makeBoard());
