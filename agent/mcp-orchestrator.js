@@ -7,9 +7,10 @@ const { getLogger } = require('./logger');
 const log = getLogger();
 
 class MCPOrchestrator {
-  constructor() {
+  constructor({ heartbeatValidator } = {}) {
     this.board = new Blackboard();
     this.agents = new Map(); // agentId -> { role, status, registeredAt }
+    this.heartbeatValidator = heartbeatValidator || null;
   }
 
   async init() {
@@ -27,6 +28,10 @@ class MCPOrchestrator {
     this.agents.set(agentId, entry);
     await this.board.setHashField('agents:registry', agentId, entry);
     await this.board.publish('orchestrator:registered', { author: 'orchestrator', agentId, role });
+    // Record initial heartbeat if validator is injected (Requirement 3)
+    if (this.heartbeatValidator) {
+      await this.heartbeatValidator.recordHeartbeat(agentId);
+    }
     log.info('orchestrator', `registered: ${agentId} (${role})`);
     return entry;
   }
