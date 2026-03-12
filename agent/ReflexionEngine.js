@@ -8,11 +8,11 @@ const { getLogger } = require('./logger');
 const log = getLogger();
 
 const DEFAULT_CONFIG = {
-  model: process.env.HUB_PRIMARY_MODEL || 'gemini-3.0-flash',
+  model: process.env.HUB_PRIMARY_MODEL || 'claude-haiku-4-5-20251001',
   escalationModel: process.env.HUB_ESCALATION_MODEL || 'claude-sonnet-4-6',
   ultraModel: process.env.HUB_ULTRA_MODEL || 'claude-opus-4-6',
-  liteModel: process.env.HUB_LITE_MODEL || 'claude-sonnet-4-5',
-  researchModel: process.env.HUB_RESEARCH_MODEL || 'gemini-3.0-pro',
+  liteModel: process.env.HUB_LITE_MODEL || 'claude-haiku-4-5-20251001',
+  researchModel: process.env.HUB_RESEARCH_MODEL || 'claude-sonnet-4-6',
   fallbackModel: process.env.HUB_FALLBACK_MODEL || 'local:qwen/qwen3.5-9b',
   temperature: 0.7,
   maxTokens: 2048,
