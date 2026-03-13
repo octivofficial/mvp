@@ -142,11 +142,14 @@ class TelegramDevelopmentBot {
     this.client = new BotApi(this.config.telegramToken, { polling: true });
     this.client.on('message', async (msg) => {
       if (msg.text) await this._routeMessage(msg);
-      // When Octivia herself is added to a group — introduce herself
+      // When Octivia herself is added to a group — introduce herself and register chatId
       const botUsername = (this.config.botUsername || 'Octivia_bot').toLowerCase();
       if (msg.new_chat_members?.some(m => m.username?.toLowerCase() === botUsername)) {
         const chatId = msg.chat.id;
-        log.info('telegram-bot', `Added to group: chatId=${chatId} title="${msg.chat.title}"`);
+        const title = msg.chat.title || 'group';
+        log.info('telegram-bot', `Added to group: chatId=${chatId} title="${title}"`);
+        // Persist group chatId to Blackboard so it survives container restarts
+        this.board?.publish?.('octiv:telegram:group:joined', { chatId, title }).catch(() => {});
         this.client?.sendMessage(chatId,
           "안녕하세요 여러분! I'm Octivia — your vibe translator.\n\n" +
           "Talk to me anytime — I'll respond to everything.\n" +
