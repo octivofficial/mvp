@@ -31,9 +31,16 @@ describe('TelegramBot -> API Polling', () => {
     bot.startPolling();
     
     assert.strictEqual(bot.client.token, 'dummy_token');
-    assert.deepStrictEqual(bot.client.options, { polling: true });
-    
-    assert.strictEqual(mockOn.mock.calls.length, 1);
-    assert.strictEqual(mockOn.mock.calls[0].arguments[0], 'message');
+    assert.deepStrictEqual(bot.client.options, {
+      polling: {
+        params: {
+          allowed_updates: JSON.stringify(['message', 'channel_post', 'edited_message', 'edited_channel_post'])
+        }
+      }
+    });
+
+    // message + channel_post handlers registered
+    assert.ok(mockOn.mock.calls.length >= 1);
+    assert.ok(mockOn.mock.calls.some(c => c.arguments[0] === 'message'));
   });
 });
