@@ -143,13 +143,13 @@ class TelegramDevelopmentBot {
     this.client.on('message', async (msg) => {
       if (msg.text) await this._routeMessage(msg);
       // When Octivia herself is added to a group — introduce herself
-      if (msg.new_chat_members?.some(m => m.username?.toLowerCase() === 'octivia_bot')) {
+      const botUsername = (this.config.botUsername || 'Octivia_bot').toLowerCase();
+      if (msg.new_chat_members?.some(m => m.username?.toLowerCase() === botUsername)) {
         const chatId = msg.chat.id;
         log.info('telegram-bot', `Added to group: chatId=${chatId} title="${msg.chat.title}"`);
         this.client?.sendMessage(chatId,
           "안녕하세요 여러분! I'm Octivia — your vibe translator.\n\n" +
-          "I'll quietly take notes while you talk.\n" +
-          "Mention @Octivia_bot anytime you want me to weigh in.\n" +
+          "Talk to me anytime — I'll respond to everything.\n" +
           "Use /build when you're ready to turn the vibe into something real.\n\n" +
           "잘 부탁드립니다 👂✨"
         );
@@ -220,7 +220,7 @@ class TelegramDevelopmentBot {
         "/context <idea> — check against what we have\n" +
         "/build — compile all vibes → BMAD brief for the dev team\n" +
         "/reset — start fresh\n\n" +
-        (isGroup ? "Mention @Octivia_bot to talk with me. 그냥 불러요." : "Or just talk — I'm always listening. 그냥 말해요.")
+        "Or just talk — I'm always listening. 그냥 말해요."
       );
     }
 
@@ -483,7 +483,8 @@ class TelegramDevelopmentBot {
       const vibesCount = await this._countVibes();
       if (vibesCount > 0) lines.push(`Vibes accumulated: ${vibesCount} (use /build to compile)`);
     } catch {}
-    lines.push(`VM: 34.94.165.1 (LA)\n${new Date().toISOString()}`);
+    const vmHost = process.env.VM_HOST || process.env.BLACKBOARD_REDIS_URL?.match(/redis:\/\/([^:\/]+)/)?.[1] || 'VM';
+    lines.push(`Host: ${vmHost}\n${new Date().toISOString()}`);
     return lines.join('\n\n') || 'System snapshot unavailable.';
   }
 
