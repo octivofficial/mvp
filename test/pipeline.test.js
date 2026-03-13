@@ -39,7 +39,7 @@ describe('SkillPipeline — Generation & Deployment (Phase 4.1/4.2)', () => {
         await pipeline.shutdown();
     });
 
-    it('Should validate safe code in vm2 sandbox', async () => {
+    it('Should validate safe code in node:vm sandbox', async () => {
         const pipeline = new SkillPipeline(null);
         await pipeline.init();
 
@@ -49,7 +49,7 @@ describe('SkillPipeline — Generation & Deployment (Phase 4.1/4.2)', () => {
         await pipeline.shutdown();
     });
 
-    it('Should reject invalid code in vm2 sandbox', async () => {
+    it('Should reject invalid code in node:vm sandbox', async () => {
         const pipeline = new SkillPipeline(null);
         await pipeline.init();
 

@@ -144,7 +144,7 @@ describe('SafetyAgent — Position Passthrough (AC-8 Runtime)', () => {
     });
 });
 
-describe('SafetyAgent — vm2 Sandbox Validation (AC-8)', () => {
+describe('SafetyAgent — node:vm Sandbox Validation (AC-8)', () => {
     let SafetyAgent;
 
     before(() => {
