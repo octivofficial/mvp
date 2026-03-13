@@ -1,6 +1,8 @@
 // FarmerAgent.js
 const { BaseRole } = require('./BaseRole');
 const { AgentChat } = require('../agent-chat');
+const { getLogger } = require('../logger');
+const log = getLogger();
 const T = require('../../config/timeouts');
 
 // Crop definitions with harvest maturity (metadata value at full growth)
@@ -64,19 +66,19 @@ class FarmerAgent extends BaseRole {
     this.totalHarvested++;
 
     // 5. Try to replant
-    await this.replant(bot, block, cropType).catch(() => {});
+    await this.replant(bot, block, cropType).catch(e => log.debug('farmer', 'chat error', { error: e.message }));
 
     // 6. Chat about it
     this.chat.chat('crop_harvested', {
       type: cropType, total: this.totalHarvested,
       x: cropInfo.position.x, z: cropInfo.position.z,
-    }).catch(() => {});
+    }).catch(e => log.debug('farmer', 'chat error', { error: e.message }));
 
     // Confess on milestone
     if (this.totalHarvested > 0 && this.totalHarvested % 10 === 0) {
       this.chat.confess('farming_milestone', {
         total: this.totalHarvested, inventory: { ...this.harvested },
-      }).catch(() => {});
+      }).catch(e => log.debug('farmer', 'chat error', { error: e.message }));
     }
 
     // 7. Publish to Blackboard

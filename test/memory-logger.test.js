@@ -100,6 +100,59 @@ describe('MemoryLogger — getByType', () => {
   });
 });
 
+describe('MemoryLogger — log rotation', () => {
+  let logger, tmpDir;
+
+  beforeEach(() => {
+    tmpDir = path.join(os.tmpdir(), `octiv-memlog-rotate-${Date.now()}`);
+    // Use tiny maxFileSize to trigger rotation quickly
+    logger = new MemoryLogger(tmpDir, { maxFileSize: 200, maxRotations: 2 });
+  });
+
+  afterEach(async () => {
+    try { await fsp.rm(tmpDir, { recursive: true }); } catch {}
+  });
+
+  it('should rotate log files when exceeding maxFileSize', async () => {
+    // Write enough data to exceed 200 bytes
+    for (let i = 0; i < 10; i++) {
+      await logger.logEvent('rotate-agent', { type: 'test', i, padding: 'x'.repeat(30) });
+    }
+
+    const rotatedFile = path.join(tmpDir, 'rotate-agent.jsonl.1');
+    const exists = fs.existsSync(rotatedFile);
+    assert.ok(exists, 'Rotated file .1 should exist after exceeding maxFileSize');
+  });
+
+  it('should prune oldest rotation beyond maxRotations', async () => {
+    // Write lots of data to trigger multiple rotations
+    for (let i = 0; i < 30; i++) {
+      await logger.logEvent('prune-agent', { type: 'test', i, padding: 'x'.repeat(50) });
+    }
+
+    // With maxRotations=2, .3 should NOT exist
+    const file3 = path.join(tmpDir, 'prune-agent.jsonl.3');
+    assert.ok(!fs.existsSync(file3), 'File .3 should be pruned (maxRotations=2)');
+
+    // Current file should still be writable
+    const current = path.join(tmpDir, 'prune-agent.jsonl');
+    assert.ok(fs.existsSync(current), 'Current log file should exist');
+  });
+
+  it('should clear rotated files too', async () => {
+    for (let i = 0; i < 10; i++) {
+      await logger.logEvent('clear-agent', { type: 'test', i, padding: 'x'.repeat(30) });
+    }
+
+    await logger.clear('clear-agent');
+
+    const current = path.join(tmpDir, 'clear-agent.jsonl');
+    const rotated1 = path.join(tmpDir, 'clear-agent.jsonl.1');
+    assert.ok(!fs.existsSync(current), 'Current log should be cleared');
+    assert.ok(!fs.existsSync(rotated1), 'Rotated log should be cleared');
+  });
+});
+
 describe('MemoryLogger — clear', () => {
   let logger, tmpDir;
 

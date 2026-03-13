@@ -1,6 +1,8 @@
 // MinerAgent.js
 const { BaseRole } = require('./BaseRole');
 const { AgentChat } = require('../agent-chat');
+const { getLogger } = require('../logger');
+const log = getLogger();
 const T = require('../../config/timeouts');
 
 // Lazy-loaded priority/tier
@@ -76,20 +78,20 @@ class MinerAgent extends BaseRole {
     this.chat.chat('ore_mined', {
       type: oreType, total: this.totalMined,
       x: orePos.x, y: orePos.y, z: orePos.z,
-    }).catch(() => {});
+    }).catch(e => log.debug('miner', 'chat error', { error: e.message }));
 
     // Confess on rare find (diamond, gold, lapis)
     if (['diamond', 'gold', 'lapis'].includes(oreType)) {
       this.chat.confess('rare_find', {
         type: oreType, y: orePos.y,
-      }).catch(() => {});
+      }).catch(e => log.debug('miner', 'chat error', { error: e.message }));
     }
 
     // Confess on milestone (every 10 ores)
     if (this.totalMined > 0 && this.totalMined % 10 === 0) {
       this.chat.confess('mining_milestone', {
         total: this.totalMined, inventory: { ...this.mined },
-      }).catch(() => {});
+      }).catch(e => log.debug('miner', 'chat error', { error: e.message }));
     }
 
     // 9. Publish to Blackboard (resilient to Redis failure)
@@ -199,7 +201,7 @@ class MinerAgent extends BaseRole {
       await furnace.putInput(item.type, null, item.count);
     }
     await furnace.close();
-    this.chat.chat('smelting', { count: items.length, type: 'ores' }).catch(() => {});
+    this.chat.chat('smelting', { count: items.length, type: 'ores' }).catch(e => log.debug('miner', 'chat error', { error: e.message }));
   }
 
   // ── Internal Helpers ──────────────────────────────────────────

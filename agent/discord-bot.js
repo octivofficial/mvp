@@ -961,7 +961,7 @@ class OctivDiscordBot {
   async _waitForRcResponse(requestId, timeoutMs) {
     return new Promise(async (resolve) => {
       const timeout = setTimeout(() => {
-        if (sub) sub.disconnect().catch(() => {});
+        if (sub) sub.disconnect().catch(e => log.debug('discord-bot', 'rc subscriber disconnect error', { error: e?.message }));
         resolve(null);
       }, timeoutMs);
 
@@ -970,7 +970,7 @@ class OctivDiscordBot {
         sub = await this.board.createSubscriber();
         await sub.subscribe(PREFIX + requestId, (message) => {
           clearTimeout(timeout);
-          sub.disconnect().catch(() => {});
+          sub.disconnect().catch(e => log.debug('discord-bot', 'rc subscriber disconnect error', { error: e?.message }));
           try {
             resolve(JSON.parse(message));
           } catch {

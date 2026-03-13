@@ -65,7 +65,7 @@ function createApiClients() {
     log.info('api-clients', 'LM Studio disabled via LM_STUDIO_ENABLED=false');
   } else {
     const lmClient = new LMStudioClient();
-    lmClient.checkHealth().catch(() => {}); // non-blocking initial probe
+    lmClient.checkHealth().catch(e => log.debug('api-clients', 'initial health probe error', { error: e?.message }));
     lmClient.startHealthMonitor();
     clients.local = lmClient;
     log.info('api-clients', `LM Studio client ready (${lmClient.urls.join(', ')})`);

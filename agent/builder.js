@@ -173,17 +173,17 @@ class BuilderAgent {
         }
 
         if (wanderFailures >= 5) {
-          this.chat.confess('repeated_failure', { failures: wanderFailures }).catch(() => {});
+          this.chat.confess('repeated_failure', { failures: wanderFailures }).catch(e => log.debug(this.id, 'chat error', { error: e.message }));
         }
 
         const wp = this.bot.entity.position;
-        this.chat.chat('wandering', { x: Math.round(wp.x), z: Math.round(wp.z) }).catch(() => {});
+        this.chat.chat('wandering', { x: Math.round(wp.x), z: Math.round(wp.z) }).catch(e => log.debug(this.id, 'chat error', { error: e.message }));
         await this._wander();
         continue;
       }
       wanderFailures = 0; // reset on success
 
-      this.chat.chat('wood_found', { blockType: woodLog.name, x: woodLog.position.x, z: woodLog.position.z }).catch(() => {});
+      this.chat.chat('wood_found', { blockType: woodLog.name, x: woodLog.position.x, z: woodLog.position.z }).catch(e => log.debug(this.id, 'chat error', { error: e.message }));
       await this._goto(new GoalBlock(woodLog.position.x, woodLog.position.y, woodLog.position.z));
       await this.bot.dig(woodLog);
       collected++;
@@ -193,8 +193,8 @@ class BuilderAgent {
     }
 
     this.acProgress[1] = true;
-    this.chat.chat('wood_complete', { count: collected }).catch(() => {});
-    this.chat.confess('ac_complete', { ac: 1, count: collected }).catch(() => {});
+    this.chat.chat('wood_complete', { count: collected }).catch(e => log.debug(this.id, 'chat error', { error: e.message }));
+    this.chat.confess('ac_complete', { ac: 1, count: collected }).catch(e => log.debug(this.id, 'chat error', { error: e.message }));
     if (this.logger) this.logger.logEvent(this.id, { type: 'ac_complete', ac: 1, collected }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
     log.info(this.id, `AC-1 done: collected ${collected} wood`);
   }
@@ -224,7 +224,7 @@ class BuilderAgent {
     });
     this.acProgress[2] = true;
     const shelterPos = (await this.board.get('builder:shelter'))?.position || {};
-    this.chat.chat('shelter_complete', { x: shelterPos.x, y: shelterPos.y, z: shelterPos.z }).catch(() => {});
+    this.chat.chat('shelter_complete', { x: shelterPos.x, y: shelterPos.y, z: shelterPos.z }).catch(e => log.debug(this.id, 'chat error', { error: e.message }));
   }
 
   // ── AC-4: Navigate to shelter ──────────────────────────────────
@@ -239,7 +239,7 @@ class BuilderAgent {
     await this._goto(new GoalNear(x + 1, y + 1, z + 1, 2));
 
     this.acProgress[4] = true;
-    this.chat.chat('arrived_shelter', {}).catch(() => {});
+    this.chat.chat('arrived_shelter', {}).catch(e => log.debug(this.id, 'chat error', { error: e.message }));
     await this.board.updateAC(this.id, 4, 'done');
     await this.board.publish('builder:arrived', {
       author: this.id,
@@ -326,7 +326,7 @@ class BuilderAgent {
           author: this.id,
           ac: data.ac,
           action: data.action,
-        }).catch(() => {});
+        }).catch(e => log.debug(this.id, 'chat error', { error: e.message }));
       } catch (err) {
         log.error(this.id, 'mission parse error', { error: err.message });
       }

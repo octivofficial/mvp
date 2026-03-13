@@ -171,7 +171,7 @@ class LMStudioClient {
   startHealthMonitor() {
     if (this._healthInterval) return; // idempotent
     this._healthInterval = setInterval(
-      () => this.checkHealth().catch(() => {}),
+      () => this.checkHealth().catch(e => log.debug('lm-studio', 'periodic health error', { error: e?.message })),
       T.LM_STUDIO_HEALTH_INTERVAL_MS,
     );
     // Don't hold process open
@@ -200,7 +200,7 @@ class LMStudioClient {
       activeUrl: this._activeUrl,
       models: this._models,
       timestamp: Date.now(),
-    }).catch(() => {}); // non-critical, suppress unhandled rejection
+    }).catch(e => log.debug('lm-studio', 'health check error', { error: e?.message })); // non-critical, suppress unhandled rejection
   }
 }
 

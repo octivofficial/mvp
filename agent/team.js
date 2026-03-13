@@ -20,15 +20,9 @@ const { GoTReasoner } = require('./got-reasoner');
 const { ZettelkastenHooks } = require('./zettelkasten-hooks');
 const { getLogger } = require('./logger');
 const { MCPServer } = require('./mcp-server');
-const { ObsidianCLIAgent } = require('./obsidian-cli-agent');
+const { initPlugins } = require('./team-plugins');
+const { setupRemoteControl } = require('./team-rc');
 const T = require('../config/timeouts');
-const path = require('node:path');
-let botConfig = {};
-try {
-  botConfig = require('../config/bot-config.json');
-} catch (e) {
-  // Config optional
-}
 const log = getLogger();
 const TEAM_SIZE = 5; // number of builder agents (expanded from 3 to 5)
 
@@ -160,13 +154,13 @@ async function gracefulShutdown(agents, resources) {
 
   // Shutdown new bots
   if (agents.telegramBot && agents.telegramBot.client) {
-    try { await agents.telegramBot.client.stopPolling(); } catch (e) {}
+    try { await agents.telegramBot.client.stopPolling(); } catch (e) { log.debug('team', 'telegram shutdown error', { error: e.message }); }
   }
   if (agents.obsidianAgent && agents.obsidianAgent.watcher) {
-    try { await agents.obsidianAgent.watcher.close(); } catch (e) {}
+    try { await agents.obsidianAgent.watcher.close(); } catch (e) { log.debug('team', 'obsidian shutdown error', { error: e.message }); }
   }
   if (agents.discordBot) {
-    try { await agents.discordBot.stop(); } catch (e) {}
+    try { await agents.discordBot.stop(); } catch (e) { log.debug('team', 'discord shutdown error', { error: e.message }); }
   }
 
   // Deregister agents from orchestrator before shutdown
@@ -272,87 +266,7 @@ function monitorGathering(board, teamSize, intervalMs = T.GATHERING_POLL_INTERVA
   return checkInterval;
 }
 
-/**
- * Remote Control listener — responds to RC commands published by discord-bot
- * Supports: status, agents, ac, log, test
- */
-async function setupRemoteControl(board, agents) {
-  const rcSubscriber = await board.createSubscriber();
-  const rcCommands = ['status', 'agents', 'ac', 'log', 'test'];
-
-  for (const subcmd of rcCommands) {
-    await rcSubscriber.subscribe(`octiv:rc:cmd:${subcmd}`, async (message) => {
-      try {
-        const request = JSON.parse(message);
-        const requestId = request.requestId;
-        if (!requestId) return;
-
-        let data;
-        switch (subcmd) {
-          case 'status': {
-            const teamStatus = await board.get('team:status');
-            data = {
-              status: teamStatus?.status || 'unknown',
-              mission: teamStatus?.mission || 'unknown',
-              uptime: teamStatus?.startedAt
-                ? `${Math.round((Date.now() - new Date(teamStatus.startedAt).getTime()) / 1000)}s`
-                : 'unknown',
-              builders: agents.builders.length,
-            };
-            break;
-          }
-          case 'agents': {
-            const agentList = [
-              { id: agents.leader.id, role: 'leader', mode: agents.leader.mode },
-              ...agents.builders.map((b, i) => ({ id: `builder-0${i + 1}`, role: 'builder' })),
-              { id: 'safety-01', role: 'safety' },
-              { id: 'explorer-01', role: 'explorer' },
-              ...(agents.miner ? [{ id: agents.miner.id, role: 'miner' }] : []),
-              ...(agents.farmer ? [{ id: agents.farmer.id, role: 'farmer' }] : []),
-            ];
-            data = agentList;
-            break;
-          }
-          case 'ac': {
-            const matrix = {};
-            for (let i = 1; i <= agents.builders.length; i++) {
-              const progress = await board.getACProgress(`builder-0${i}`);
-              const parsed = {};
-              for (const [k, v] of Object.entries(progress)) {
-                try { parsed[k] = JSON.parse(v).status; } catch { parsed[k] = v; }
-              }
-              matrix[`builder-0${i}`] = parsed;
-            }
-            data = matrix;
-            break;
-          }
-          case 'log': {
-            const recent = await board.get('team:status');
-            data = `Team: ${recent?.status || 'unknown'} | Mission: ${recent?.mission || 'unknown'}`;
-            break;
-          }
-          case 'test': {
-            data = 'RC connection OK. Team is responsive.';
-            break;
-          }
-        }
-
-        // Publish response back via main board client
-        const responsePayload = JSON.stringify({
-          ts: Date.now(),
-          requestId,
-          data,
-        });
-        await board.client.publish(`octiv:${requestId}`, responsePayload);
-      } catch (err) {
-        log.error('team', `RC handler error for ${subcmd}`, { error: err.message });
-      }
-    });
-  }
-
-  log.info('team', 'Remote Control listener active', { commands: rcCommands });
-  return rcSubscriber;
-}
+// setupRemoteControl extracted to ./team-rc.js (re-exported below for backward compat)
 
 async function main() {
   const redisDisplay = (process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380').replace(/:\/\/[^@]*@/, '://***@');
@@ -416,109 +330,9 @@ async function main() {
     log.warn('team', 'Learning pipeline unavailable — bots will run without skill generation', { error: err.message });
   }
 
-  // Initialize new Telegram and Obsidian Integration bots (Phase 2)
-  // Set ENABLE_TELEGRAM_BOT=false to skip (e.g. when running octivia.js on VM)
-  let telegramBot = null;
-  let obsidianAgent = null;
-  if (process.env.ENABLE_TELEGRAM_BOT !== 'false') {
-    try {
-      const TelegramDevelopmentBot = require('./telegram-bot');
-      telegramBot = new TelegramDevelopmentBot({
-        telegramToken: botConfig.telegramToken || process.env.TELEGRAM_BOT_TOKEN,
-        telegramChannelUrl: botConfig.telegramChannelUrl || process.env.TELEGRAM_CHANNEL_URL,
-        openClawEndpoint: botConfig.openClawEndpoint || process.env.OPENCLAW_ENDPOINT || 'https://api.dantelabs.com/openclaw/1.0',
-        blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380',
-        authorizedUsers: botConfig.authorizedUsers || []
-      }, board, reflexion);
-      telegramBot.startPolling();
-      log.info('team', 'TelegramDevelopmentBot initialized and polling');
-    } catch (err) {
-      log.warn('team', 'TelegramDevelopmentBot disabled — missing configuration or dependencies', { error: err.message });
-    }
-  } else {
-    log.info('team', 'Telegram bot disabled (ENABLE_TELEGRAM_BOT=false)');
-  }
-
-  try {
-    const ObsidianOrganizer = require('./obsidian-agent');
-    obsidianAgent = new ObsidianOrganizer({
-      vaultPath: botConfig.obsidianVaultPath || process.env.OBSIDIAN_VAULT_PATH || './vault',
-      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380'
-    }, board, reflexion);
-    obsidianAgent.startWatcher();
-    log.info('team', 'ObsidianOrganizer initialized and watching vault');
-  } catch (err) {
-    log.warn('team', 'ObsidianOrganizer disabled — missing configuration or dependencies', { error: err.message });
-  }
-
-  let discordBot = null;
-  try {
-    const { OctivDiscordBot } = require('./discord-bot');
-    const discordConfig = require('../config/discord.json');
-    discordBot = new OctivDiscordBot({
-      token: botConfig.discordToken || process.env.DISCORD_TOKEN,
-      guildId: botConfig.discordGuildId || process.env.DISCORD_GUILD_ID,
-      config: discordConfig
-    }, reflexion);
-    await discordBot.start();
-    log.info('team', 'OctivDiscordBot initialized');
-  } catch (err) {
-    log.warn('team', 'OctivDiscordBot disabled — missing configuration or dependencies', { error: err.message });
-  }
-
-  // --- Cloud Hub Hub Agents (Crawler, Google) ---
-  let crawlerAgent = null;
-  try {
-    const { CrawlerAgent } = require('./crawler-agent');
-    crawlerAgent = new CrawlerAgent({
-      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL
-    }, board);
-    await crawlerAgent.init();
-    log.info('team', 'CrawlerAgent initialized');
-  } catch (err) {
-    log.warn('team', 'CrawlerAgent disabled — missing configuration or dependencies', { error: err.message });
-  }
-
-  let workspaceAgent = null;
-  try {
-    const { WorkspaceAgent } = require('./workspace-agent.js');
-    workspaceAgent = new WorkspaceAgent({
-      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL
-    }, board);
-    await workspaceAgent.init();
-    log.info('team', 'WorkspaceAgent initialized');
-  } catch (err) {
-    log.warn('team', 'WorkspaceAgent disabled — missing configuration or dependencies', { error: err.message });
-  }
-
-  let notebookAgent = null;
-  try {
-    const { NotebookLMAgent } = require('./notebook-lm-agent.js');
-    notebookAgent = new NotebookLMAgent({}, board, reflexion);
-    await notebookAgent.init();
-    log.info('team', 'NotebookLMAgent initialized');
-  } catch (err) {
-    log.warn('team', 'NotebookLMAgent disabled', { error: err.message });
-  }
-
-  let youtubeAgent = null;
-  try {
-    const { YouTubeAgent } = require('./youtube-agent.js');
-    youtubeAgent = new YouTubeAgent({}, board, reflexion);
-    await youtubeAgent.init();
-    log.info('team', 'YouTubeAgent initialized');
-  } catch (err) {
-    log.warn('team', 'YouTubeAgent disabled', { error: err.message });
-  }
-
-  let obsidianCliAgent = null;
-  try {
-    obsidianCliAgent = new ObsidianCLIAgent({ vaultPath: process.env.OBSIDIAN_VAULT_PATH || path.resolve('.') }, board);
-    await obsidianCliAgent.init();
-    log.info('team', 'Obsidian CLI Agent initialized');
-  } catch (err) {
-    log.warn('team', 'Obsidian CLI Agent disabled', { error: err.message });
-  }
+  // Initialize optional plugin agents (Telegram, Discord, Obsidian, Crawler, etc.)
+  const plugins = await initPlugins({ board, reflexion });
+  const { telegramBot, obsidianAgent, discordBot, crawlerAgent, workspaceAgent, notebookAgent, youtubeAgent, obsidianCliAgent } = plugins;
 
   // Record Octiv team initialization state
   await board.publish('team:status', {
@@ -672,9 +486,13 @@ async function main() {
 
   // Log team status periodically (every 30s)
   setInterval(async () => {
-    const status = await board.get('team:status');
-    if (status) {
-      log.info('team', `status: ${status.status} | mission: ${status.mission}`);
+    try {
+      const status = await board.get('team:status');
+      if (status) {
+        log.info('team', `status: ${status.status} | mission: ${status.mission}`);
+      }
+    } catch (err) {
+      log.error('team', 'status poll error', { error: err.message });
     }
   }, T.STATUS_LOG_INTERVAL_MS);
 }

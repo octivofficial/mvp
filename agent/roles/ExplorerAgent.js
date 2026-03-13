@@ -5,6 +5,8 @@
  */
 const { BaseRole } = require('./BaseRole');
 const { AgentChat } = require('../agent-chat');
+const { getLogger } = require('../logger');
+const log = getLogger();
 
 const DANGER_BLOCKS = ['lava', 'flowing_lava', 'fire', 'cactus', 'magma_block', 'sweet_berry_bush'];
 const SPIRAL_STEP = 10;
@@ -58,25 +60,25 @@ class ExplorerAgent extends BaseRole {
       radius: this.radius, resources: scanResult.resources.length,
       dangers: scanResult.dangers.length, x: waypoint.x, z: waypoint.z,
       safe: scanResult.dangers.length === 0 ? 'safe' : 'hostile',
-    }).catch(() => {});
+    }).catch(e => log.debug('explorer', 'chat error', { error: e.message }));
 
     // Report one danger per type (throttle only allows first per 30s anyway)
     const reportedTypes = new Set();
     for (const d of scanResult.dangers) {
       if (!reportedTypes.has(d.type)) {
         reportedTypes.add(d.type);
-        this.chat.chat('danger_spotted', { type: d.type, x: d.x, y: d.y, z: d.z }).catch(() => {});
+        this.chat.chat('danger_spotted', { type: d.type, x: d.x, y: d.y, z: d.z }).catch(e => log.debug('explorer', 'chat error', { error: e.message }));
       }
     }
 
     // Confess on danger zone accumulation
     if (this.dangerZones.length > 0 && this.dangerZones.length % 5 === 0) {
-      this.chat.confess('danger_zone', { dangerCount: this.dangerZones.length }).catch(() => {});
+      this.chat.confess('danger_zone', { dangerCount: this.dangerZones.length }).catch(e => log.debug('explorer', 'chat error', { error: e.message }));
     }
 
     // Confess milestone every 10 discoveries
     if (this.discovered.length > 0 && this.discovered.length % 10 === 0) {
-      this.chat.confess('milestone', { discoveries: this.discovered.length }).catch(() => {});
+      this.chat.confess('milestone', { discoveries: this.discovered.length }).catch(e => log.debug('explorer', 'chat error', { error: e.message }));
     }
 
     // Publish to Blackboard

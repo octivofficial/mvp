@@ -157,7 +157,7 @@ class TelegramDevelopmentBot {
         const title = msg.chat.title || 'group';
         log.info('telegram-bot', `Added to group: chatId=${chatId} title="${title}"`);
         // Persist group chatId to Blackboard so it survives container restarts
-        this.board?.publish?.('octiv:telegram:group:joined', { chatId, title }).catch(() => {});
+        this.board?.publish?.('octiv:telegram:group:joined', { chatId, title }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
         this.client?.sendMessage(chatId,
           "안녕하세요 여러분! I'm Octivia — your vibe translator.\n\n" +
           "Talk to me anytime — I'll respond to everything.\n" +
@@ -240,7 +240,7 @@ class TelegramDevelopmentBot {
 
     if (text === '/reset') {
       this._sessions.delete(chatId);
-      await this._saveSession(chatId, { stage: 0, notes: [] }).catch(() => {});
+      await this._saveSession(chatId, { stage: 0, notes: [] }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
       return this.client?.sendMessage(chatId,
         "Fresh start. What are you thinking? Conversation state reset."
       );
@@ -267,7 +267,7 @@ class TelegramDevelopmentBot {
       if (!question) return this.client?.sendMessage(chatId, 'Usage: /notebook <your question>');
       this.client?.sendMessage(chatId, '📚 Querying NotebookLM...');
       if (this.reflexion) {
-        await this.board?.publish?.('notebooklm:query', { question, context: { chatId, author: msg.from?.username } }).catch(() => {});
+        await this.board?.publish?.('notebooklm:query', { question, context: { chatId, author: msg.from?.username } }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
         // Response arrives via notebooklm:answer subscription in listenForUpdates
         return;
       }
@@ -278,7 +278,7 @@ class TelegramDevelopmentBot {
       const description = text.slice(5).trim();
       if (!description) return this.client?.sendMessage(chatId, 'Usage: /doc <description of what to create>');
       this.client?.sendMessage(chatId, '📄 Creating Google Doc...');
-      await this.board?.publish?.('google:task', { action: 'create_doc', description, context: { chatId, author: msg.from?.username } }).catch(() => {});
+      await this.board?.publish?.('google:task', { action: 'create_doc', description, context: { chatId, author: msg.from?.username } }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
       // Response arrives via google:finished subscription in listenForUpdates
       return;
     }
@@ -329,7 +329,7 @@ class TelegramDevelopmentBot {
     await this._saveBuildBrief(brief, author);
     await this.board.publish('octivia:build-brief', {
       author, brief, chatId, timestamp: Date.now(),
-    }).catch(() => {});
+    }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
     return this.client?.sendMessage(chatId,
       brief + '\n\n> Saved to vault/00-Vibes/ · Claude Code ready to build'
     );
@@ -424,7 +424,7 @@ class TelegramDevelopmentBot {
 
       await this.board.publish('telegram:idea', {
         author, text, chatId, timestamp: new Date().toISOString(),
-      }).catch(() => {});
+      }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
 
       const response = await this._llmCall(FOLLOW_UP_PROMPT(text));
       this.client?.sendMessage(chatId, response);
@@ -450,7 +450,7 @@ class TelegramDevelopmentBot {
       await this.board.publish('vibe:golden', {
         author, spec, chatId, idea: session.idea,
         notes: session.notes, timestamp: Date.now(),
-      }).catch(() => {});
+      }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
 
       this.client?.sendMessage(chatId, spec + '\n\n> /build to trigger · vault/00-Vibes/ saved');
     }

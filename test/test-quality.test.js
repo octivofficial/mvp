@@ -51,7 +51,7 @@ function getAgentFiles() {
     if (entry.isFile() && entry.name.endsWith('.js')) {
       files.push(entry.name);
     }
-    if (entry.isDirectory()) {
+    if (entry.isDirectory() && entry.name !== '_archived') {
       const subEntries = fs.readdirSync(path.join(AGENT_DIR, entry.name), { withFileTypes: true });
       for (const sub of subEntries) {
         if (sub.isFile() && sub.name.endsWith('.js')) {
@@ -159,8 +159,7 @@ describe('Test Quality — Agent Coverage Map', () => {
     'bot.js',                  // entry-point script, wraps OctivBot
     'logger.js',               // tested via logger.test.js (getLogger import)
     'memory-logger.js',        // circular dep prevention, tested via memory.test.js
-    'octivia.legacy.js',       // archived backup of pre-OpenClaw octivia.js (not active)
-    'telegram-bot.legacy.js',  // archived backup of pre-OpenClaw telegram-bot.js (not active)
+    'team-rc.js',              // re-exported via team.js, tested in team.test.js + rc.test.js
   ];
 
   it('every non-exempt agent/*.js should be imported by at least one test', () => {

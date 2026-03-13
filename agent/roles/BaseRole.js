@@ -76,7 +76,7 @@ class BaseRole {
     try {
       this.chat?.chat('navigating', {
         type: chatType, x: pos.x, y: pos.y, z: pos.z,
-      })?.catch(() => {});
+      })?.catch(e => log.debug(this.id, 'chat error', { error: e?.message }));
 
       const nav = _getNav();
       this._cachedMovements = nav.setupPathfinder(bot, this._cachedMovements);
@@ -137,7 +137,7 @@ class BaseRole {
       if (!quota.hasQuota) break;
 
       if (this.isInventoryFull(bot)) {
-        this.chat?.chat('inventory_full', { total: this._countItems(bot) })?.catch(() => {});
+        this.chat?.chat('inventory_full', { total: this._countItems(bot) })?.catch(e => log.debug(this.id, 'chat error', { error: e?.message }));
         break;
       }
 

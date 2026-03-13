@@ -51,7 +51,7 @@ class LeaderAgent {
     else mission = { ac: 0, action: 'idle', params: {} };
 
     await this.board.publish(`command:${agentId}:mission`, { author: 'leader', ...mission });
-    this.chat.chat('mission_assigned', { ac: mission.ac, agentId, action: mission.action }).catch(() => {});
+    this.chat.chat('mission_assigned', { ac: mission.ac, agentId, action: mission.action }).catch(e => log.debug('leader', 'chat error', { error: e.message }));
     if (this.logger) {
       this.logger.logEvent(this.id, { type: 'mission_assigned', agentId, mission }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
     }
@@ -120,7 +120,7 @@ class LeaderAgent {
       : 'training';
 
     await this.board.publish('leader:mode', { author: 'leader', mode: this.mode, progress });
-    this.chat.chat('mode_change', { mode: this.mode, progress: Math.floor(progress * 100) }).catch(() => {});
+    this.chat.chat('mode_change', { mode: this.mode, progress: Math.floor(progress * 100) }).catch(e => log.debug('leader', 'chat error', { error: e.message }));
     log.info(this.id, `mode: ${this.mode} (progress: ${Math.floor(progress * 100)}%)`);
     return this.mode;
   }
@@ -146,7 +146,7 @@ class LeaderAgent {
   // AC-6: Collect reflexion logs from all builders, synthesize improvements
   async triggerGroupReflexion() {
     log.info(this.id, 'triggering Group Reflexion');
-    this.chat.chat('reflexion_triggered', {}).catch(() => {});
+    this.chat.chat('reflexion_triggered', {}).catch(e => log.debug('leader', 'chat error', { error: e.message }));
     const allErrors = [];
     for (let i = 1; i <= this.teamSize; i++) {
       const entries = await this.board.getListRange(`agent:builder-0${i}:reflexion`);
@@ -193,8 +193,8 @@ class LeaderAgent {
       }
     }
 
-    this.chat.chat('reflexion_complete', { totalEntries: allErrors.length, recommendation: result.recommendation }).catch(() => {});
-    this.chat.confess('reflexion_insight', { totalEntries: allErrors.length, agentCount: this.teamSize, recommendation: result.recommendation }).catch(() => {});
+    this.chat.chat('reflexion_complete', { totalEntries: allErrors.length, recommendation: result.recommendation }).catch(e => log.debug('leader', 'chat error', { error: e.message }));
+    this.chat.confess('reflexion_insight', { totalEntries: allErrors.length, agentCount: this.teamSize, recommendation: result.recommendation }).catch(e => log.debug('leader', 'chat error', { error: e.message }));
     log.info(this.id, `Group Reflexion complete: ${allErrors.length} entries from ${this.teamSize} agents`);
     return result;
   }
@@ -238,7 +238,7 @@ class LeaderAgent {
     for (let i = 1; i <= this.teamSize; i++) {
       await this.board.publish(`command:builder-0${i}:prompt_update`, { author: 'leader', skills });
     }
-    this.chat.chat('skill_injected', { skill: skillName, version, totalSkills: skills.length }).catch(() => {});
+    this.chat.chat('skill_injected', { skill: skillName, version, totalSkills: skills.length }).catch(e => log.debug('leader', 'chat error', { error: e.message }));
     if (this.logger) {
       this.logger.logEvent(this.id, { type: 'skill_injected', skill: skillName, version, totalSkills: skills.length }).catch(e => log.error(this.id, 'log persist error', { error: e.message }));
     }
