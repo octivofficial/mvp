@@ -139,7 +139,15 @@ class TelegramDevelopmentBot {
   startPolling() {
     let BotApi = this.clientFactory;
     if (!BotApi) BotApi = require('node-telegram-bot-api');
-    this.client = new BotApi(this.config.telegramToken, { polling: true });
+    this.client = new BotApi(this.config.telegramToken, {
+      polling: {
+        params: { allowed_updates: JSON.stringify(['message', 'channel_post', 'edited_message', 'edited_channel_post']) }
+      }
+    });
+    // channel_post = messages in Telegram channels (admin-only broadcast channels)
+    this.client.on('channel_post', async (msg) => {
+      if (msg.text) await this._routeMessage(msg);
+    });
     this.client.on('message', async (msg) => {
       if (msg.text) await this._routeMessage(msg);
       // When Octivia herself is added to a group — introduce herself and register chatId
@@ -165,7 +173,8 @@ class TelegramDevelopmentBot {
   // ── Routing ───────────────────────────────────────────────
 
   _isGroupChat(msg) {
-    return ['group', 'supergroup'].includes(msg.chat?.type);
+    // channel = Telegram broadcast channel (admin posts), supergroup/group = group chats
+    return ['group', 'supergroup', 'channel'].includes(msg.chat?.type);
   }
 
   async _routeMessage(msg) {
