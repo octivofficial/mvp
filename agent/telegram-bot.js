@@ -142,9 +142,17 @@ class TelegramDevelopmentBot {
     this.client = new BotApi(this.config.telegramToken, { polling: true });
     this.client.on('message', async (msg) => {
       if (msg.text) await this._routeMessage(msg);
-      // Log when bot is added to a group (so owner can add group ID to authorizedGroups)
-      if (msg.new_chat_members?.some(m => m.is_bot)) {
-        log.info('telegram-bot', `Added to group: chatId=${msg.chat.id} title="${msg.chat.title}"`);
+      // When Octivia herself is added to a group — introduce herself
+      if (msg.new_chat_members?.some(m => m.username?.toLowerCase() === 'octivia_bot')) {
+        const chatId = msg.chat.id;
+        log.info('telegram-bot', `Added to group: chatId=${chatId} title="${msg.chat.title}"`);
+        this.client?.sendMessage(chatId,
+          "안녕하세요 여러분! I'm Octivia — your vibe translator.\n\n" +
+          "I'll quietly take notes while you talk.\n" +
+          "Mention @Octivia_bot anytime you want me to weigh in.\n" +
+          "Use /build when you're ready to turn the vibe into something real.\n\n" +
+          "잘 부탁드립니다 👂✨"
+        );
       }
     });
     this.listenForUpdates();
