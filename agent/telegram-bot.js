@@ -433,7 +433,7 @@ class TelegramDevelopmentBot {
 
   async _llmCall(prompt) {
     if (this.reflexion) {
-      const result = await this.reflexion.callLLM(prompt, 'normal').catch(() => null);
+      const result = await this.reflexion.callLLM(prompt, 'critical').catch(() => null);
       if (result) return result;
     }
     return "I need a moment to think — no LLM available right now. 잠깐만요.";
@@ -509,7 +509,7 @@ class TelegramDevelopmentBot {
         `Team capabilities:\n${TEAM_CAPABILITIES}\n\n` +
         `In your natural gyopo voice, briefly say:\n- What already exists that helps\n- What's missing (the gap)\n` +
         `- How hard to build (1 day / 1 week / 1 month)\n- Which agents/skills would handle it\nKeep it conversational and short.`;
-      return await this.reflexion.callLLM(prompt, 'normal').catch(() => `Can't cross-ref right now. 나중에 다시 해봐요.`);
+      return await this.reflexion.callLLM(prompt, 'critical').catch(() => `Can't cross-ref right now. 나중에 다시 해봐요.`);
     }
     return `Cross-reference unavailable — no LLM or MEMORY.md. "${idea}"`;
   }
@@ -554,7 +554,7 @@ class TelegramDevelopmentBot {
   async analyzeFeasibility(requestText) {
     if (this.reflexion) {
       const prompt = `Analyze feasibility and generate a PRD for this idea:\n\n${requestText}\n\nRespond with: title, scope, and key requirements.`;
-      const result = await this.reflexion.callLLM(prompt, 'normal');
+      const result = await this.reflexion.callLLM(prompt, 'critical');
       return result || `PRD draft for: ${requestText}`;
     }
     if (!this.config.openClawEndpoint) return `PRD draft for: ${requestText}`;
