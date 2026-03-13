@@ -416,22 +416,26 @@ async function main() {
   }
 
   // Initialize new Telegram and Obsidian Integration bots (Phase 2)
-  // These bots now use the reflexion engine for cost-aware local routing
+  // Set ENABLE_TELEGRAM_BOT=false to skip (e.g. when running octivia.js on VM)
   let telegramBot = null;
   let obsidianAgent = null;
-  try {
-    const TelegramDevelopmentBot = require('./telegram-bot');
-    telegramBot = new TelegramDevelopmentBot({
-      telegramToken: botConfig.telegramToken || process.env.TELEGRAM_BOT_TOKEN,
-      telegramChannelUrl: botConfig.telegramChannelUrl || process.env.TELEGRAM_CHANNEL_URL,
-      openClawEndpoint: botConfig.openClawEndpoint || process.env.OPENCLAW_ENDPOINT || 'https://api.dantelabs.com/openclaw/1.0',
-      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380',
-      authorizedUsers: botConfig.authorizedUsers || []
-    }, board, reflexion);
-    telegramBot.startPolling();
-    log.info('team', 'TelegramDevelopmentBot initialized and polling');
-  } catch (err) {
-    log.warn('team', 'TelegramDevelopmentBot disabled — missing configuration or dependencies', { error: err.message });
+  if (process.env.ENABLE_TELEGRAM_BOT !== 'false') {
+    try {
+      const TelegramDevelopmentBot = require('./telegram-bot');
+      telegramBot = new TelegramDevelopmentBot({
+        telegramToken: botConfig.telegramToken || process.env.TELEGRAM_BOT_TOKEN,
+        telegramChannelUrl: botConfig.telegramChannelUrl || process.env.TELEGRAM_CHANNEL_URL,
+        openClawEndpoint: botConfig.openClawEndpoint || process.env.OPENCLAW_ENDPOINT || 'https://api.dantelabs.com/openclaw/1.0',
+        blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380',
+        authorizedUsers: botConfig.authorizedUsers || []
+      }, board, reflexion);
+      telegramBot.startPolling();
+      log.info('team', 'TelegramDevelopmentBot initialized and polling');
+    } catch (err) {
+      log.warn('team', 'TelegramDevelopmentBot disabled — missing configuration or dependencies', { error: err.message });
+    }
+  } else {
+    log.info('team', 'Telegram bot disabled (ENABLE_TELEGRAM_BOT=false)');
   }
 
   try {
