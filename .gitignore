@@ -103,3 +103,4 @@ logs/
 .vercel
 .env*.local
 .mcp.json.future
+.openclaw/workspace/.openclaw/
