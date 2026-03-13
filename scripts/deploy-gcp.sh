@@ -7,7 +7,7 @@ set -e
 
 # ── Config (override via env or arg) ─────────────────────────
 PROJECT_ID="${1:-${GCP_PROJECT_ID:-}}"
-ZONE="${GCP_ZONE:-asia-northeast3-a}"   # Seoul — lowest latency from KR
+ZONE="${GCP_ZONE:-us-west2-a}"          # Los Angeles, USA
 VM_NAME="${GCP_VM_NAME:-octiv-hub}"
 MACHINE_TYPE="${GCP_MACHINE_TYPE:-e2-standard-4}"   # 4 vCPU, 16GB RAM
 DISK_SIZE="${GCP_DISK_SIZE:-50}"
@@ -88,9 +88,16 @@ echo ""
 echo "Step 4: Deploy on VM"
 gcloud compute ssh "$VM_NAME" --zone="$ZONE" --project="$PROJECT_ID" --command "
   set -e
-  # Install Docker if needed
+  # Install Docker CE + compose plugin from official Docker repo
   if ! command -v docker &>/dev/null; then
-    sudo apt-get update -q && sudo apt-get install -y docker.io docker-compose-plugin git
+    sudo apt-get update -q
+    sudo apt-get install -y ca-certificates curl git
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \$(. /etc/os-release && echo \$VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt-get update -q
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     sudo systemctl start docker && sudo systemctl enable docker
     sudo usermod -aG docker \$USER
   fi
