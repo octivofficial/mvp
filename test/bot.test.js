@@ -600,14 +600,10 @@ describe('OctivBot — Edge Cases', () => {
         // Force board publish to throw
         bot.board.publish = async () => { throw new Error('Redis error'); };
 
-        let threw = false;
-        try {
-            await bot._publishStatus('test');
-        } catch (e) {
-            threw = true;
-        }
-
-        assert.equal(threw, false, '_publishStatus should not throw on board error');
+        await assert.doesNotReject(
+            () => bot._publishStatus('test'),
+            '_publishStatus should not throw on board error'
+        );
 
         await bot.shutdown();
     });

@@ -1330,14 +1330,16 @@ describe('OctivDiscordBot — stop() leaves voice', () => {
     await assert.doesNotReject(() => bot.stop());
   });
 
-  it('shutdown() is an alias for stop()', async () => {
+  it('shutdown() is an alias for stop() and calls client.destroy', async () => {
     const bot = new OctivDiscordBot({ token: 'fake', config: {} });
     bot.voice = null;
     bot.subscriber = null;
     bot.board = null;
-    bot.client = { destroy: () => {} };
+    let destroyCalled = false;
+    bot.client = { destroy: () => { destroyCalled = true; } };
     assert.equal(typeof bot.shutdown, 'function');
-    await assert.doesNotReject(() => bot.shutdown());
+    await bot.shutdown();
+    assert.ok(destroyCalled, 'shutdown() should call client.destroy via stop()');
   });
 });
 

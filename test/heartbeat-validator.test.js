@@ -321,6 +321,7 @@ describe('HeartbeatValidator — start and stop', () => {
 
   it('should not throw if stop() is called before start()', () => {
     assert.doesNotThrow(() => hv.stop());
+    assert.equal(hv._timer, null, '_timer should remain null after stop() on unstarted validator');
   });
 
   it('should not create duplicate timers on repeated start() calls', () => {

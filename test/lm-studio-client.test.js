@@ -486,6 +486,7 @@ describe('LMStudioClient — Health monitor', () => {
     const { LMStudioClient } = freshRequire();
     const client = new LMStudioClient();
     assert.doesNotThrow(() => client.stopHealthMonitor());
+    assert.equal(client._healthInterval, null, '_healthInterval should remain null');
   });
 
   it('should be idempotent on multiple starts', () => {

@@ -132,10 +132,15 @@ describe('OctiviaContext format()', () => {
     assert.ok(result.includes('Build a thing'));
   });
 
-  it('does not throw on partial data', () => {
+  it('returns valid string on partial data', () => {
     const ctx = new OctiviaContext();
-    assert.doesNotThrow(() => ctx.format({ memory: 'some memory', agents: {} }));
-    assert.doesNotThrow(() => ctx.format({ recentCommits: '', previousVibes: '' }));
+    const r1 = ctx.format({ memory: 'some memory', agents: {} });
+    assert.equal(typeof r1, 'string');
+    assert.ok(r1.length > 0, 'should produce non-empty output');
+
+    const r2 = ctx.format({ recentCommits: '', previousVibes: '' });
+    assert.equal(typeof r2, 'string');
+    assert.ok(r2.length > 0, 'should produce non-empty output even with empty strings');
   });
 });
 

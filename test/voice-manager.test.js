@@ -146,9 +146,12 @@ describe('VoiceManager — leave()', () => {
     assert.equal(vm._destroyed, true);
   });
 
-  it('should not throw if called without join', () => {
+  it('should not throw if called without join and should reset state', () => {
     const { vm } = createVM();
     assert.doesNotThrow(() => vm.leave());
+    assert.deepEqual(vm._queue, [], '_queue should be empty after leave');
+    assert.equal(vm._playing, false, '_playing should be false');
+    assert.equal(vm._destroyed, true, '_destroyed should be true');
   });
 
   it('should stop player', () => {

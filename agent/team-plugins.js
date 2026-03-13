@@ -134,6 +134,14 @@ async function initPlugins(deps) {
     log.warn('team', 'Obsidian CLI Agent disabled', { error: err.message });
   }
 
+  // Summary: which plugins are active vs disabled
+  const active = Object.entries(plugins).filter(([, v]) => v !== null).map(([k]) => k);
+  const disabled = Object.entries(plugins).filter(([, v]) => v === null).map(([k]) => k);
+  log.info('team', `Plugins summary: ${active.length} active, ${disabled.length} disabled`, {
+    active: active.join(', ') || 'none',
+    disabled: disabled.join(', ') || 'none',
+  });
+
   return plugins;
 }
 
