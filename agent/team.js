@@ -22,6 +22,7 @@ const { getLogger } = require('./logger');
 const { MCPServer } = require('./mcp-server');
 const { ObsidianCLIAgent } = require('./obsidian-cli-agent');
 const T = require('../config/timeouts');
+const path = require('node:path');
 let botConfig = {};
 try {
   botConfig = require('../config/bot-config.json');
@@ -512,7 +513,7 @@ async function main() {
 
   let obsidianCliAgent = null;
   try {
-    obsidianCliAgent = new ObsidianCLIAgent({ vaultPath: process.env.OBSIDIAN_VAULT_PATH || '/Users/octiv/Octiv_MVP' }, board);
+    obsidianCliAgent = new ObsidianCLIAgent({ vaultPath: process.env.OBSIDIAN_VAULT_PATH || path.resolve('.') }, board);
     await obsidianCliAgent.init();
     log.info('team', 'Obsidian CLI Agent initialized');
   } catch (err) {

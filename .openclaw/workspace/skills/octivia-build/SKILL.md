@@ -12,7 +12,7 @@ When the user runs `/build`, compile all accumulated ideas from the vault into a
 
 1. **Gather vibes**: Read vault/00-Vibes/ directory for recent vibe files (exclude BUILD-BRIEF files)
    ```bash
-   ls -1t /Users/octiv/Octiv_MVP/vault/00-Vibes/*.md 2>/dev/null | grep -v BUILD-BRIEF | head -10
+   ls -1t "${OBSIDIAN_VAULT_PATH:-$(pwd)}/vault/00-Vibes/"*.md 2>/dev/null | grep -v BUILD-BRIEF | head -10
    ```
 
 2. **Extract ideas**: For each vibe file, extract:

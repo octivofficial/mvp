@@ -94,7 +94,7 @@ class KnowledgeRouter {
       const results = await this.notebookLmClient.searchDocs(question, 3);
       return results.map(r => r.content).join('\n');
     };
-    const claudeCall = () => this.claudeClient.call('claude-haiku-4-5-20251001', question, {});
+    const claudeCall = () => this.claudeClient.call(process.env.HUB_PRIMARY_MODEL || 'claude-haiku-4-5-20251001', question, {});
 
     // Start with the primary service for this type, then append the remaining two
     if (type === 'simple') {
