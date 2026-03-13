@@ -111,6 +111,11 @@ gcloud compute ssh "$VM_NAME" --zone="$ZONE" --project="$PROJECT_ID" --command "
     sudo usermod -aG docker \$USER
   fi
 
+  # Kill any legacy telegram-bot or octivia processes (prevents 409 conflict)
+  sudo pkill -f "telegram-bot.js" 2>/dev/null || true
+  sudo pkill -f "agent/octivia.js" 2>/dev/null || true
+  echo 'Legacy bot processes stopped.'
+
   # Clone or update repo
   if [ -d /opt/octiv/.git ]; then
     cd /opt/octiv && sudo git fetch origin && sudo git reset --hard origin/${BRANCH}
