@@ -231,6 +231,8 @@ class TelegramDevelopmentBot {
         "/status — system snapshot\n" +
         "/context <idea> — check against what we have\n" +
         "/build — compile all vibes → BMAD brief for the dev team\n" +
+        "/notebook <question> — query NotebookLM knowledge base\n" +
+        "/doc <description> — create a Google Doc\n" +
         "/reset — start fresh\n\n" +
         "Or just talk — I'm always listening. 그냥 말해요."
       );
@@ -258,6 +260,27 @@ class TelegramDevelopmentBot {
       this.client?.sendMessage(chatId, 'Let me check that against what we have...');
       const result = await this._crossReference(idea);
       return this.client?.sendMessage(chatId, result);
+    }
+
+    if (text.startsWith('/notebook ')) {
+      const question = text.slice(10).trim();
+      if (!question) return this.client?.sendMessage(chatId, 'Usage: /notebook <your question>');
+      this.client?.sendMessage(chatId, '📚 Querying NotebookLM...');
+      if (this.reflexion) {
+        await this.board?.publish?.('notebooklm:query', { question, context: { chatId, author: msg.from?.username } }).catch(() => {});
+        // Response arrives via notebooklm:answer subscription in listenForUpdates
+        return;
+      }
+      return this.client?.sendMessage(chatId, 'NotebookLM not connected yet.');
+    }
+
+    if (text.startsWith('/doc ')) {
+      const description = text.slice(5).trim();
+      if (!description) return this.client?.sendMessage(chatId, 'Usage: /doc <description of what to create>');
+      this.client?.sendMessage(chatId, '📄 Creating Google Doc...');
+      await this.board?.publish?.('google:task', { action: 'create_doc', description, context: { chatId, author: msg.from?.username } }).catch(() => {});
+      // Response arrives via google:finished subscription in listenForUpdates
+      return;
     }
 
     if (text.startsWith('/vibe ')) {
@@ -602,6 +625,14 @@ class TelegramDevelopmentBot {
           const data = JSON.parse(msg);
           if (data.context?.chatId) {
             this.client?.sendMessage(data.context.chatId, `Doc created:\n${data.docUrl}`);
+          }
+        } catch {}
+      });
+      sub.subscribe('notebooklm:answer', async (msg) => {
+        try {
+          const data = JSON.parse(msg);
+          if (data.context?.chatId) {
+            this.client?.sendMessage(data.context.chatId, `📚 NotebookLM:\n\n${data.answer}`);
           }
         } catch {}
       });

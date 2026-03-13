@@ -2,6 +2,8 @@
  * Octivia Standalone — Telegram bot entry point for VM deployment
  *
  * Runs: Redis (Blackboard) + ReflexionEngine + TelegramBot + ObsidianAgent
+ *       + WorkspaceAgent (Google Docs/Sheets — optional, requires GOOGLE credentials)
+ *       + NotebookAgent (NotebookLM — optional, requires NOTEBOOKLM_* env vars)
  * Does NOT start: mineflayer bots, leader, safety, builders, Discord
  *
  * Usage:
@@ -69,6 +71,34 @@ async function startOctivia(deps = {}) {
     log.warn('octivia', 'Vault watcher unavailable', { error: err.message });
   }
 
+  // 5. WorkspaceAgent — Google Docs/Sheets automation (optional)
+  let workspaceAgent = null;
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    try {
+      const { WorkspaceAgent } = require('./workspace-agent');
+      workspaceAgent = new WorkspaceAgent({
+        blackboardUrl: redisUrl,
+      }, board);
+      await workspaceAgent.init();
+      log.info('octivia', 'WorkspaceAgent ready (Google Workspace)');
+    } catch (err) {
+      log.warn('octivia', 'WorkspaceAgent unavailable', { error: err.message });
+    }
+  } else {
+    log.info('octivia', 'WorkspaceAgent skipped (no GOOGLE_APPLICATION_CREDENTIALS)');
+  }
+
+  // 6. NotebookAgent — NotebookLM research (optional)
+  let notebookAgent = null;
+  try {
+    const { NotebookLMAgent } = require('./notebook-lm-agent');
+    notebookAgent = new NotebookLMAgent({ blackboardUrl: redisUrl }, board, reflexion);
+    await notebookAgent.init();
+    log.info('octivia', 'NotebookAgent ready');
+  } catch (err) {
+    log.warn('octivia', 'NotebookAgent unavailable', { error: err.message });
+  }
+
   log.info('octivia', 'Octivia ready. Ctrl+C to stop.');
 
   // Graceful shutdown
@@ -85,7 +115,7 @@ async function startOctivia(deps = {}) {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  return { telegramBot, obsidianAgent, board, reflexion };
+  return { telegramBot, obsidianAgent, workspaceAgent, notebookAgent, board, reflexion };
 }
 
 module.exports = { startOctivia };
