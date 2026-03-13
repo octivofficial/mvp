@@ -50,6 +50,16 @@ When user says "build this" or "implement this":
 2. Claude Code runs with `--permission-mode bypassPermissions`
 3. Returns result to this conversation
 
+## Self-Extension (via clawhub)
+
+When user wants a new integration or capability:
+1. `clawhub search "<topic>"` → find slug
+2. `clawhub install <slug>` → installs to workspace/skills/ automatically
+3. Activate: `/skill <slug>`
+
+52 skills are already bundled (github, notion, discord, slack, gemini, obsidian, etc.).
+Use `clawhub explore` to browse community skills beyond the bundle.
+
 ## Paths
 
 - Project: `/Users/octiv/Octiv_MVP`

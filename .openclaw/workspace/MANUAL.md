@@ -65,7 +65,13 @@ Then open Telegram → find `@Octivia_bot` → start talking.
 | `session-logs` | Search past conversations |
 | `skill-creator` | Create new skills |
 
-Install new skill: `/skill clawhub` then `clawhub install <slug>`
+Install new skill from registry:
+```bash
+clawhub login                       # one-time GitHub OAuth
+clawhub search "what you need"      # semantic search
+clawhub install <slug>              # auto-installs to workspace
+```
+Total: 52 bundled + unlimited registry skills.
 
 ---
 
