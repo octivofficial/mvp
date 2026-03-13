@@ -1,4 +1,4 @@
-const { describe, it, mock, before, after } = require('node:test');
+const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 const OctiviaContext = require('../agent/octivia-context.js');
 

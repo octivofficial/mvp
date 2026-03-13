@@ -1,0 +1,32 @@
+FROM node:22-slim
+
+# Install system deps
+RUN apt-get update && apt-get install -y \
+    python3 make g++ curl procps \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy package files and install prod deps
+COPY package*.json ./
+RUN npm install --omit=dev
+
+# Install OpenClaw and ClawHub CLIs
+RUN npm install -g openclaw clawhub
+
+# Copy application code (no test/dev files)
+COPY agent/ ./agent/
+COPY config/ ./config/
+COPY .openclaw/workspace/ ./.openclaw/workspace/
+
+# Vault runtime directories
+RUN mkdir -p vault/00-Vibes vault/01-Requirements vault/02-Design
+
+# openclaw.json injected at runtime via volume mount:
+#   -v /opt/octiv/.openclaw:/root/.openclaw:ro
+# OR via OPENCLAW_CONFIG env var pointing to a mounted config file
+
+EXPOSE 3000
+
+# octivia.js spawns `openclaw gateway` — needs openclaw on PATH
+CMD ["node", "agent/octivia.js"]

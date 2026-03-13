@@ -470,19 +470,15 @@ describe('TelegramDevelopmentBot _accumulateRecentVibes()', () => {
 });
 
 describe('TelegramDevelopmentBot _saveBuildBrief()', () => {
-  const os = require('os');
 
   it('does not throw on valid brief text', async () => {
     const bot = new TelegramDevelopmentBot(baseConfig(), makeBoard());
     // Override vault dir to temp dir
-    const tmpDir = os.tmpdir();
-    const origDir = require('path').join(__dirname, '..', 'vault', '00-Vibes');
     // Use the real method but with a brief that's easy to save
     await assert.doesNotReject(async () => {
       // Just test it doesn't throw with a mocked fs approach
       const spy = { saved: false };
-      const orig = bot._saveBuildBrief.bind(bot);
-      bot._saveBuildBrief = async (brief, author) => { spy.saved = true; };
+      bot._saveBuildBrief = async (_brief, _author) => { spy.saved = true; };
       await bot._saveBuildBrief('## Build Brief: Test\n**Vision**: testing', 'tester');
       assert.ok(spy.saved);
     });

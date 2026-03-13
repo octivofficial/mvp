@@ -5,7 +5,8 @@
 # Services:
 #   redis     : Blackboard (port 6379 → host 6380)
 #   minecraft : PaperMC 1.21.11 (port 25565, RCON 25575)
-#   bot       : Octiv agent team (node agent/team.js)
+#   bot       : Octiv mineflayer bots (node agent/team.js) — LOCAL only
+#   octivia   : Telegram AI gateway (OpenClaw) — VM (GCP) only
 
 services:
 
@@ -84,7 +85,30 @@ services:
     ports:
       - "3000:3000"   # Web dashboard
 
+  octivia:
+    # Telegram AI gateway (OpenClaw) — deploy on VM, not locally
+    # Requires: /opt/octiv/.openclaw/openclaw.json on host (contains API keys)
+    build:
+      context: .
+      dockerfile: Dockerfile.octivia
+    container_name: octiv-octivia
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BLACKBOARD_REDIS_URL: redis://redis:6379
+      ENABLE_TELEGRAM_BOT: "true"
+      NODE_ENV: production
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - /opt/octiv/.openclaw:/root/.openclaw:ro   # openclaw.json with API keys (host-mounted secret)
+      - octivia-vault:/app/vault
+    profiles:
+      - vm   # only starts with: docker compose --profile vm up -d
+
 volumes:
   redis-data:
   mc-data:
   vault-data:
+  octivia-vault:
