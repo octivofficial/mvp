@@ -361,36 +361,33 @@ describe('TelegramDevelopmentBot _routeMessage()', () => {
 describe('TelegramDevelopmentBot group chat', () => {
   const makeClient = () => ({ sendMessage: mock.fn(() => {}) });
 
-  it('silently records group message without responding', async () => {
-    const board = makeBoard();
-    const bot = new TelegramDevelopmentBot(baseConfig(), board);
-    bot.client = makeClient();
-    bot._recordGroupMessage = mock.fn(async () => {});
-    const msg = {
-      chat: { id: -100123456, type: 'group' },
-      text: 'Let\'s build something cool',
-      from: { id: 999, username: 'friend1' }
-    };
-    await bot._routeMessage(msg);
-    // Should record but NOT send any message
-    assert.strictEqual(bot.client.sendMessage.mock.calls.length, 0);
-    assert.strictEqual(bot._recordGroupMessage.mock.calls.length, 1);
-  });
-
-  it('responds in group when @Octivia_bot is mentioned', async () => {
+  it('responds to all group messages (same as DM)', async () => {
     const board = makeBoard();
     const reflexion = makeReflexion('Great idea! 좋아요');
     const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
     bot.client = makeClient();
-    bot._recordGroupMessage = mock.fn(async () => {});
+    const msg = {
+      chat: { id: -100123456, type: 'group' },
+      text: "Let's build something cool",
+      from: { id: 999, username: 'friend1' }
+    };
+    await bot._routeMessage(msg);
+    // Should respond — group chats work same as DM
+    assert.ok(bot.client.sendMessage.mock.calls.length >= 1);
+  });
+
+  it('responds in group even without @Octivia_bot mention', async () => {
+    const board = makeBoard();
+    const reflexion = makeReflexion('Great idea! 좋아요');
+    const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
+    bot.client = makeClient();
     const msg = {
       chat: { id: -100123456, type: 'group' },
       text: '@Octivia_bot what do you think about this feature?',
       from: { id: 999, username: 'friend1' }
     };
     await bot._routeMessage(msg);
-    assert.strictEqual(bot._recordGroupMessage.mock.calls.length, 1);
-    // Should have responded since @mentioned
+    // @mention is stripped, cleanText = "what do you think about this feature?" → responds
     assert.ok(bot.client.sendMessage.mock.calls.length >= 1);
   });
 
@@ -427,14 +424,14 @@ describe('TelegramDevelopmentBot group chat', () => {
     assert.ok(text.includes("Hi everyone") || text.includes("Octivia"));
   });
 
-  it('sends group-specific welcome for /start in group', async () => {
+  it('sends welcome for /start in group (same as DM)', async () => {
     const board = makeBoard();
     const bot = new TelegramDevelopmentBot(baseConfig(), board);
     bot.client = makeClient();
     const msg = { chat: { id: -100123, type: 'group' }, text: '/start', from: { id: 42 } };
     await bot._routeMessage(msg);
     const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
-    assert.ok(text.includes('Hi everyone'));
+    assert.ok(text.includes('Octivia'));
   });
 
   it('_recordGroupMessage stores message in session notes', async () => {

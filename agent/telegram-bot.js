@@ -189,39 +189,21 @@ class TelegramDevelopmentBot {
       }
     }
 
-    // ── Group: silent listen + respond only on @mention ───
+    // ── Group: same as DM — strip @mention if present, then process normally ───
     if (isGroup && !text.startsWith('/')) {
       const botUsername = this.config.botUsername || 'Octivia_bot';
-      const isMentioned = text.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
-
-      // Always record silently — Octivia takes notes of the whole room
-      await this._recordGroupMessage(chatId, msg);
-
-      if (!isMentioned) return; // not addressed to Octivia — stay silent
-
-      // @mentioned → respond as vibe translator
       const cleanText = text.replace(new RegExp(`@${botUsername}`, 'gi'), '').trim();
-      if (cleanText) {
-        if (this.reflexion) {
-          await this._vibeConversation(chatId, cleanText, msg.from);
-        } else {
-          const prdData = await this.handleMessage(cleanText);
-          if (prdData?.title) this.client?.sendMessage(chatId, `PRD published.\nTitle: ${prdData.title}`);
-        }
+      if (!cleanText) return;
+      if (this.reflexion) {
+        await this._vibeConversation(chatId, cleanText, msg.from);
+      } else {
+        const prdData = await this.handleMessage(cleanText);
+        if (prdData?.title) this.client?.sendMessage(chatId, `PRD published.\nTitle: ${prdData.title}`);
       }
       return;
     }
 
     if (text === '/start') {
-      if (isGroup) {
-        return this.client?.sendMessage(chatId,
-          "Hi everyone — I'm Octivia, your vibe translator.\n\n" +
-          "I'll silently take notes of your discussions.\n" +
-          "Mention @Octivia_bot anytime you want me to weigh in.\n" +
-          "Use /build when you're ready to compile ideas into a build brief.\n\n" +
-          "안녕하세요 다들! 잘 듣고 있을게요 👂"
-        );
-      }
       return this.client?.sendMessage(chatId,
         "Welcome to Octiv — I'm Octivia, your vibe translator.\n\n" +
         "Tell me what you're thinking. Rough idea, half-baked thought, whatever. " +
