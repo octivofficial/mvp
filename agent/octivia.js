@@ -17,19 +17,24 @@ const { getLogger } = require('./logger');
 
 const log = getLogger();
 
-async function main() {
+/**
+ * Start Octivia standalone service.
+ * Accepts optional dependency overrides for testing.
+ * @param {object} deps - { board, reflexion, apiClients } — injected in tests
+ */
+async function startOctivia(deps = {}) {
   const redisUrl = process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380';
 
   log.info('octivia', 'Starting Octivia standalone', { redis: redisUrl });
 
   // 1. Blackboard
-  const board = new Blackboard(redisUrl);
-  await board.connect();
+  const board = deps.board || new Blackboard(redisUrl);
+  if (!deps.board) await board.connect();
 
   // 2. LLM
-  const apiClients = createApiClients();
-  const reflexion = new ReflexionEngine(apiClients);
-  await reflexion.init();
+  const apiClients = deps.apiClients || createApiClients();
+  const reflexion = deps.reflexion || new ReflexionEngine(apiClients);
+  if (!deps.reflexion) await reflexion.init();
 
   // 3. Telegram bot
   let telegramBot = null;
@@ -79,9 +84,16 @@ async function main() {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+
+  return { telegramBot, obsidianAgent, board, reflexion };
 }
 
-main().catch(err => {
-  log.error('octivia', 'Fatal error', { error: err.message });
-  process.exit(1);
-});
+module.exports = { startOctivia };
+
+// Run directly
+if (require.main === module) {
+  startOctivia().catch(err => {
+    log.error('octivia', 'Fatal error', { error: err.message });
+    process.exit(1);
+  });
+}

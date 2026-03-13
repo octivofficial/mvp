@@ -47,14 +47,15 @@ Verify that the Octiv test suite is healthy and all agent files have coverage.
 | agent/logger.js | test/logger.test.js |
 | agent/agent-chat.js | test/agent-chat.test.js |
 | agent/api-clients.js | test/api-clients.test.js |
-| agent/tts-engine.js | test/tts.test.js |
-| agent/voice-manager.js | test/tts.test.js |
+| agent/tts-engine.js | test/tts-engine.test.js |
+| agent/voice-manager.js | test/tts-engine.test.js |
 | agent/vault-sync.js | test/vault-sync.test.js |
 | agent/roles/BaseRole.js | test/base-role.test.js |
 | agent/roles/ExplorerAgent.js | test/dashboard.test.js |
 | agent/roles/WoodcutterAgent.js | test/dashboard.test.js |
 | agent/roles/MinerAgent.js | test/miner-agent.test.js |
 | agent/roles/FarmerAgent.js | test/farmer-agent.test.js |
+| agent/octivia.js | test/octivia.test.js |
 
 4. Report:
 ```
