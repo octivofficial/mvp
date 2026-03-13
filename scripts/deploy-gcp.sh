@@ -72,15 +72,24 @@ if ! gcloud compute firewall-rules describe octiv-allow-dashboard --project="$PR
 fi
 echo "  Firewall rules OK."
 
-# ── 3. Copy .env to VM ────────────────────────────────────────
+# ── 3. Copy .env + openclaw config to VM ─────────────────────
 echo ""
-echo "Step 3: Copying .env to VM"
+echo "Step 3: Copying config to VM"
 if [ -f .env ]; then
   gcloud compute scp .env "$VM_NAME":/tmp/.env \
     --zone="$ZONE" --project="$PROJECT_ID"
   echo "  .env copied."
 else
   echo "  WARNING: .env not found locally. Skipping."
+fi
+
+# Copy openclaw.json (contains Telegram token + Anthropic API key)
+if [ -f ~/.openclaw/openclaw.json ]; then
+  gcloud compute scp ~/.openclaw/openclaw.json "$VM_NAME":/tmp/openclaw.json \
+    --zone="$ZONE" --project="$PROJECT_ID"
+  echo "  openclaw.json copied."
+else
+  echo "  WARNING: ~/.openclaw/openclaw.json not found. Octivia service will not start."
 fi
 
 # ── 4. Deploy on VM ───────────────────────────────────────────
@@ -118,9 +127,26 @@ gcloud compute ssh "$VM_NAME" --zone="$ZONE" --project="$PROJECT_ID" --command "
     exit 1
   fi
 
-  # Start all services (Redis + Minecraft + Bot)
+  # Place openclaw.json (secret config for Octivia Telegram gateway)
+  if [ -f /tmp/openclaw.json ]; then
+    sudo mkdir -p /opt/octiv/.openclaw
+    sudo cp /tmp/openclaw.json /opt/octiv/.openclaw/openclaw.json
+    sudo chmod 600 /opt/octiv/.openclaw/openclaw.json
+    rm /tmp/openclaw.json
+    echo 'openclaw.json placed at /opt/octiv/.openclaw/'
+  fi
+
+  # Start base services (Redis + Minecraft + Bot)
   sudo docker compose pull --quiet
   sudo docker compose up -d --build
+
+  # Start Octivia (VM profile — Telegram gateway)
+  if [ -f /opt/octiv/.openclaw/openclaw.json ]; then
+    sudo docker compose --profile vm up -d --build octivia
+    echo 'Octivia service started.'
+  else
+    echo 'WARNING: openclaw.json missing, Octivia not started.'
+  fi
 
   echo 'Services started.'
   sleep 10
