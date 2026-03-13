@@ -1,14 +1,10 @@
 /**
- * Octivia Standalone — OpenClaw Gateway entry point
+ * Octivia Standalone — Telegram bot entry point for VM deployment
  *
- * Runs: OpenClaw Gateway (Telegram + LLM via openclaw.json config)
- *       + ObsidianAgent (vault watcher — optional)
+ * Runs: Redis (Blackboard) + ReflexionEngine + TelegramBot + ObsidianAgent
  *       + WorkspaceAgent (Google Docs/Sheets — optional, requires GOOGLE credentials)
  *       + NotebookAgent (NotebookLM — optional, requires NOTEBOOKLM_* env vars)
  * Does NOT start: mineflayer bots, leader, safety, builders, Discord
- *
- * OpenClaw config: ~/.openclaw/openclaw.json
- * Workspace: .openclaw/workspace/ (SOUL.md, AGENTS.md, skills/)
  *
  * Usage:
  *   node --env-file=.env agent/octivia.js
@@ -16,75 +12,66 @@
  */
 'use strict';
 
-const path = require('path');
-const os = require('os');
 const { Blackboard } = require('./blackboard');
+const { ReflexionEngine } = require('./ReflexionEngine');
+const { createApiClients } = require('./api-clients');
 const { getLogger } = require('./logger');
 
 const log = getLogger();
 
-const OPENCLAW_CONFIG = path.join(os.homedir(), '.openclaw', 'openclaw.json');
-
 /**
- * Start Octivia standalone service via OpenClaw Gateway.
+ * Start Octivia standalone service.
  * Accepts optional dependency overrides for testing.
- *
- * @param {object} deps - { board, spawn } — injected in tests
- *   deps.spawn: injectable child_process.spawn for unit tests
- *   deps.board: injectable Blackboard instance
+ * @param {object} deps - { board, reflexion, apiClients } — injected in tests
  */
 async function startOctivia(deps = {}) {
   const redisUrl = process.env.BLACKBOARD_REDIS_URL || 'redis://localhost:6380';
 
-  log.info('octivia', 'Starting Octivia via OpenClaw gateway', { redis: redisUrl });
+  log.info('octivia', 'Starting Octivia standalone', { redis: redisUrl });
 
-  // 1. Blackboard (still used by supporting agents)
+  // 1. Blackboard
   const board = deps.board || new Blackboard(redisUrl);
   if (!deps.board) await board.connect();
 
-  // 2. OpenClaw gateway — handles Telegram + LLM routing
-  let telegramBot = null; // gateway handle (API-compatible with legacy code)
-  try {
-    const spawnFn = deps.spawn || require('child_process').spawn;
-    const gatewayProcess = spawnFn('openclaw', ['gateway', '--config', OPENCLAW_CONFIG], {
-      stdio: deps.spawn ? 'pipe' : 'inherit',
-      env: { ...process.env },
-    });
+  // 2. LLM
+  const apiClients = deps.apiClients || createApiClients();
+  const reflexion = deps.reflexion || new ReflexionEngine(apiClients);
+  if (!deps.reflexion) await reflexion.init();
 
-    // Wrap in telegramBot-compatible interface for backward compatibility
-    telegramBot = {
-      gateway: gatewayProcess,
-      startPolling: () => {
-        log.info('octivia', 'OpenClaw gateway already running (no-op startPolling)');
-      },
-      client: {
-        stopPolling: async () => new Promise((resolve) => {
-          gatewayProcess.once('close', resolve);
-          gatewayProcess.kill('SIGTERM');
-        }),
-      },
-    };
-    log.info('octivia', 'OpenClaw gateway started', { config: OPENCLAW_CONFIG });
+  // 3. Telegram bot
+  let telegramBot = null;
+  try {
+    const TelegramDevelopmentBot = require('./telegram-bot');
+    telegramBot = new TelegramDevelopmentBot({
+      telegramToken: process.env.TELEGRAM_BOT_TOKEN,
+      telegramChannelUrl: process.env.TELEGRAM_CHANNEL_URL,
+      blackboardUrl: redisUrl,
+      authorizedUsers: process.env.TELEGRAM_AUTHORIZED_USERS
+        ? process.env.TELEGRAM_AUTHORIZED_USERS.split(',')
+        : [],
+    }, board, reflexion);
+    telegramBot.startPolling();
+    log.info('octivia', 'Telegram bot polling');
   } catch (err) {
-    log.error('octivia', 'OpenClaw gateway failed to start', { error: err.message });
+    log.error('octivia', 'Telegram bot failed to start', { error: err.message });
     process.exit(1);
   }
 
-  // 3. Obsidian vault watcher (optional)
+  // 4. Obsidian vault watcher (optional)
   let obsidianAgent = null;
   try {
     const ObsidianOrganizer = require('./obsidian-agent');
     obsidianAgent = new ObsidianOrganizer({
       vaultPath: process.env.OBSIDIAN_VAULT_PATH || '/app/vault',
       blackboardUrl: redisUrl,
-    }, board, null);
+    }, board, reflexion);
     obsidianAgent.startWatcher();
     log.info('octivia', 'Vault watcher started');
   } catch (err) {
     log.warn('octivia', 'Vault watcher unavailable', { error: err.message });
   }
 
-  // 4. WorkspaceAgent — Google Docs/Sheets automation (optional)
+  // 5. WorkspaceAgent — Google Docs/Sheets automation (optional)
   let workspaceAgent = null;
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     try {
@@ -101,24 +88,26 @@ async function startOctivia(deps = {}) {
     log.info('octivia', 'WorkspaceAgent skipped (no GOOGLE_APPLICATION_CREDENTIALS)');
   }
 
-  // 5. NotebookAgent — NotebookLM research (optional)
+  // 6. NotebookAgent — NotebookLM research (optional)
   let notebookAgent = null;
   try {
     const { NotebookLMAgent } = require('./notebook-lm-agent');
-    notebookAgent = new NotebookLMAgent({ blackboardUrl: redisUrl }, board, null);
+    notebookAgent = new NotebookLMAgent({ blackboardUrl: redisUrl }, board, reflexion);
     await notebookAgent.init();
     log.info('octivia', 'NotebookAgent ready');
   } catch (err) {
     log.warn('octivia', 'NotebookAgent unavailable', { error: err.message });
   }
 
-  log.info('octivia', 'Octivia ready. OpenClaw handling Telegram. Ctrl+C to stop.');
+  log.info('octivia', 'Octivia ready. Ctrl+C to stop.');
 
   // Graceful shutdown
   const shutdown = async () => {
     log.info('octivia', 'Shutting down...');
     try {
       if (telegramBot?.client) await telegramBot.client.stopPolling();
+      if (apiClients?.shutdown) await apiClients.shutdown();
+      await reflexion.shutdown();
     } catch (e) { /* ignore */ }
     process.exit(0);
   };
@@ -126,7 +115,7 @@ async function startOctivia(deps = {}) {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  return { telegramBot, obsidianAgent, workspaceAgent, notebookAgent, board };
+  return { telegramBot, obsidianAgent, workspaceAgent, notebookAgent, board, reflexion };
 }
 
 module.exports = { startOctivia };

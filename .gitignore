@@ -35,9 +35,13 @@ server/config/session.lock
 # npm cache (CI artifact, not source)
 npm-cache/
 
-# OpenClaw runtime state
+# OpenClaw runtime state (sessions, memory, auth — local only)
 agent/.openclaw/
 agent/sessions/
+.openclaw/workspace/sessions/
+.openclaw/workspace/memory/
+.openclaw/workspace/.session-*
+.openclaw/workspace/*.session
 
 # macOS
 .DS_Store

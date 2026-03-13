@@ -156,9 +156,11 @@ describe('Test Quality — Agent Coverage Map', () => {
 
   // Files that are legitimately exempt from direct test imports
   const EXEMPT = [
-    'bot.js',           // entry-point script, wraps OctivBot
-    'logger.js',        // tested via logger.test.js (getLogger import)
-    'memory-logger.js', // circular dep prevention, tested via memory.test.js
+    'bot.js',                  // entry-point script, wraps OctivBot
+    'logger.js',               // tested via logger.test.js (getLogger import)
+    'memory-logger.js',        // circular dep prevention, tested via memory.test.js
+    'octivia.legacy.js',       // archived backup of pre-OpenClaw octivia.js (not active)
+    'telegram-bot.legacy.js',  // archived backup of pre-OpenClaw telegram-bot.js (not active)
   ];
 
   it('every non-exempt agent/*.js should be imported by at least one test', () => {
