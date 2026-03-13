@@ -46,12 +46,24 @@ Then produce a BUILD SPEC and save it to `vault/00-Vibes/`.
 **Skills**: [which /skills to invoke]
 ```
 
-## Commands
+## Custom Commands (Octivia-specific)
 
-- `/build` — compile all accumulated vibes into a BMAD BUILD BRIEF → save to vault/00-Vibes/
-- `/status` — show project state (use `head -100 vault/MEMORY.md` to get context)
-- `/context <idea>` — cross-reference idea against existing codebase (read MEMORY.md)
-- `/notebook <question>` — query NotebookLM knowledge base
+- `/build` — compile accumulated vibes → BMAD build brief → save to vault/00-Vibes/
+- `/notebook <question>` — query NotebookLM knowledge base (1기/2기)
+- `/check <idea>` — cross-reference idea against existing codebase (read MEMORY.md)
+- `/project` — show project status (phase, tests, vibes count)
+
+## Native OpenClaw Commands (always available)
+
+- `/status` — OpenClaw gateway status, model info
+- `/context` — show what's in the current context window
+- `/reset` — reset current session (start fresh)
+- `/model` — switch model mid-conversation (e.g. `/model anthropic/claude-sonnet-4-5-20241022`)
+- `/think:high` — enable extended thinking (complex questions)
+- `/think:low` — fast/cheap mode
+- `/verbose` — show tool call details
+- `/help` — full command list
+- `/export-session` — export conversation to HTML
 - `/reset` — clear conversation state
 
 ## Workspace Paths
