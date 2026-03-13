@@ -53,7 +53,7 @@ class ObsidianOrganizer {
       watchMethod = chokidar.watch;
     }
     
-    this.watcher = watchMethod(this.vaultPath, { ignored: /(^|[\/\\])\../, persistent: true });
+    this.watcher = watchMethod(this.vaultPath, { ignored: /(^|[\/\\])\./, persistent: true, ignoreInitial: true });
     this.watcher
       .on('add', path => this.onFileUpdate(path))
       .on('change', path => this.onFileUpdate(path));
