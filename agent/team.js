@@ -562,6 +562,7 @@ async function main() {
     log.info('team', `Retrying ${failedBuilderIds.length} failed builder(s) in 30s...`);
     await new Promise(r => setTimeout(r, 30_000));
     for (const i of failedBuilderIds) {
+      await new Promise(r => setTimeout(r, T.BUILDER_SPAWN_INTERVAL_MS));
       const builder = new BuilderAgent({ id: `builder-0${i}` });
       builder.setLogger(logger);
       builder.setSkillPipeline(pipeline);
