@@ -382,10 +382,11 @@ See `~/.claude/skills/{skill-name}/SKILL.md` for details.
 - **Repo**: https://github.com/octivofficial/mvp (main)
 
 ## NotebookLM Notebooks
-| Name | ID | URL | Role |
-|------|-----|-----|------|
-| **1기** Octiv Project Roadmap | `ae1281fe...` | `notebook/ae1281fe-6370-493f-a1bd-afed03263a88` | Director (총괄 감독) — blueprints, roadmap |
-| **2기** OpenClaw Phase 2 | `4f8bd626...` | `notebook/4f8bd626-c548-454a-b36b-fb080d335530` | Field deployment planning |
+| Name | Slug ID | UUID | Role |
+|------|---------|------|------|
+| **1기** Octiv Master Blueprint | `octiv-neostars-alpha---master-blueprint` | `ae1281fe-6370-493f-a1bd-afed03263a88` | Director (총괄 감독) — blueprints, roadmap |
+| **2기** OpenClaw Phase 2 | `openclaw-phase-2` | `4f8bd626-c548-454a-b36b-fb080d335530` | Field deployment planning |
+| **3기** Tool Research | `tool-research` | — | Tool comparisons, tech research |
 
 ### NotebookLM Workflow
 - **Source update** (session end / major milestone): `add_source.py --all --source-file report.txt`
