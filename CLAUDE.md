@@ -72,7 +72,7 @@ Choose the right pattern for the task at hand:
 
 ### When unsure → `octiv-orchestrator`
 
-### Agents (54 core + 5 role files = 59 total)
+### Agents (13 workflow roles — see agent/ for 57 core + 5 role .js files)
 | Agent | One-liner |
 |-------|-----------|
 | `octiv-orchestrator` | **START HERE** for complex tasks |
@@ -112,9 +112,9 @@ Choose the right pattern for the task at hand:
 | `/learn [topic]` | Extract patterns from session → instincts |
 | `/checkpoint [name]` | Save session state snapshot for recovery |
 
-### Skills (21 Octiv + 5 global + 3 utility — with SKILL.md)
+### Skills (32 Octiv + 5 global + 3 utility — with SKILL.md)
 
-**Octiv project skills (21 — `.claude/skills/`):**
+**Octiv project skills (32 — `.claude/skills/`):**
 | Skill | When |
 |-------|------|
 | `cost-aware-llm-pipeline` | LLM model routing, cost optimization |
@@ -138,6 +138,17 @@ Choose the right pattern for the task at hand:
 | `browser-recovery` | Playwright MCP + Patchright failure recovery |
 | `automated-debugging` | Automated debug workflows |
 | `capability-registry` | Agent↔MCP↔Skill mapping reference |
+| `coverage-audit` | Run c8 coverage, enforce minimums, report gaps |
+| `discord-bot-patterns` | Discord.js bot patterns — embeds, voice, reconnection |
+| `discord-hub` | OpenClaw skill for Discord Bot API workflows |
+| `doc-sync` | Auto-update vault markdown with current metrics |
+| `minecraft-monitor-skill` | Monitor Minecraft server status, players, latency |
+| `mineflayer-building-patterns` | Mineflayer building — floors, walls, shelter |
+| `obsidian-cli-official` | Official Obsidian CLI for notes, tasks, search |
+| `obsidian-sync` | Vault sync, Dashboard.md, Session-Sync management |
+| `octivia-party-mode` | 3-layer skill architecture for Octivia party mode |
+| `permission-hygiene` | Clean accumulated one-shot permissions |
+| `stale-detector` | Scan for outdated comments, counts, dead references |
 
 **Octiv global skills (5 — `~/.claude/skills/`):**
 | Skill | When |
@@ -190,6 +201,8 @@ See `~/.claude/skills/{skill-name}/SKILL.md` for details.
 | `playwright` | Browser testing, E2E automation | read-only | ✅ Active |
 | `redis` | Redis data access (`redis-mcp`) | local | ⚠️ Requires Redis |
 | `docker` | Container management (`mcp-server-docker`) | local | ⚠️ Requires Docker |
+| `obsidian` | Obsidian vault read/write (`mcp-obsidian`) | local | ⚠️ Requires Obsidian |
+| `discord` | Discord Bot API (`discordmcp`) | token | ⚠️ Requires Token |
 
 **Project** (`.mcp.json`) — Octiv-specific:
 | MCP | Purpose | Access | Status |
@@ -200,7 +213,7 @@ See `~/.claude/skills/{skill-name}/SKILL.md` for details.
 | `vercel` | Deploy, preview, environment vars | team-scoped token | ✅ Token Ready |
 | `figma` | Design specs, component extraction | read-only token | ⚠️ Token Required |
 
-**Summary**: 7 global active + 2 infra-dependent (redis, docker), 5 project (3 token ready + 1 uvx-dependent + 1 token required)
+**Summary**: 7 global active + 4 infra/token-dependent (redis, docker, obsidian, discord), 5 project (3 token ready + 1 uvx-dependent + 1 token required)
 
 ### MCP Security Policy
 
@@ -334,6 +347,8 @@ See `~/.claude/skills/{skill-name}/SKILL.md` for details.
 | `filesystem` | Active | dev-agent, skill-agent, obsidian-agent | — |
 | `redis` | Infra-dep | debug-agent | verify-redis, health-monitor |
 | `docker` | Infra-dep | debug-agent | docker-patterns, health-monitor |
+| `obsidian` | Infra-dep | obsidian-agent, obsidian-cli-agent | obsidian-sync, obsidian-cli-official |
+| `discord` | Token-dep | discord-bot | discord-bot-patterns, discord-hub |
 | `serena` | uvx-dep | planner, architect, dev-agent, tdd-guide, code-reviewer | search-first |
 | `supabase` | Token Ready | (none) | — |
 | `sentry` | Token Ready | (none) | — |
@@ -355,7 +370,7 @@ See `~/.claude/skills/{skill-name}/SKILL.md` for details.
 
 ## Git Rules
 - **Format**: `emoji Phase-N: English description`
-- **Never commit**: `.env`, `vault/`, `TXT/`, `.obsidian/`, `node_modules/`, `dump.rdb`
+- **Never commit**: `.env`, `vault/`, `TXT/`, `.obsidian/`, `node_modules/`, `dump.rdb`, `.mcp.json`, `.claude/worktrees/`, `config/bot-config.json`
 - **CI/CD**: GitHub Actions runs `npm test` on every push to `main`
 
 ---
