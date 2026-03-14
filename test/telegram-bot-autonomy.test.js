@@ -418,3 +418,87 @@ describe('OctiviaAutonomy — pattern detection concurrency', () => {
     assert.ok(digestCalls.length <= 1, 'busy guard should prevent concurrent pattern detection');
   });
 });
+
+// ── Metacognitive edge cases ─────────────────────────────────
+describe('OctiviaAutonomy — metacognitive edge cases', () => {
+  beforeEach(() => setupFsMocks());
+  afterEach(() => restoreFsMocks());
+
+  it('getContextRecap handles notes with missing author gracefully', () => {
+    const { autonomy } = makeAutonomy({ options: { contextRecapThreshold: 0 } });
+    const session = {
+      stage: 0,
+      notes: [
+        { text: 'hello', ts: Date.now() },          // no author
+        { author: null, text: 'world', ts: Date.now() },  // null author
+        { author: 'alice', text: 'ok', ts: Date.now() },  // normal
+      ],
+    };
+    autonomy._getCounter(100).sinceSummary = 50;
+    const result = autonomy.getContextRecap(100, session);
+    assert.strictEqual(typeof result, 'string');
+    assert.ok(!result.includes('undefined'), 'should not contain literal undefined');
+    assert.ok(!result.includes('null'), 'should not contain literal null');
+    assert.ok(result.includes('unknown'), 'missing authors should be replaced with unknown');
+  });
+
+  it('getContextRecap handles unicode text without crashing', () => {
+    const { autonomy } = makeAutonomy({ options: { contextRecapThreshold: 0 } });
+    const emoji = '🇰🇷'.repeat(100); // flag emoji (4 code units each) = 400 code units
+    const session = {
+      stage: 0,
+      notes: [{ author: 'user', text: emoji, ts: Date.now() }],
+    };
+    autonomy._getCounter(200).sinceSummary = 50;
+    const result = autonomy.getContextRecap(200, session);
+    assert.strictEqual(typeof result, 'string');
+    assert.ok(result.length <= 200, `result should be ≤200 chars, got ${result.length}`);
+    // Verify no garbled surrogate pairs
+    for (let i = 0; i < result.length; i++) {
+      const code = result.charCodeAt(i);
+      if (code >= 0xD800 && code <= 0xDBFF) {
+        // High surrogate — next must be low surrogate
+        const next = result.charCodeAt(i + 1);
+        assert.ok(next >= 0xDC00 && next <= 0xDFFF,
+          `Orphan high surrogate at position ${i}`);
+      }
+    }
+  });
+
+  it('getContextRecap handles notes with missing text', () => {
+    const { autonomy } = makeAutonomy({ options: { contextRecapThreshold: 0 } });
+    const session = {
+      stage: 0,
+      notes: [
+        { author: 'alice', ts: Date.now() },             // no text
+        { author: 'bob', text: null, ts: Date.now() },    // null text
+        { author: 'charlie', text: 42, ts: Date.now() },  // non-string text
+        { author: 'dave', text: 'valid', ts: Date.now() }, // normal
+      ],
+    };
+    autonomy._getCounter(300).sinceSummary = 50;
+    const result = autonomy.getContextRecap(300, session);
+    assert.strictEqual(typeof result, 'string');
+    assert.ok(result.includes('valid'), 'should include valid text');
+  });
+
+  it('_autoSync returns early for empty notes without writing', async () => {
+    const { autonomy } = makeAutonomy();
+    const session = { stage: 0, notes: [] };
+    await autonomy._autoSync(400, session);
+    assert.strictEqual(writeFileMock.mock.calls.length, 0,
+      'should not write file for empty notes');
+  });
+
+  it('onMessage swallows autonomy errors without propagating', async () => {
+    const { autonomy } = makeAutonomy({ options: { autoSyncThreshold: 1 } });
+    // Force _autoSync to throw
+    autonomy._autoSync = async () => { throw new Error('forced failure'); };
+    const session = makeSession(5);
+    // Should NOT throw
+    await autonomy.onMessage(500, session);
+    // Counter should still work (busy guard released via finally)
+    const counter = autonomy._getCounter(500);
+    assert.strictEqual(counter.sinceSummary, 1, 'counter should increment despite error');
+  });
+});

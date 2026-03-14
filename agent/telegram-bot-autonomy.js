@@ -101,11 +101,15 @@ class OctiviaAutonomy {
 
     // Build brief recap from last 10 messages
     const recent = notes.slice(-10);
-    const contributors = [...new Set(recent.map(n => n.author))];
-    const topics = recent.map(n => n.text?.slice(0, 30)).filter(Boolean).slice(-5);
+    const contributors = [...new Set(recent.map(n => n.author || 'unknown'))].filter(Boolean);
+    const topics = recent.map(n =>
+      typeof n.text === 'string' ? n.text.slice(0, 30) : null
+    ).filter(Boolean).slice(-5);
 
     const recap = `${recent.length} recent msgs from ${contributors.join(', ')}. Topics: ${topics.join('; ')}`;
-    return recap.slice(0, 200);
+    // Unicode-safe truncation: avoid splitting surrogate pairs
+    if (recap.length <= 200) return recap;
+    return [...recap].slice(0, 200).join('');
   }
 
   /**
