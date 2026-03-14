@@ -176,3 +176,19 @@ describe('TelegramDevelopmentBot — _systemSnapshot()', () => {
     assert.ok(result.includes('Host:'));
   });
 });
+
+// ── autonomy integration ─────────────────────────────────────
+describe('TelegramDevelopmentBot — autonomy integration', () => {
+  it('creates autonomy module with board reference', () => {
+    const { bot } = makeBot();
+    assert.ok(bot.autonomy, 'autonomy should be instantiated');
+    assert.strictEqual(bot.autonomy.board, bot.board, 'autonomy should share same board');
+  });
+
+  it('autonomy module receives reflexion from constructor', () => {
+    const board = makeBoard();
+    const reflexion = { callLLM: async () => 'test' };
+    const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
+    assert.strictEqual(bot.autonomy.reflexion, reflexion);
+  });
+});

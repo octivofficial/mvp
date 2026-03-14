@@ -258,9 +258,8 @@ class TelegramDevelopmentBot {
       if (!mentionPattern.test(text)) return; // recorded but no response
       let cleanText = text.replace(mentionPattern, '').trim();
       if (!cleanText) return;
-      // Autonomy: inject context recap if enough messages accumulated
-      const session = await this._loadSession(chatId);
-      const recap = this.autonomy?.getContextRecap(chatId, session);
+      // Autonomy: inject context recap (use in-memory session, already loaded by _recordGroupMessage)
+      const recap = this.autonomy?.getContextRecap(chatId, this._sessions.get(chatId));
       if (recap) cleanText = `[Context: ${recap}] ${cleanText}`;
       if (this.reflexion) {
         await this._vibeConversation(chatId, cleanText, msg.from);

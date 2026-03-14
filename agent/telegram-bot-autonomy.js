@@ -70,13 +70,17 @@ class OctiviaAutonomy {
       }
     }
 
-    // Pattern detection at threshold (requires LLM)
-    if (counter.sinceSummary >= this._patternThreshold && this.reflexion) {
+    // Pattern detection at threshold (requires LLM + busy guard)
+    const busyKey = `detect:${chatId}`;
+    if (counter.sinceSummary >= this._patternThreshold && this.reflexion && !this._busy.has(busyKey)) {
+      this._busy.add(busyKey);
       try {
         await this._detectPatterns(chatId, session);
         counter.sinceSummary = 0;
       } catch (e) {
         log.debug('autonomy', 'pattern detection error', { chatId, error: e.message });
+      } finally {
+        this._busy.delete(busyKey);
       }
     }
   }
@@ -92,7 +96,7 @@ class OctiviaAutonomy {
     const counter = this._getCounter(chatId);
     if (counter.sinceSummary < this._recapThreshold) return null;
 
-    const notes = session?.notes || [];
+    const notes = Array.isArray(session?.notes) ? session.notes : [];
     if (notes.length === 0) return null;
 
     // Build brief recap from last 10 messages
@@ -111,7 +115,7 @@ class OctiviaAutonomy {
    * @param {object} session
    */
   async _autoSync(chatId, session) {
-    const notes = session?.notes || [];
+    const notes = Array.isArray(session?.notes) ? session.notes : [];
     if (notes.length === 0) return;
 
     const date = new Date().toISOString().slice(0, 10);
@@ -174,7 +178,7 @@ class OctiviaAutonomy {
    * @param {object} session
    */
   async _detectPatterns(chatId, session) {
-    const notes = session?.notes || [];
+    const notes = Array.isArray(session?.notes) ? session.notes : [];
     if (notes.length === 0) return;
 
     const recent = notes.slice(-20);
@@ -249,6 +253,28 @@ class OctiviaAutonomy {
       this._counters.set(chatId, { sinceSync: 0, sinceSummary: 0 });
     }
     return this._counters.get(chatId);
+  }
+
+  /**
+   * Prune stale entries from Maps (chatIds inactive for > maxAge).
+   * Call periodically to prevent unbounded memory growth.
+   * @param {number} [maxAgeMs=86400000] - Max age in ms (default 24h)
+   */
+  pruneStale(maxAgeMs = 24 * 60 * 60 * 1000) {
+    const now = Date.now();
+    for (const [chatId, ts] of this._lastSync) {
+      if (now - ts > maxAgeMs) {
+        this._lastSync.delete(chatId);
+        this._counters.delete(chatId);
+      }
+    }
+    // Prune counters that never synced (no lastSync entry) if Maps grow large
+    if (this._counters.size > 1000) {
+      const syncedIds = new Set(this._lastSync.keys());
+      for (const chatId of this._counters.keys()) {
+        if (!syncedIds.has(chatId)) this._counters.delete(chatId);
+      }
+    }
   }
 
   /** Cleanup all internal state */

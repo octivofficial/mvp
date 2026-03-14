@@ -72,7 +72,7 @@ Choose the right pattern for the task at hand:
 
 ### When unsure → `octiv-orchestrator`
 
-### Agents (13 workflow roles — see agent/ for 57 core + 5 role .js files)
+### Agents (13 workflow roles — see agent/ for 58 core + 5 role .js files)
 | Agent | One-liner |
 |-------|-----------|
 | `octiv-orchestrator` | **START HERE** for complex tasks |

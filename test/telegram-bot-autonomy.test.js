@@ -293,12 +293,30 @@ describe('OctiviaAutonomy — getContextRecap()', () => {
     assert.ok(result.length <= 200, `recap too long: ${result.length} chars`);
   });
 
-  it('works without context object', () => {
+  it('works without context object and returns a non-empty string', () => {
     const { autonomy } = makeAutonomy({ options: { contextRecapThreshold: 0 } });
     const session = makeSession(5);
     autonomy._getCounter(444).sinceSummary = 15;
     const result = autonomy.getContextRecap(444, session);
-    assert.ok(result === null || typeof result === 'string');
+    assert.strictEqual(typeof result, 'string', 'should return string with notes present');
+    assert.ok(result.length > 0, 'recap should not be empty');
+    assert.ok(result.includes('recent msgs'), 'recap should contain summary pattern');
+  });
+
+  it('returns null for empty session notes even with high counter', () => {
+    const { autonomy } = makeAutonomy({ options: { contextRecapThreshold: 1 } });
+    const session = { stage: 0, notes: [] };
+    autonomy._getCounter(555).sinceSummary = 100;
+    const result = autonomy.getContextRecap(555, session);
+    assert.strictEqual(result, null, 'empty notes should return null');
+  });
+
+  it('handles non-array notes defensively', () => {
+    const { autonomy } = makeAutonomy({ options: { contextRecapThreshold: 0 } });
+    const session = { stage: 0, notes: 'not an array' };
+    autonomy._getCounter(666).sinceSummary = 50;
+    const result = autonomy.getContextRecap(666, session);
+    assert.strictEqual(result, null, 'non-array notes should return null');
   });
 });
 
@@ -342,5 +360,61 @@ describe('OctiviaAutonomy — constructor()', () => {
       options: { autoSyncThreshold: 5 },
     });
     assert.strictEqual(autonomy._syncThreshold, 5);
+  });
+});
+
+// ── pruneStale() ─────────────────────────────────────────────
+describe('OctiviaAutonomy — pruneStale()', () => {
+  it('removes entries older than maxAge', () => {
+    const { autonomy } = makeAutonomy();
+    // Simulate old sync
+    autonomy._lastSync.set(111, Date.now() - 2 * 24 * 60 * 60 * 1000); // 2 days ago
+    autonomy._counters.set(111, { sinceSync: 5, sinceSummary: 3 });
+    // Simulate recent sync
+    autonomy._lastSync.set(222, Date.now() - 1000); // 1 second ago
+    autonomy._counters.set(222, { sinceSync: 1, sinceSummary: 1 });
+
+    autonomy.pruneStale(24 * 60 * 60 * 1000); // prune > 24h
+
+    assert.ok(!autonomy._lastSync.has(111), 'old entry should be pruned');
+    assert.ok(!autonomy._counters.has(111), 'old counter should be pruned');
+    assert.ok(autonomy._lastSync.has(222), 'recent entry should remain');
+    assert.ok(autonomy._counters.has(222), 'recent counter should remain');
+  });
+
+  it('does not crash on empty Maps', () => {
+    const { autonomy } = makeAutonomy();
+    autonomy.pruneStale();
+    assert.strictEqual(autonomy._counters.size, 0);
+  });
+});
+
+// ── Pattern detection busy guard ─────────────────────────────
+describe('OctiviaAutonomy — pattern detection concurrency', () => {
+  beforeEach(() => setupFsMocks());
+  afterEach(() => restoreFsMocks());
+
+  it('prevents concurrent pattern detection for same chatId', async () => {
+    const slowLLM = mock.fn(async () => {
+      await new Promise(r => setTimeout(r, 50));
+      return 'Themes: test';
+    });
+    const { autonomy, board } = makeAutonomy({
+      options: { autoSyncThreshold: 999, patternDetectThreshold: 3 },
+    });
+    autonomy.reflexion = { callLLM: slowLLM };
+
+    const session = makeSession(10);
+    // Send 3 messages concurrently (hitting threshold)
+    const promises = [];
+    for (let i = 0; i < 3; i++) {
+      promises.push(autonomy.onMessage(999, session));
+    }
+    await Promise.all(promises);
+
+    const digestCalls = board.publish.mock.calls.filter(
+      c => c.arguments[0] === 'octivia:digest'
+    );
+    assert.ok(digestCalls.length <= 1, 'busy guard should prevent concurrent pattern detection');
   });
 });
