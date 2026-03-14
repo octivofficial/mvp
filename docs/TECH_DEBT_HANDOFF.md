@@ -113,8 +113,8 @@ Already done — `TELEGRAM_AUTHORIZED_USERS` is in `.env.example`.
 
 ### Priority: MEDIUM
 4. ~~**Consolidate LLM client paths**~~ ✅ `gemini-client.js` archived (api-clients.js is canonical)
-5. **Flag dormant agents** — `crawler-agent.js`, `youtube-agent.js`, `workspace-agent.js` init silently; add explicit status logging
-6. **Config consolidation** — eliminate `config/discord.json` if unused, consolidate to .env + timeouts.js
+5. ~~**Flag dormant agents**~~ ✅ ENABLE_CRAWLER/WORKSPACE/YOUTUBE env vars (db85cde)
+6. ~~**Config consolidation**~~ N/A — `discord.json` has `.env` fallback already; no change needed
 
 ### Priority: LOW
 7. **Dependency updates** — `chokidar` 3→5, `groq-sdk` 0→1 (breaking changes likely)
