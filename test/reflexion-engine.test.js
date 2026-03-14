@@ -97,8 +97,8 @@ describe('ReflexionEngine — callLLM primary model', () => {
     const googleCall = mock.fn(async () => 'gemini-response');
     const engine = makeEngine({ google: { call: googleCall } });
 
-    // Ensure primary model is a gemini model (default is gemini-3.0-flash).
-    engine.config.model = 'gemini-3.0-flash';
+    // Ensure primary model is a gemini model (default is gemini-3-flash-preview).
+    engine.config.model = 'gemini-3-flash-preview';
 
     const result = await engine.callLLM('my prompt');
 
@@ -109,12 +109,12 @@ describe('ReflexionEngine — callLLM primary model', () => {
   it('passes the model name to the google client', async () => {
     const googleCall = mock.fn(async () => 'ok');
     const engine = makeEngine({ google: { call: googleCall } });
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
 
     await engine.callLLM('hello');
 
     const [modelArg] = googleCall.mock.calls[0].arguments;
-    assert.equal(modelArg, 'gemini-3.0-flash');
+    assert.equal(modelArg, 'gemini-3-flash-preview');
   });
 });
 
@@ -126,7 +126,7 @@ describe('ReflexionEngine — callLLM secondary fallback', () => {
     const anthropicCall = mock.fn(async () => 'anthropic-response');
 
     const engine = makeEngine({ google: { call: googleCall }, anthropic: { call: anthropicCall } });
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
     engine.config.escalationModel = 'claude-sonnet-4-6';
 
     const result = await engine.callLLM('hello');
@@ -141,7 +141,7 @@ describe('ReflexionEngine — callLLM secondary fallback', () => {
     const anthropicCall = mock.fn(async () => 'ok');
 
     const engine = makeEngine({ google: { call: googleCall }, anthropic: { call: anthropicCall } });
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
     engine.config.escalationModel = 'claude-sonnet-4-6';
     engine.config.ultraModel = 'claude-opus-4-6';
 
@@ -184,7 +184,7 @@ describe('ReflexionEngine — callLLM local fallback', () => {
       anthropic: { call: anthropicCall },
       local: { call: localCall },
     });
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
     engine.config.fallbackModel = 'local:qwen/qwen3.5-9b';
 
     const result = await engine.callLLM('hello');
@@ -203,7 +203,7 @@ describe('ReflexionEngine — callLLM local fallback', () => {
       anthropic: { call: anthropicCall },
       local: { call: localCall },
     });
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
     engine.config.fallbackModel = 'local:qwen/qwen3.5-9b';
 
     await engine.callLLM('hello');
@@ -224,7 +224,7 @@ describe('ReflexionEngine — callLLM all models fail', () => {
       anthropic: { call: failing },
       local: { call: failing },
     });
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
     engine.config.fallbackModel = 'local:qwen/qwen3.5-9b';
 
     const result = await engine.callLLM('test');
@@ -234,7 +234,7 @@ describe('ReflexionEngine — callLLM all models fail', () => {
 
   it('returns null when no API clients are provided and model has no client', async () => {
     const engine = makeEngine({}); // no clients at all
-    engine.config.model = 'gemini-3.0-flash'; // requires google client
+    engine.config.model = 'gemini-3-flash-preview'; // requires google client
     engine.config.fallbackModel = 'local:qwen/qwen3.5-9b'; // requires local client
 
     const result = await engine.callLLM('test');
@@ -248,7 +248,7 @@ describe('ReflexionEngine — callLLM counters', () => {
   it('increments totalCalls by 1 per call', async () => {
     const googleCall = mock.fn(async () => 'ok');
     const engine = makeEngine({ google: { call: googleCall } });
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
 
     await engine.callLLM('a');
     assert.equal(engine.totalCalls, 1);
@@ -260,7 +260,7 @@ describe('ReflexionEngine — callLLM counters', () => {
   it('increments dailyCost by costPerAttempt per call', async () => {
     const googleCall = mock.fn(async () => 'ok');
     const engine = makeEngine({ google: { call: googleCall } });
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
 
     await engine.callLLM('test');
     assert.equal(engine.dailyCost, engine.config.costPerAttempt);
@@ -303,7 +303,7 @@ describe('ReflexionEngine — callLLM forceLocal for "local" severity', () => {
       anthropic: { call: anthropicCall },
       local: { call: localCall },
     });
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
     engine.config.fallbackModel = 'local:qwen/qwen3.5-9b';
 
     const result = await engine.callLLM('task', 'local');
@@ -337,7 +337,7 @@ describe('ReflexionEngine — handleIntent null LLM response', () => {
   it('returns null when callLLM returns null', async () => {
     const engine = makeEngine();
     // All clients missing → callLLM will return null
-    engine.config.model = 'gemini-3.0-flash';
+    engine.config.model = 'gemini-3-flash-preview';
     engine.config.fallbackModel = 'local:qwen/qwen3.5-9b';
 
     const result = await engine.handleIntent('search the web for cats');
@@ -441,12 +441,12 @@ describe('ReflexionEngine — getStats', () => {
 
   it('returns a copy of modelUsage (not a reference)', () => {
     const engine = makeEngine();
-    engine.modelUsage = { 'gemini-3.0-flash': 3 };
+    engine.modelUsage = { 'gemini-3-flash-preview': 3 };
 
     const stats = engine.getStats();
-    stats.modelUsage['gemini-3.0-flash'] = 99; // mutate the returned copy
+    stats.modelUsage['gemini-3-flash-preview'] = 99; // mutate the returned copy
 
-    assert.equal(engine.modelUsage['gemini-3.0-flash'], 3, 'original should be unchanged');
+    assert.equal(engine.modelUsage['gemini-3-flash-preview'], 3, 'original should be unchanged');
   });
 
   it('returns a copy of config (not a reference)', () => {
