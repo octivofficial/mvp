@@ -45,7 +45,7 @@ describe('TelegramBot -> Conversation Manager', () => {
 
     await bot._routeMessage({ chat: { id: 12345 }, text: '/start' });
     assert.strictEqual(handled, false);
-    assert.match(bot.client.lastSent.text, /Welcome to Octiv/);
+    assert.match(bot.client.lastSent.text, /Welcome|Octivia/);
   });
 
   it('should respond to /help command', async () => {

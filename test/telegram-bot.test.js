@@ -430,7 +430,7 @@ describe('TelegramDevelopmentBot _routeMessage()', () => {
 describe('TelegramDevelopmentBot group chat', () => {
   const makeClient = () => ({ sendMessage: mock.fn(() => {}) });
 
-  it('ignores group messages without @mention', async () => {
+  it('records group messages silently without @mention (no response)', async () => {
     const board = makeBoard();
     const reflexion = makeReflexion('Great idea! 좋아요');
     const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
@@ -441,8 +441,12 @@ describe('TelegramDevelopmentBot group chat', () => {
       from: { id: 999, username: 'friend1' }
     };
     await bot._routeMessage(msg);
-    // No @mention → silently ignored
+    // No @mention → no response sent
     assert.strictEqual(bot.client.sendMessage.mock.calls.length, 0);
+    // But message IS recorded in session
+    const session = bot._sessions.get(-100123456);
+    assert.ok(session?.notes?.length >= 1);
+    assert.strictEqual(session.notes[0].author, 'friend1');
   });
 
   it('responds in group when @mentioned', async () => {
@@ -585,14 +589,142 @@ describe('TelegramDevelopmentBot _saveSpecToVault()', () => {
   });
 });
 
+describe('TelegramDevelopmentBot /summary command', () => {
+  const makeClient = () => ({ sendMessage: mock.fn(() => {}) });
+
+  it('returns no-messages hint when group has no notes', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    const msg = { chat: { id: 42 }, text: '/summary', from: {} };
+    await bot._routeMessage(msg);
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('No group conversation'));
+  });
+
+  it('synthesizes messages when notes exist and reflexion available', async () => {
+    const board = makeBoard();
+    const reflexion = makeReflexion('## Summary\n### Key Ideas\n- [kirby]: great concept');
+    const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
+    bot.client = makeClient();
+    // Pre-populate session with group notes
+    bot._sessions.set(42, {
+      stage: 0,
+      notes: [
+        { author: 'kirby', text: 'We should design a cool concept', ts: Date.now(), type: 'group' },
+        { author: 'dpd', text: 'Agreed, lets go bold', ts: Date.now(), type: 'group' },
+      ]
+    });
+    await bot._handleSummary(42);
+    // Should send "synthesizing..." + summary
+    assert.ok(bot.client.sendMessage.mock.calls.length >= 2);
+    // LLM was called with the transcript
+    const prompt = reflexion.callLLM.mock.calls[0].arguments[0];
+    assert.ok(prompt.includes('[kirby]'));
+    assert.ok(prompt.includes('[dpd]'));
+  });
+
+  it('returns message count when no reflexion', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board); // no reflexion
+    bot.client = makeClient();
+    bot._sessions.set(42, {
+      stage: 0,
+      notes: [{ author: 'bb', text: 'idea', ts: Date.now(), type: 'group' }]
+    });
+    await bot._handleSummary(42);
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('1 messages'));
+  });
+});
+
+describe('TelegramDevelopmentBot /ideas command', () => {
+  const makeClient = () => ({ sendMessage: mock.fn(() => {}) });
+
+  it('returns no-ideas hint when empty', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    await bot._handleIdeas(42);
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('No ideas'));
+  });
+
+  it('groups ideas by contributor', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    bot._sessions.set(42, {
+      stage: 0,
+      notes: [
+        { author: 'kirby', text: 'Visual concept idea', ts: Date.now(), type: 'group' },
+        { author: 'kirby', text: 'Color palette', ts: Date.now(), type: 'group' },
+        { author: 'dpd', text: 'Music direction', ts: Date.now(), type: 'group' },
+        { author: 'bb', text: 'Choreography style', ts: Date.now(), type: 'group' },
+      ]
+    });
+    await bot._handleIdeas(42);
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('kirby'));
+    assert.ok(text.includes('dpd'));
+    assert.ok(text.includes('bb'));
+    assert.ok(text.includes('2 messages')); // kirby has 2
+    assert.ok(text.includes('Total: 4'));
+  });
+});
+
+describe('TelegramDevelopmentBot /sync command', () => {
+  const makeClient = () => ({ sendMessage: mock.fn(() => {}) });
+
+  it('returns nothing-to-sync hint when empty', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    await bot._handleSync(42, { username: 'octiv' });
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('Nothing to sync'));
+  });
+
+  it('syncs messages and publishes to Blackboard', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    bot._sessions.set(42, {
+      stage: 0,
+      notes: [
+        { author: 'kirby', text: 'Design concept A', ts: Date.now(), type: 'group' },
+        { author: 'dpd', text: 'I like it', ts: Date.now(), type: 'group' },
+      ]
+    });
+    await bot._handleSync(42, { username: 'octiv' });
+    const lastCall = bot.client.sendMessage.mock.calls[bot.client.sendMessage.mock.calls.length - 1];
+    const text = lastCall.arguments[1];
+    // Should confirm sync
+    assert.ok(text.includes('Synced') || text.includes('2 messages'));
+    // Should publish octivia:sync to Blackboard
+    const syncPublish = board.publish.mock.calls.find(c => c.arguments[0] === 'octivia:sync');
+    assert.ok(syncPublish, 'Should publish sync event');
+    assert.strictEqual(syncPublish.arguments[1].messageCount, 2);
+  });
+
+  it('includes /summary and /sync in help text', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    const msg = { chat: { id: 42 }, text: '/help', from: {} };
+    await bot._routeMessage(msg);
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('/summary'));
+    assert.ok(text.includes('/ideas'));
+    assert.ok(text.includes('/sync'));
+  });
+});
+
 describe('TelegramDevelopmentBot _saveBuildBrief()', () => {
 
   it('does not throw on valid brief text', async () => {
     const bot = new TelegramDevelopmentBot(baseConfig(), makeBoard());
-    // Override vault dir to temp dir
-    // Use the real method but with a brief that's easy to save
     await assert.doesNotReject(async () => {
-      // Just test it doesn't throw with a mocked fs approach
       const spy = { saved: false };
       bot._saveBuildBrief = async (_brief, _author) => { spy.saved = true; };
       await bot._saveBuildBrief('## Build Brief: Test\n**Vision**: testing', 'tester');

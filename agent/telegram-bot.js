@@ -47,20 +47,23 @@ Key Skills Available:
 // ── Octivia's internal LLM prompts ───────────────────────────
 // These are invisible to the user — she "thinks" before responding.
 
-const SYSTEM_PROMPT = `You are Octivia, a vibe translator and creative assistant for a software team.
-Your job: listen deeply to human ideas, understand the EMOTIONAL intent behind technical requests,
-and help people think clearly so their ideas can be built into software.
+const SYSTEM_PROMPT = `You are Octivia, creative assistant and secretary for a builder team.
+The team: Octiv (commander), kirby, dpd, bb — they design an idol group concept together.
+Your job: listen deeply to EVERYONE's ideas, understand intent, help the team think bigger
+and more clearly. You collect, refine, expand, and organize their ideas.
 
-Language style: English-first. Add a brief Korean phrase naturally at the end if it fits —
-like a Korean-American (gyopo) would. Never forced. Natural code-switching.
-Example: "Love that direction — what's the feeling behind it? 어떤 느낌이에요?"
+CRITICAL RULES:
+- NEVER hallucinate. Only reference things actually said by team members.
+- When synthesizing, attribute ideas: [kirby], [dpd], [bb], [octiv].
+- You are a creative PARTNER — suggest connections, ask good questions, expand thinking.
+- But never invent facts or ideas the team didn't discuss.
 
-NEVER say "Socratic question 1/2" or any stage labels. Just be present, warm, curious.
-You are taking SILENT NOTES of everything said — you never tell the user this.
-Your questions help YOU gather what you need, not interrogate the user.
+Language style: English-first. Add a brief Korean phrase naturally at the end —
+Korean-American (gyopo) style. Never forced. Natural code-switching.
 
-You bridge between the human (Tony) and the dev team (JARVIS). You know what the team can build.
-Keep responses SHORT. One thought, one question (if needed). Never more than 3 sentences.`;
+You bridge between the human team and the dev team (Claude Code).
+The ideas you collect go to Obsidian vault → Claude Code builds them.
+Keep responses SHORT. One thought, one question (if needed). Max 3 sentences.`;
 
 const FOLLOW_UP_PROMPT = (idea) =>
   `${SYSTEM_PROMPT}\n\nThe person just shared this idea: "${idea}"\n\n` +
@@ -195,9 +198,9 @@ class TelegramDevelopmentBot {
         // Persist group chatId to Blackboard so it survives container restarts
         this.board?.publish?.('octiv:telegram:group:joined', { chatId, title }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
         this.client?.sendMessage(chatId,
-          "안녕하세요 여러분! I'm Octivia — your BMAD dev assistant.\n\n" +
-          "@mention me with ideas — I'll generate specs with AC + TDD stubs.\n" +
-          "Use /spec <feature> for instant specs, /build for batch briefs.\n\n" +
+          "안녕하세요 여러분! I'm Octivia — your creative assistant.\n\n" +
+          "I'll listen to everything and collect your ideas silently.\n" +
+          "@mention me to chat, /summary to review, /sync to save.\n\n" +
           "잘 부탁드립니다 👂✨"
         );
       }
@@ -237,11 +240,14 @@ class TelegramDevelopmentBot {
       }
     }
 
-    // ── Group: only respond when @mentioned ───
+    // ── Group: always listen, respond only on @mention ───
     if (isGroup && !text.startsWith('/')) {
+      // Always record — Octivia absorbs everything silently
+      await this._recordGroupMessage(chatId, msg);
+
       const botUsername = this.config.botUsername || 'Octivia_bot';
       const mentionPattern = new RegExp(`@${botUsername}`, 'gi');
-      if (!mentionPattern.test(text)) return; // ignore unless @mentioned
+      if (!mentionPattern.test(text)) return; // recorded but no response
       const cleanText = text.replace(mentionPattern, '').trim();
       if (!cleanText) return;
       if (this.reflexion) {
@@ -255,10 +261,13 @@ class TelegramDevelopmentBot {
 
     if (text === '/start') {
       return this.client?.sendMessage(chatId,
-        "Welcome to Octiv — I'm Octivia, your BMAD development assistant.\n\n" +
-        "Tell me what you're thinking. I'll turn it into a spec with " +
-        "Acceptance Criteria and TDD test stubs — ready for the dev team.\n\n" +
-        "Or use /spec <feature> for instant spec generation.\n\n" +
+        "Welcome — I'm Octivia, your creative assistant.\n\n" +
+        "I listen to everything and collect your ideas.\n" +
+        "@mention me to chat directly, or use:\n" +
+        "/summary — see what we've discussed\n" +
+        "/ideas — ideas by contributor\n" +
+        "/sync — save to vault\n" +
+        "/spec <feature> — generate BMAD spec\n\n" +
         "아이디어 있으면 그냥 말해요 ✨"
       );
     }
@@ -268,13 +277,16 @@ class TelegramDevelopmentBot {
         "Available commands:\n" +
         "/start — intro\n" +
         "/status — system snapshot\n" +
-        "/spec <feature> — generate BMAD spec with AC + TDD stubs\n" +
-        "/build — compile all vibes → BMAD brief for the dev team\n" +
-        "/context <idea> — check against what we have\n" +
-        "/notebook <question> — query NotebookLM knowledge base\n" +
+        "/summary — synthesize recent group discussion\n" +
+        "/ideas — list collected ideas by contributor\n" +
+        "/sync — save everything to Obsidian vault\n" +
+        "/spec <feature> — generate BMAD spec with AC + TDD\n" +
+        "/build — compile all vibes → BMAD brief\n" +
+        "/context <idea> — cross-reference with existing system\n" +
+        "/notebook <question> — query NotebookLM\n" +
         "/doc <description> — create a Google Doc\n" +
         "/reset — start fresh\n\n" +
-        "Or just talk — I'll collect vibes for /build. 그냥 말해요."
+        "Or just talk — I'm always listening. 그냥 말해요."
       );
     }
 
@@ -293,6 +305,18 @@ class TelegramDevelopmentBot {
 
     if (text === '/build') {
       return this._handleBuild(chatId, msg.from);
+    }
+
+    if (text === '/summary') {
+      return this._handleSummary(chatId);
+    }
+
+    if (text === '/ideas') {
+      return this._handleIdeas(chatId);
+    }
+
+    if (text === '/sync') {
+      return this._handleSync(chatId, msg.from);
     }
 
     if (text.startsWith('/spec ')) {
@@ -429,6 +453,146 @@ class TelegramDevelopmentBot {
       log.info('telegram-bot', `BMAD spec saved: vault/01-Specs/${filename}`);
     } catch (err) {
       log.warn('telegram-bot', 'Spec vault save failed', { error: err.message });
+    }
+  }
+
+  // ── /summary — Synthesize recent group discussion ────────
+
+  async _handleSummary(chatId) {
+    const session = await this._loadSession(chatId);
+    const notes = (session.notes || []).filter(n => n.type === 'group');
+    if (notes.length === 0) {
+      return this.client?.sendMessage(chatId, 'No group conversation recorded yet. Talk freely — I\'m listening. 대화해요!');
+    }
+    const recent = notes.slice(-100);
+    const transcript = recent.map(n => `[${n.author}]: ${n.text}`).join('\n');
+
+    if (!this.reflexion) {
+      return this.client?.sendMessage(chatId, `${recent.length} messages recorded. LLM not connected for synthesis.`);
+    }
+
+    this.client?.sendMessage(chatId, `Synthesizing ${recent.length} messages... 정리 중`);
+
+    const prompt =
+      `${SYSTEM_PROMPT}\n\n` +
+      `Synthesize this group conversation. ONLY reference what was actually said — NO hallucination.\n` +
+      `Attribute every point to the person who said it: [kirby], [dpd], [bb], [octiv], etc.\n\n` +
+      `Conversation:\n${transcript}\n\n` +
+      `Output format:\n` +
+      `## Summary (${recent.length} messages)\n\n` +
+      `### Key Ideas\n- [author]: idea\n\n` +
+      `### Themes Emerging\n- theme description\n\n` +
+      `### Open Questions\n- what still needs discussion?\n\n` +
+      `Keep it concise. Only facts from the conversation.`;
+
+    const summary = await this._llmCall(prompt);
+    return this.client?.sendMessage(chatId, summary);
+  }
+
+  // ── /ideas — List collected ideas by contributor ────────
+
+  async _handleIdeas(chatId) {
+    const session = await this._loadSession(chatId);
+    const notes = (session.notes || []).filter(n => n.type === 'group');
+    if (notes.length === 0) {
+      return this.client?.sendMessage(chatId, 'No ideas collected yet. Start talking! 아이디어 주세요!');
+    }
+
+    // Group by author — no LLM needed, just raw organization
+    const byAuthor = {};
+    for (const note of notes) {
+      const author = note.author || 'anonymous';
+      if (!byAuthor[author]) byAuthor[author] = [];
+      byAuthor[author].push(note.text);
+    }
+
+    const lines = ['## Ideas by Contributor\n'];
+    for (const [author, messages] of Object.entries(byAuthor)) {
+      lines.push(`**${author}** (${messages.length} messages):`);
+      // Show last 5 messages per person to keep it readable
+      const recent = messages.slice(-5);
+      for (const msg of recent) {
+        lines.push(`  - ${msg.slice(0, 120)}${msg.length > 120 ? '...' : ''}`);
+      }
+      lines.push('');
+    }
+    lines.push(`Total: ${notes.length} messages from ${Object.keys(byAuthor).length} people`);
+
+    return this.client?.sendMessage(chatId, lines.join('\n'));
+  }
+
+  // ── /sync — Push accumulated knowledge to Obsidian vault ──
+
+  async _handleSync(chatId, from) {
+    const session = await this._loadSession(chatId);
+    const notes = (session.notes || []).filter(n => n.type === 'group');
+    if (notes.length === 0) {
+      return this.client?.sendMessage(chatId, 'Nothing to sync yet. 대화 먼저!');
+    }
+
+    const author = from?.username || from?.first_name || 'octivia';
+    const date = new Date().toISOString().slice(0, 10);
+    const chatDir = path.join(__dirname, '..', 'vault', '02-GroupChat');
+
+    try {
+      await fs.promises.mkdir(chatDir, { recursive: true });
+
+      // Group by author for structured output
+      const byAuthor = {};
+      for (const note of notes) {
+        const a = note.author || 'anonymous';
+        if (!byAuthor[a]) byAuthor[a] = [];
+        byAuthor[a].push(note);
+      }
+
+      const sections = ['---',
+        'type: group-chat-log',
+        `date: ${date}`,
+        `synced-by: ${author}`,
+        `message-count: ${notes.length}`,
+        `contributors: [${Object.keys(byAuthor).join(', ')}]`,
+        'tags: [group-chat, ideas, sync]',
+        '---', '',
+        `# Group Chat — ${date}`, '',
+        `> ${notes.length} messages from ${Object.keys(byAuthor).length} contributors`, '',
+      ];
+
+      // Chronological log
+      sections.push('## Conversation Log\n');
+      for (const note of notes.slice(-200)) {
+        const time = new Date(note.ts).toISOString().slice(11, 16);
+        sections.push(`- **${time}** [${note.author}]: ${note.text}`);
+      }
+
+      // Per-contributor summary
+      sections.push('\n## By Contributor\n');
+      for (const [a, msgs] of Object.entries(byAuthor)) {
+        sections.push(`### ${a} (${msgs.length} messages)`);
+        for (const m of msgs.slice(-10)) {
+          sections.push(`- ${m.text.slice(0, 150)}`);
+        }
+        sections.push('');
+      }
+
+      const filename = `${date}-group-chat.md`;
+      const filepath = path.join(chatDir, filename);
+      await fs.promises.writeFile(filepath, sections.join('\n'), 'utf8');
+      log.info('telegram-bot', `Group chat synced: vault/02-GroupChat/${filename}`);
+
+      // Publish sync event to Blackboard
+      await this.board.publish('octivia:sync', {
+        author, chatId, date, messageCount: notes.length,
+        contributors: Object.keys(byAuthor), timestamp: Date.now(),
+      }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
+
+      return this.client?.sendMessage(chatId,
+        `Synced ${notes.length} messages to vault/02-GroupChat/${filename}\n` +
+        `Contributors: ${Object.keys(byAuthor).join(', ')}\n` +
+        `Claude Code can now access this. 동기화 완료!`
+      );
+    } catch (err) {
+      log.warn('telegram-bot', 'Sync failed', { error: err.message });
+      return this.client?.sendMessage(chatId, 'Sync failed — check logs. 다시 해볼게요.');
     }
   }
 
