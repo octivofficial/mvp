@@ -51,7 +51,7 @@ export default [
     },
   },
   {
-    // Ignore generated/vendor files
-    ignores: ['node_modules/', 'logs/', 'server/', 'vault/', 'TXT/'],
+    // Ignore generated/vendor/external files
+    ignores: ['node_modules/', 'logs/', 'server/', 'vault/', 'TXT/', '.obsidian/', 'tools/', 'supabase/', '.claude/'],
   },
 ];
