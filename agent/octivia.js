@@ -46,7 +46,7 @@ async function startOctivia(deps = {}) {
   let telegramBot = null; // gateway handle (API-compatible with legacy code)
   try {
     const spawnFn = deps.spawn || require('child_process').spawn;
-    const gatewayProcess = spawnFn('openclaw', ['gateway', '--config', OPENCLAW_CONFIG], {
+    const gatewayProcess = spawnFn('openclaw', ['gateway'], {
       stdio: deps.spawn ? 'pipe' : 'inherit',
       env: { ...process.env },
     });
