@@ -94,6 +94,9 @@ config/bot-config.json
 # Coverage reports
 coverage/
 
+# LSP / IDE tooling
+.serena/
+
 # npm
 npm-debug.log*
 
