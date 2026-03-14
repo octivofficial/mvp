@@ -40,7 +40,7 @@ class LeaderAgent {
     const acData = await this.board.getACProgress(agentId);
     const done = new Set();
     for (const [key, val] of Object.entries(acData)) {
-      try { if (JSON.parse(val).status === 'done') done.add(key); } catch {}
+      try { if (JSON.parse(val).status === 'done') done.add(key); } catch (e) { log.debug('leader', 'AC parse skip', { key }); }
     }
 
     let mission;
@@ -151,7 +151,7 @@ class LeaderAgent {
     for (let i = 1; i <= this.teamSize; i++) {
       const entries = await this.board.getListRange(`agent:builder-0${i}:reflexion`);
       for (const raw of entries) {
-        try { allErrors.push(JSON.parse(raw)); } catch {}
+        try { allErrors.push(JSON.parse(raw)); } catch (e) { log.debug('leader', 'reflexion parse skip', { raw: raw?.slice(0, 50) }); }
       }
     }
 

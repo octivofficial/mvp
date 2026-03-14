@@ -54,7 +54,7 @@ class MCPServer {
         const data = JSON.parse(message);
         const agentId = channel.split(':')[2];
         this.syncedState[agentId] = { ...data, syncedAt: Date.now() };
-      } catch {}
+      } catch (e) { log.debug('mcp-server', 'status sync parse error', { error: e.message }); }
     });
   }
 

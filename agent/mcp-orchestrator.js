@@ -26,7 +26,7 @@ class MCPOrchestrator {
     // Load existing registry from Redis
     const registry = await this.board.getHash('agents:registry');
     for (const [id, raw] of Object.entries(registry)) {
-      try { this.agents.set(id, JSON.parse(raw)); } catch {}
+      try { this.agents.set(id, JSON.parse(raw)); } catch (e) { log.debug('orchestrator', 'registry parse skip', { id }); }
     }
     log.info('orchestrator', `initialized, ${this.agents.size} agents registered`);
   }

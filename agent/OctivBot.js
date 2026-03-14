@@ -209,12 +209,12 @@ class OctivBot {
         if (this.spawnTimeoutTimer) clearTimeout(this.spawnTimeoutTimer);
 
         if (this.bot) {
-            try { this.bot.quit(); } catch (e) { }
+            try { this.bot.quit(); } catch (e) { log.debug(this.config.username, 'bot.quit cleanup error', { error: e.message }); }
         }
 
         try {
             await this.board.disconnect();
-        } catch (e) { }
+        } catch (e) { log.debug(this.config.username, 'board disconnect cleanup error', { error: e.message }); }
 
         log.info(this.config.username, 'OctivBot shutdown complete');
     }

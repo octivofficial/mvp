@@ -83,7 +83,7 @@ class DashboardServer {
 
   _safePSub(pattern, handler) {
     this.subscriber.pSubscribe(pattern, (message, channel) => {
-      try { handler(JSON.parse(message), channel); } catch {}
+      try { handler(JSON.parse(message), channel); } catch (e) { log.debug('dashboard', 'psub parse error', { channel, error: e.message }); }
     });
   }
 

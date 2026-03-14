@@ -136,7 +136,7 @@ class SkillPipeline {
     const all = await this.board.getHash('skills:library');
     const result = {};
     for (const [name, raw] of Object.entries(all)) {
-      try { result[name] = JSON.parse(raw); } catch {}
+      try { result[name] = JSON.parse(raw); } catch (e) { log.debug('skill-pipeline', 'library parse skip', { name }); }
     }
     return result;
   }

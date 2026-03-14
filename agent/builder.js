@@ -21,7 +21,7 @@ try {
   goto = nav.goto;
   const shelter = require('./builder-shelter');
   buildShelterImpl = shelter.buildShelter;
-} catch {}
+} catch (e) { log.debug('builder', 'optional module load skip', { error: e.message }); }
 
 // Lazy-loaded mineflayer connection dependencies
 let mineflayer = null;
@@ -449,8 +449,8 @@ class BuilderAgent {
   async shutdown() {
     this._running = false;
     if (this._missionSubscriber) {
-      try { await this._missionSubscriber.unsubscribe(); } catch {}
-      try { await this._missionSubscriber.disconnect(); } catch {}
+      try { await this._missionSubscriber.unsubscribe(); } catch (e) { log.debug('builder', 'unsubscribe cleanup error', { error: e.message }); }
+      try { await this._missionSubscriber.disconnect(); } catch (e) { log.debug('builder', 'disconnect cleanup error', { error: e.message }); }
     }
     try {
       if (this.bot) this.bot.end();

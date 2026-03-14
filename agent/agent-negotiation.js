@@ -411,8 +411,8 @@ class AgentNegotiation {
 
   async shutdown() {
     if (this._subscriber) {
-      try { await this._subscriber.unsubscribe(); } catch {}
-      try { await this._subscriber.disconnect(); } catch {}
+      try { await this._subscriber.unsubscribe(); } catch (e) { log.debug('negotiation', 'unsubscribe cleanup error', { error: e.message }); }
+      try { await this._subscriber.disconnect(); } catch (e) { log.debug('negotiation', 'disconnect cleanup error', { error: e.message }); }
     }
     this._pendingRequests.clear();
     this._activeNegotiations.clear();

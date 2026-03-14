@@ -611,7 +611,7 @@ class TelegramDevelopmentBot {
       // Keep last 200 messages per group (memory limit)
       if (session.notes.length > 200) session.notes = session.notes.slice(-200);
       await this._saveSession(chatId, session);
-    } catch {}
+    } catch (e) { log.debug('telegram-bot', 'recordGroupMessage error', { error: e.message }); }
   }
 
   async _accumulateRecentVibes() {
@@ -735,7 +735,7 @@ class TelegramDevelopmentBot {
         const saved = await this.board.getConfig('octivia:session:' + chatId);
         if (saved && typeof saved === 'object') return saved;
       }
-    } catch {}
+    } catch (e) { log.debug('telegram-bot', 'loadSession redis fallback', { error: e.message }); }
     return this._sessions.get(chatId) || { stage: 0, notes: [] };
   }
 
@@ -745,7 +745,7 @@ class TelegramDevelopmentBot {
       if (this.board?.setConfig) {
         await this.board.setConfig('octivia:session:' + chatId, session);
       }
-    } catch {}
+    } catch (e) { log.debug('telegram-bot', 'saveSession redis error', { error: e.message }); }
   }
 
   // ── Context & Memory ─────────────────────────────────────
@@ -756,7 +756,7 @@ class TelegramDevelopmentBot {
       try {
         const ctx = await this.context.gather();
         return this.context.format(ctx);
-      } catch {}
+      } catch (e) { log.debug('telegram-bot', 'context gather error', { error: e.message }); }
     }
     // Fallback: just MEMORY.md
     try {
@@ -771,15 +771,15 @@ class TelegramDevelopmentBot {
       const raw = await fs.promises.readFile(MEMORY_PATH, 'utf8').catch(() => '');
       const match = raw.match(/## Phase Status[\s\S]{0,400}/);
       if (match) lines.push(`Phase Status:\n${match[0].slice(0, 280)}`);
-    } catch {}
+    } catch (e) { log.debug('telegram-bot', 'snapshot memory read error', { error: e.message }); }
     try {
       const reg = await this.board.get('agents:registry');
       if (reg) lines.push(`Active agents: ${Object.keys(reg).join(', ')}`);
-    } catch {}
+    } catch (e) { log.debug('telegram-bot', 'snapshot registry error', { error: e.message }); }
     try {
       const vibesCount = await this._countVibes();
       if (vibesCount > 0) lines.push(`Vibes accumulated: ${vibesCount} (use /build to compile)`);
-    } catch {}
+    } catch (e) { log.debug('telegram-bot', 'snapshot vibes error', { error: e.message }); }
     const vmHost = process.env.VM_HOST || process.env.BLACKBOARD_REDIS_URL?.match(/redis:\/\/([^:\/]+)/)?.[1] || 'VM';
     lines.push(`Host: ${vmHost}\n${new Date().toISOString()}`);
     return lines.join('\n\n') || 'System snapshot unavailable.';
@@ -880,7 +880,7 @@ class TelegramDevelopmentBot {
           if (data.context?.chatId) {
             this.client?.sendMessage(data.context.chatId, `Research done:\n${data.summary}`);
           }
-        } catch {}
+        } catch (e) { log.debug('telegram-bot', 'crawler event parse error', { error: e.message }); }
       });
       sub.subscribe('google:finished', async (msg) => {
         try {
@@ -888,21 +888,21 @@ class TelegramDevelopmentBot {
           if (data.context?.chatId) {
             this.client?.sendMessage(data.context.chatId, `Doc created:\n${data.docUrl}`);
           }
-        } catch {}
+        } catch (e) { log.debug('telegram-bot', 'google event parse error', { error: e.message }); }
       });
       sub.subscribe('notebooklm:answer', async (msg) => {
         try {
           const data = JSON.parse(msg);
           if (data.context?.chatId) {
-            this.client?.sendMessage(data.context.chatId, `📚 NotebookLM:\n\n${data.answer}`);
+            this.client?.sendMessage(data.context.chatId, `NotebookLM:\n\n${data.answer}`);
           }
-        } catch {}
+        } catch (e) { log.debug('telegram-bot', 'notebooklm event parse error', { error: e.message }); }
       });
       sub.subscribe('octivia:build-brief', async (msg) => {
         try {
           const data = JSON.parse(msg);
           log.info('telegram-bot', 'Build brief ready for Claude Code', { chatId: data.chatId });
-        } catch {}
+        } catch (e) { log.debug('telegram-bot', 'build-brief parse error', { error: e.message }); }
       });
     } catch (err) {
       log.warn('telegram-bot', 'listenForUpdates failed', { error: err.message });

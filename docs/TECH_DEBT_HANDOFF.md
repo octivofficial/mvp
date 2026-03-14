@@ -104,21 +104,34 @@ Already done — `TELEGRAM_AUTHORIZED_USERS` is in `.env.example`.
 
 ---
 
+### 9. Remaining empty catch blocks eliminated (Phase-3)
+- **25 files modified**: telegram-bot.js (11), agent-negotiation.js (2), OctivBot.js (2),
+  builder.js (3), leader.js (2), safety.js (1), dashboard.js (1), mcp-orchestrator.js (1),
+  mcp-server.js (1), skill-zettelkasten.js (1), skill-pipeline.js (1)
+- All `catch {}` blocks replaced with `log.debug()` for error visibility
+- Archived files (`_archived/`) left as-is (not in production)
+- `memory-logger.js` console.error retained (circular dependency with logger.js)
+
+---
+
 ## 📋 REMAINING TECH DEBT (future sessions)
 
 ### Priority: HIGH
 1. ~~**Split discord-bot.js**~~ ✅ Done (Phase-2 continuation)
 2. ~~**Fix 2 skipped tests**~~ ✅ Done (d2aebb4)
 3. ~~**Strengthen weak tests**~~ ✅ 7 assertions strengthened (d2aebb4)
+4. ~~**Empty catch blocks**~~ ✅ 25 blocks → log.debug (Phase-3)
 
 ### Priority: MEDIUM
-4. ~~**Consolidate LLM client paths**~~ ✅ `gemini-client.js` archived (api-clients.js is canonical)
-5. ~~**Flag dormant agents**~~ ✅ ENABLE_CRAWLER/WORKSPACE/YOUTUBE env vars (db85cde)
-6. ~~**Config consolidation**~~ N/A — `discord.json` has `.env` fallback already; no change needed
+5. ~~**Consolidate LLM client paths**~~ ✅ `gemini-client.js` archived (api-clients.js is canonical)
+6. ~~**Flag dormant agents**~~ ✅ ENABLE_CRAWLER/WORKSPACE/YOUTUBE env vars (db85cde)
+7. ~~**Config consolidation**~~ N/A — `discord.json` has `.env` fallback already; no change needed
 
 ### Priority: LOW
-7. ~~**Dependency updates**~~ Assessed: `chokidar` 3→5 (HIGH risk — API breaking), `groq-sdk` 0→1 (LOW risk but optional). Both optional paths, no security vulns. **Deferred.**
-8. ~~**Return value validation**~~ ✅ Fixed: defensive `.copy()` check in `isolated-vm-sandbox.js`
+8. ~~**Dependency updates**~~ Assessed: `chokidar` 3→5 (HIGH risk — API breaking), `groq-sdk` 0→1 (LOW risk but optional). Both optional paths, no security vulns. **Deferred.**
+9. ~~**Return value validation**~~ ✅ Fixed: defensive `.copy()` check in `isolated-vm-sandbox.js`
+10. **2 TODO comments**: `test/builder-shelter.test.js:212`, `test/builder-shelter.property.test.js:153` — low risk
+11. **WoodcutterAgent**: defined but not wired in team.js — intentional (future role)
 
 ---
 
@@ -126,5 +139,5 @@ Already done — `TELEGRAM_AUTHORIZED_USERS` is in `.env.example`.
 
 ```
 Lint:     0 errors, 0 warnings
-Tests:    1878 total, 1867 pass, 0 fail, 11 skip
+Tests:    1893 total, 1882 pass, 0 fail, 11 skip
 ```

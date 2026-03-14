@@ -81,7 +81,7 @@ class SafetyAgent {
       try {
         const data = JSON.parse(message);
         this.reactIterations = data.iteration || 0;
-      } catch {}
+      } catch (e) { log.debug('safety', 'react parse error', { error: e.message }); }
     });
   }
 

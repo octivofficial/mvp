@@ -188,7 +188,7 @@ class SkillZettelkasten {
     const raw = await this.board.getHash(`${ZK_PREFIX}:notes`);
     const notes = {};
     for (const [id, json] of Object.entries(raw)) {
-      try { notes[id] = JSON.parse(json); } catch {}
+      try { notes[id] = JSON.parse(json); } catch (e) { log.debug('zettelkasten', 'note parse skip', { id }); }
     }
     return notes;
   }
