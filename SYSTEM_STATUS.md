@@ -1,5 +1,5 @@
 # Octiv System Status
-**Updated**: 2026-03-11 19:30 KST  
+**Updated**: 2026-03-14 KST  
 **Status**: 🟢 ALL SYSTEMS OPERATIONAL
 
 ---
@@ -33,7 +33,7 @@
 
 ### Minecraft Server
 - **Address**: localhost:25565
-- **Version**: PaperMC 1.21.1 (build 123)
+- **Version**: PaperMC 1.21.11
 - **Mode**: Offline (no authentication)
 - **RCON**: localhost:25575 (password: changeme)
 - **World**: octiv-world
