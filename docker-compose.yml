@@ -102,7 +102,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - /opt/octiv/.openclaw:/root/.openclaw:ro   # openclaw.json with API keys (host-mounted secret)
+      - /opt/octiv/.openclaw:/root/.openclaw   # openclaw.json with API keys (host-mounted)
       - octivia-vault:/app/vault
     profiles:
       - vm   # only starts with: docker compose --profile vm up -d
