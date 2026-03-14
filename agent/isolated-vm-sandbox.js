@@ -36,9 +36,9 @@ class IsolatedVMSandbox {
       
       // Copy result back to main context
       if (result && typeof result === 'object') {
-        return await result.copy();
+        return typeof result.copy === 'function' ? await result.copy() : result;
       }
-      
+
       return result;
     } catch (err) {
       // Handle timeout errors
@@ -77,9 +77,9 @@ class IsolatedVMSandbox {
       const result = await script.run(context, { timeout: this.timeout });
       
       if (result && typeof result === 'object') {
-        return await result.copy();
+        return typeof result.copy === 'function' ? await result.copy() : result;
       }
-      
+
       return result;
     } catch (err) {
       if (err.message && err.message.includes('Script execution timed out')) {

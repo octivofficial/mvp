@@ -117,8 +117,8 @@ Already done — `TELEGRAM_AUTHORIZED_USERS` is in `.env.example`.
 6. ~~**Config consolidation**~~ N/A — `discord.json` has `.env` fallback already; no change needed
 
 ### Priority: LOW
-7. **Dependency updates** — `chokidar` 3→5, `groq-sdk` 0→1 (breaking changes likely)
-8. **Return value validation** in `isolated-vm-sandbox.js` (potential circular ref)
+7. ~~**Dependency updates**~~ Assessed: `chokidar` 3→5 (HIGH risk — API breaking), `groq-sdk` 0→1 (LOW risk but optional). Both optional paths, no security vulns. **Deferred.**
+8. ~~**Return value validation**~~ ✅ Fixed: defensive `.copy()` check in `isolated-vm-sandbox.js`
 
 ---
 
