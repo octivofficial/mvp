@@ -1,7 +1,8 @@
 /**
  * Octiv ReflexionEngine — Phase 4.3 + 4.5 + 4.6
  * LLM bridge with multi-model routing, cost guardrails, config auto-reload.
- * Default: Claude Sonnet 4.6 → escalate to Opus 4.6 → fallback Groq.
+ * Chain: Gemini Flash → Gemini escalation → LM Studio local fallback.
+ * Anthropic API is NOT used (separate billing from Claude Code subscription).
  */
 const { Blackboard } = require('./blackboard');
 const { getLogger } = require('./logger');
