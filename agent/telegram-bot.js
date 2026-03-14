@@ -201,10 +201,12 @@ class TelegramDevelopmentBot {
       }
     }
 
-    // ── Group: same as DM — strip @mention if present, then process normally ───
+    // ── Group: only respond when @mentioned ───
     if (isGroup && !text.startsWith('/')) {
       const botUsername = this.config.botUsername || 'Octivia_bot';
-      const cleanText = text.replace(new RegExp(`@${botUsername}`, 'gi'), '').trim();
+      const mentionPattern = new RegExp(`@${botUsername}`, 'gi');
+      if (!mentionPattern.test(text)) return; // ignore unless @mentioned
+      const cleanText = text.replace(mentionPattern, '').trim();
       if (!cleanText) return;
       if (this.reflexion) {
         await this._vibeConversation(chatId, cleanText, msg.from);

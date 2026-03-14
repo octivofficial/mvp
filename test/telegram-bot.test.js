@@ -361,7 +361,7 @@ describe('TelegramDevelopmentBot _routeMessage()', () => {
 describe('TelegramDevelopmentBot group chat', () => {
   const makeClient = () => ({ sendMessage: mock.fn(() => {}) });
 
-  it('responds to all group messages (same as DM)', async () => {
+  it('ignores group messages without @mention', async () => {
     const board = makeBoard();
     const reflexion = makeReflexion('Great idea! 좋아요');
     const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
@@ -372,11 +372,11 @@ describe('TelegramDevelopmentBot group chat', () => {
       from: { id: 999, username: 'friend1' }
     };
     await bot._routeMessage(msg);
-    // Should respond — group chats work same as DM
-    assert.ok(bot.client.sendMessage.mock.calls.length >= 1);
+    // No @mention → silently ignored
+    assert.strictEqual(bot.client.sendMessage.mock.calls.length, 0);
   });
 
-  it('responds in group even without @Octivia_bot mention', async () => {
+  it('responds in group when @mentioned', async () => {
     const board = makeBoard();
     const reflexion = makeReflexion('Great idea! 좋아요');
     const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
@@ -387,7 +387,7 @@ describe('TelegramDevelopmentBot group chat', () => {
       from: { id: 999, username: 'friend1' }
     };
     await bot._routeMessage(msg);
-    // @mention is stripped, cleanText = "what do you think about this feature?" → responds
+    // @mention present → responds
     assert.ok(bot.client.sendMessage.mock.calls.length >= 1);
   });
 
