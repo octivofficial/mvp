@@ -80,28 +80,36 @@ async function initPlugins(deps) {
     log.warn('team', 'OctivDiscordBot disabled — missing configuration or dependencies', { error: err.message });
   }
 
-  // Crawler Agent
-  try {
-    const { CrawlerAgent } = require('./crawler-agent');
-    plugins.crawlerAgent = new CrawlerAgent({
-      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL
-    }, board);
-    await plugins.crawlerAgent.init();
-    log.info('team', 'CrawlerAgent initialized');
-  } catch (err) {
-    log.warn('team', 'CrawlerAgent disabled — missing configuration or dependencies', { error: err.message });
+  // Crawler Agent (dormant — requires external crawl targets)
+  if (process.env.ENABLE_CRAWLER === 'true') {
+    try {
+      const { CrawlerAgent } = require('./crawler-agent');
+      plugins.crawlerAgent = new CrawlerAgent({
+        blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL
+      }, board);
+      await plugins.crawlerAgent.init();
+      log.info('team', 'CrawlerAgent initialized');
+    } catch (err) {
+      log.warn('team', 'CrawlerAgent failed to init', { error: err.message });
+    }
+  } else {
+    log.info('team', 'CrawlerAgent skipped (ENABLE_CRAWLER !== true)');
   }
 
-  // Workspace Agent
-  try {
-    const { WorkspaceAgent } = require('./workspace-agent.js');
-    plugins.workspaceAgent = new WorkspaceAgent({
-      blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL
-    }, board);
-    await plugins.workspaceAgent.init();
-    log.info('team', 'WorkspaceAgent initialized');
-  } catch (err) {
-    log.warn('team', 'WorkspaceAgent disabled — missing configuration or dependencies', { error: err.message });
+  // Workspace Agent (dormant — requires workspace config)
+  if (process.env.ENABLE_WORKSPACE === 'true') {
+    try {
+      const { WorkspaceAgent } = require('./workspace-agent.js');
+      plugins.workspaceAgent = new WorkspaceAgent({
+        blackboardUrl: botConfig.blackboardUrl || process.env.BLACKBOARD_REDIS_URL
+      }, board);
+      await plugins.workspaceAgent.init();
+      log.info('team', 'WorkspaceAgent initialized');
+    } catch (err) {
+      log.warn('team', 'WorkspaceAgent failed to init', { error: err.message });
+    }
+  } else {
+    log.info('team', 'WorkspaceAgent skipped (ENABLE_WORKSPACE !== true)');
   }
 
   // NotebookLM Agent
@@ -114,14 +122,18 @@ async function initPlugins(deps) {
     log.warn('team', 'NotebookLMAgent disabled', { error: err.message });
   }
 
-  // YouTube Agent
-  try {
-    const { YouTubeAgent } = require('./youtube-agent.js');
-    plugins.youtubeAgent = new YouTubeAgent({}, board, reflexion);
-    await plugins.youtubeAgent.init();
-    log.info('team', 'YouTubeAgent initialized');
-  } catch (err) {
-    log.warn('team', 'YouTubeAgent disabled', { error: err.message });
+  // YouTube Agent (dormant — requires YouTube API key)
+  if (process.env.ENABLE_YOUTUBE === 'true') {
+    try {
+      const { YouTubeAgent } = require('./youtube-agent.js');
+      plugins.youtubeAgent = new YouTubeAgent({}, board, reflexion);
+      await plugins.youtubeAgent.init();
+      log.info('team', 'YouTubeAgent initialized');
+    } catch (err) {
+      log.warn('team', 'YouTubeAgent failed to init', { error: err.message });
+    }
+  } else {
+    log.info('team', 'YouTubeAgent skipped (ENABLE_YOUTUBE !== true)');
   }
 
   // Obsidian CLI Agent
