@@ -160,6 +160,8 @@ describe('Test Quality — Agent Coverage Map', () => {
     'logger.js',               // tested via logger.test.js (getLogger import)
     'memory-logger.js',        // circular dep prevention, tested via memory.test.js
     'team-rc.js',              // re-exported via team.js, tested in team.test.js + rc.test.js
+    'discord-embeds.js',       // pure builders extracted from discord-bot.js, tested via discord.test.js
+    'discord-commands.js',     // command handlers extracted from discord-bot.js, tested via discord.test.js
   ];
 
   it('every non-exempt agent/*.js should be imported by at least one test', () => {

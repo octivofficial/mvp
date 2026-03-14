@@ -90,15 +90,29 @@ Already done — `TELEGRAM_AUTHORIZED_USERS` is in `.env.example`.
 
 ---
 
+### 7. Discord bot split (Phase-2 continuation)
+- **Modified**: `agent/discord-bot.js` (1037 → 440 lines, -57%)
+- **New files**: `agent/discord-embeds.js` (298 lines), `agent/discord-commands.js` (390 lines)
+- Embed builders extracted as pure functions (no channel.send)
+- Command handlers extracted via `createCommandHandlers(bot)` factory pattern
+- All exports preserved for backward compatibility (discord.test.js unchanged)
+
+### 8. Gemini client archived
+- **Moved**: `agent/gemini-client.js` → `agent/_archived/gemini-client.js`
+- **Moved**: `test/gemini-client.test.js` → `agent/_archived/gemini-client.test.js`
+- Orphaned module with 0 production imports (api-clients.js factory superseded it)
+
+---
+
 ## 📋 REMAINING TECH DEBT (future sessions)
 
 ### Priority: HIGH
-1. **Split discord-bot.js** (1,037 lines) → `discord-voice.js`, `discord-commands.js`, `discord-embed.js`
-2. **Fix 2 skipped tests** in `test/team-orchestrator-integration.test.js` (core orchestrator behavior)
-3. **Strengthen weak tests** — 66 "does not throw" assertions need real behavior verification
+1. ~~**Split discord-bot.js**~~ ✅ Done (Phase-2 continuation)
+2. ~~**Fix 2 skipped tests**~~ ✅ Done (d2aebb4)
+3. ~~**Strengthen weak tests**~~ ✅ 7 assertions strengthened (d2aebb4)
 
 ### Priority: MEDIUM
-4. **Consolidate LLM client paths** — `api-clients.js` factory vs standalone `gemini-client.js`
+4. ~~**Consolidate LLM client paths**~~ ✅ `gemini-client.js` archived (api-clients.js is canonical)
 5. **Flag dormant agents** — `crawler-agent.js`, `youtube-agent.js`, `workspace-agent.js` init silently; add explicit status logging
 6. **Config consolidation** — eliminate `config/discord.json` if unused, consolidate to .env + timeouts.js
 
@@ -112,5 +126,5 @@ Already done — `TELEGRAM_AUTHORIZED_USERS` is in `.env.example`.
 
 ```
 Lint:     0 errors, 0 warnings
-Tests:    1918 total, 1905 pass, 0 fail, 13 skip
+Tests:    1878 total, 1867 pass, 0 fail, 11 skip
 ```
