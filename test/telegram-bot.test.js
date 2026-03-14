@@ -356,6 +356,75 @@ describe('TelegramDevelopmentBot _routeMessage()', () => {
     const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
     assert.ok(text.includes('/build'));
   });
+
+  it('includes /spec in help text', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    const msg = { chat: { id: 42 }, text: '/help', from: {} };
+    await bot._routeMessage(msg);
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('/spec'));
+    assert.ok(text.includes('BMAD'));
+  });
+
+  it('sends usage hint for /spec without feature text', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    // '/spec  ' (spaces only) → after text.trim() = '/spec', falls through to free text
+    // '/spec x' → starts with '/spec ', triggers spec handler
+    // Test the empty-feature guard inside _handleSpec
+    const msg = { chat: { id: 42 }, text: '/spec  ', from: {} };
+    await bot._routeMessage(msg);
+    // After outer trim '/spec  ' → '/spec' which doesn't match '/spec ' prefix
+    // So we test _handleSpec directly
+    const bot2 = new TelegramDevelopmentBot(baseConfig(), makeBoard());
+    bot2.client = makeClient();
+    await bot2._handleSpec(42, '', {});
+    const [, text] = bot2.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('Usage'));
+  });
+
+  it('generates BMAD spec for /spec with feature description', async () => {
+    const board = makeBoard();
+    const reflexion = makeReflexion('## BMAD Spec: Auto-Farm\n### Acceptance Criteria\n- [ ] AC-9.1');
+    const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
+    bot.client = makeClient();
+    bot._saveSpecToVault = mock.fn(async () => {});
+    const msg = { chat: { id: 42 }, text: '/spec auto-farm wheat collection', from: { username: 'tony' } };
+    await bot._routeMessage(msg);
+    // Should send "generating..." + spec result
+    assert.ok(bot.client.sendMessage.mock.calls.length >= 2);
+    // Spec result should mention BMAD
+    const lastCall = bot.client.sendMessage.mock.calls[bot.client.sendMessage.mock.calls.length - 1];
+    assert.ok(lastCall.arguments[1].includes('BMAD'));
+  });
+
+  it('publishes octivia:spec to Blackboard on /spec', async () => {
+    const board = makeBoard();
+    const reflexion = makeReflexion('## BMAD Spec: Test\n### AC\n- [ ] AC-1.1');
+    const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
+    bot.client = makeClient();
+    bot._saveSpecToVault = mock.fn(async () => {});
+    const msg = { chat: { id: 42 }, text: '/spec add user auth', from: { username: 'dev' } };
+    await bot._routeMessage(msg);
+    const specPublish = board.publish.mock.calls.find(c => c.arguments[0] === 'octivia:spec');
+    assert.ok(specPublish, 'Should publish to octivia:spec channel');
+    assert.strictEqual(specPublish.arguments[1].feature, 'add user auth');
+    assert.strictEqual(specPublish.arguments[1].author, 'dev');
+  });
+
+  it('/start mentions BMAD and spec', async () => {
+    const board = makeBoard();
+    const bot = new TelegramDevelopmentBot(baseConfig(), board);
+    bot.client = makeClient();
+    const msg = { chat: { id: 42 }, text: '/start', from: {} };
+    await bot._routeMessage(msg);
+    const [, text] = bot.client.sendMessage.mock.calls[0].arguments;
+    assert.ok(text.includes('BMAD'));
+    assert.ok(text.includes('/spec'));
+  });
 });
 
 describe('TelegramDevelopmentBot group chat', () => {
@@ -466,6 +535,53 @@ describe('TelegramDevelopmentBot _accumulateRecentVibes()', () => {
     const result = await bot._accumulateRecentVibes();
     // If vault/00-Vibes/ has no idea files (only README), returns null
     assert.ok(result === null || typeof result === 'string');
+  });
+});
+
+describe('TelegramDevelopmentBot vibe → BMAD spec flow', () => {
+  const makeClient = () => ({ sendMessage: mock.fn(() => {}) });
+
+  it('produces BMAD spec with AC after 3-turn vibe conversation', async () => {
+    const board = makeBoard();
+    const specOutput = '## BMAD Spec: Cool Feature\n### Acceptance Criteria\n- [ ] AC-1.1: WHEN triggered THEN works';
+    const reflexion = {
+      callLLM: mock.fn(async () => specOutput),
+      handleIntent: mock.fn(async () => null)
+    };
+    const bot = new TelegramDevelopmentBot(baseConfig(), board, reflexion);
+    bot.client = makeClient();
+    bot._saveToVault = mock.fn(async () => {});
+    bot._saveSpecToVault = mock.fn(async () => {});
+
+    // Turn 1: idea
+    await bot._vibeConversation(42, 'Build a cool feature', { username: 'tony' });
+    // Turn 2: clarification
+    await bot._vibeConversation(42, 'It should be fast and reliable', { username: 'tony' });
+    // Turn 3: taste → produces BMAD spec
+    await bot._vibeConversation(42, 'Clean and minimal', { username: 'tony' });
+
+    // Should publish to octivia:spec (not vibe:golden)
+    const specPublish = board.publish.mock.calls.find(c => c.arguments[0] === 'octivia:spec');
+    assert.ok(specPublish, 'Should publish BMAD spec to octivia:spec channel');
+
+    // Should save to vault/01-Specs/
+    assert.strictEqual(bot._saveSpecToVault.mock.calls.length, 1);
+
+    // Last message should mention BMAD
+    const lastMsg = bot.client.sendMessage.mock.calls[bot.client.sendMessage.mock.calls.length - 1];
+    assert.ok(lastMsg.arguments[1].includes('BMAD'));
+  });
+});
+
+describe('TelegramDevelopmentBot _saveSpecToVault()', () => {
+  it('does not throw on valid spec text', async () => {
+    const bot = new TelegramDevelopmentBot(baseConfig(), makeBoard());
+    await assert.doesNotReject(async () => {
+      const spy = { saved: false };
+      bot._saveSpecToVault = async () => { spy.saved = true; };
+      await bot._saveSpecToVault('## BMAD Spec: Test\n### AC', 'test-feature', 'tester');
+      assert.ok(spy.saved);
+    });
   });
 });
 

@@ -1,14 +1,14 @@
-// agent/telegram-bot.js — Octivia, Vibe Translator (Blueprint Phase 1+)
+// agent/telegram-bot.js — Octivia, BMAD Development Assistant
 //
 // Personality: A brilliant bilingual assistant who listens deeply,
-// notes everything internally, and translates human vibes into
-// buildable Claude Code specs. English-first, Korean brief — gyopo culture.
+// notes everything internally, and generates BMAD-structured specs
+// with Acceptance Criteria and TDD test stubs. English-first, Korean brief.
 //
-// Flow: Free talk → Octivia absorbs + asks one natural follow-up →
-//       silently collects → produces Build Spec → vault/00-Vibes/ → Blackboard
+// Flow: Free talk → Octivia absorbs → 3-turn vibe → BMAD Spec (AC + TDD)
+//       /spec <feature> → instant BMAD spec generation
+//       /build → compile all vibes → BMAD BUILD BRIEF with TDD stubs
 //
-// Party Mode: accumulate ideas → /build → compile all → BMAD BUILD BRIEF
-// Build Mode: Claude Code reads Obsidian → BMAD team builds
+// Output: vault/01-Specs/ + Blackboard octivia:spec → Claude Code BMAD team
 //
 // Independence: NO Minecraft. Only Blackboard + LLM + Obsidian vault.
 const fs = require('fs');
@@ -73,48 +73,84 @@ const VIBE_PROMPT = (idea, clarification) =>
   `One casual question about the vibe/feeling. Short.`;
 
 const SPEC_PROMPT = (idea, clarification, taste, systemContext) =>
-  `You are Octivia, a vibe translator. Synthesize this conversation into a BUILD SPEC for Claude Code.\n\n` +
+  `You are Octivia, BMAD spec generator for the Octiv dev team. Synthesize this conversation into a BMAD SPEC.\n\n` +
   `Conversation collected:\n- Idea: ${idea}\n- Context: ${clarification}\n- Feel: ${taste}\n\n` +
   `Current system reality:\n${systemContext}\n\n` +
   `Team capabilities:\n${TEAM_CAPABILITIES}\n\n` +
-  `Output a BUILD SPEC in this exact format:\n\n` +
-  `## Build Spec: [Feature Name]\n\n` +
-  `**Intent**: [what this wants to accomplish — 1 sentence]\n` +
-  `**Vibe**: [how it should feel — adjectives]\n` +
-  `**Gap**: [what's missing from current system — be specific]\n` +
-  `**Approach**: [1-2 sentence implementation plan using existing architecture]\n` +
-  `**Files**: [which agent/*.js files to create or modify]\n` +
-  `**Skills**: [which /skills to invoke, e.g. /brainstorming /tdd-workflow]\n\n` +
-  `Then add a brief warm closing in gyopo style (English + brief Korean).`;
+  `Output a BMAD SPEC in this exact format:\n\n` +
+  `## BMAD Spec: [Feature Name]\n\n` +
+  `**Intent**: [1 sentence — what this accomplishes]\n` +
+  `**Vibe**: [adjectives — how it should feel]\n\n` +
+  `### Acceptance Criteria\n` +
+  `- [ ] AC-X.1: WHEN [trigger], THEN [system] SHALL [outcome]\n` +
+  `- [ ] AC-X.2: WHEN [trigger], THEN [system] SHALL [outcome]\n` +
+  `- [ ] AC-X.3: WHEN [trigger], THEN [system] SHALL [outcome]\n\n` +
+  `### Implementation Plan\n` +
+  `**pm-agent**: [requirements summary]\n` +
+  `**planner**:\n1. [concrete step with file path]\n2. [concrete step]\n\n` +
+  `**architect**: [key design decision — which patterns to use]\n\n` +
+  `**dev-agent**:\n` +
+  `- \`agent/xxx.js\` — create/modify: [what changes]\n\n` +
+  `### TDD Test Stubs\n` +
+  `**tdd-guide**: \`test/xxx.test.js\`\n` +
+  `\`\`\`javascript\n` +
+  `// TDD Red phase — write these tests FIRST\n` +
+  `describe('[FeatureName]', () => {\n` +
+  `  it('[AC-X.1 test description]', async () => {\n` +
+  `    // Arrange: [setup]\n` +
+  `    // Act: [action]\n` +
+  `    // Assert: [expected outcome]\n` +
+  `  });\n` +
+  `  it('[AC-X.2 test description]', async () => {\n` +
+  `    // Arrange → Act → Assert\n` +
+  `  });\n` +
+  `});\n` +
+  `\`\`\`\n\n` +
+  `### Skills to Invoke\n` +
+  `- [list relevant /skills from the team capabilities]\n\n` +
+  `Close with a brief warm line in gyopo style (English + Korean).`;
 
 // Used by /build — compiles ALL accumulated vibes into a BMAD BUILD BRIEF
 const BMAD_BRIEF_PROMPT = (accumulatedIdeas, systemContext) =>
-  `You are Octivia, bridge between human vision and the development team.\n\n` +
+  `You are Octivia, BMAD spec generator bridging human vision to the dev team.\n\n` +
   `Accumulated ideas from our conversations:\n${accumulatedIdeas}\n\n` +
   `Current system reality:\n${systemContext}\n\n` +
   `Team capabilities:\n${TEAM_CAPABILITIES}\n\n` +
-  `Compile everything into a BMAD BUILD BRIEF that the dev team can execute immediately.\n\n` +
+  `Compile everything into a BMAD BUILD BRIEF with executable ACs and TDD stubs.\n\n` +
   `Use this exact format:\n\n` +
   `## Build Brief: [Overarching Feature/Theme]\n\n` +
-  `**Vision**: [1-2 sentences: what we're building and why it matters]\n` +
-  `**Vibe**: [adjectives: how it should feel when done]\n\n` +
+  `**Vision**: [1-2 sentences: what we're building and why]\n` +
+  `**Vibe**: [adjectives]\n\n` +
   `### Gap Analysis\n` +
-  `**What exists**: [bullet list of relevant existing pieces]\n` +
-  `**What's missing**: [specific gaps — be surgical]\n` +
+  `**What exists**: [bullet list]\n` +
+  `**What's missing**: [specific gaps]\n` +
   `**Complexity**: [1 day | 1 week | 1 month]\n\n` +
+  `### Acceptance Criteria\n` +
+  `- [ ] AC-X.1: WHEN [trigger], THEN [system] SHALL [outcome]\n` +
+  `- [ ] AC-X.2: WHEN [trigger], THEN [system] SHALL [outcome]\n` +
+  `(one AC per distinct feature/behavior)\n\n` +
   `### BMAD Execution Plan\n\n` +
-  `**pm-agent** — Requirements:\n` +
-  `- [ ] AC-X: [acceptance criterion]\n\n` +
-  `**planner** — Steps:\n` +
-  `1. [concrete step]\n\n` +
-  `**architect** — Design:\n` +
-  `- [key design decision]\n\n` +
-  `**dev-agent** — Files:\n` +
-  `- \`agent/xxx.js\` — create/modify\n\n` +
-  `**tdd-guide** — Tests:\n` +
-  `- \`test/xxx.test.js\` — N tests\n\n` +
+  `**pm-agent**: [requirements + priority]\n\n` +
+  `**planner**:\n1. [step with file path]\n2. [step]\n\n` +
+  `**architect**: [design decisions, patterns]\n\n` +
+  `**dev-agent**:\n` +
+  `- \`agent/xxx.js\` — [create/modify: description]\n\n` +
+  `### TDD Test Stubs\n` +
+  `**tdd-guide**: \`test/xxx.test.js\`\n` +
+  `\`\`\`javascript\n` +
+  `const { describe, it } = require('node:test');\n` +
+  `const assert = require('node:assert/strict');\n\n` +
+  `describe('[Feature]', () => {\n` +
+  `  it('[AC-X.1 description]', async () => {\n` +
+  `    // Arrange → Act → Assert\n` +
+  `  });\n` +
+  `  it('[AC-X.2 description]', async () => {\n` +
+  `    // Arrange → Act → Assert\n` +
+  `  });\n` +
+  `});\n` +
+  `\`\`\`\n\n` +
   `### Skills to Invoke\n` +
-  `- [list relevant skills from the skills index]\n\n` +
+  `- [list relevant /skills]\n\n` +
   `Close with: "All yours, 팀. 빌드 시작해요." in gyopo style.`;
 
 class TelegramDevelopmentBot {
@@ -159,9 +195,9 @@ class TelegramDevelopmentBot {
         // Persist group chatId to Blackboard so it survives container restarts
         this.board?.publish?.('octiv:telegram:group:joined', { chatId, title }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
         this.client?.sendMessage(chatId,
-          "안녕하세요 여러분! I'm Octivia — your vibe translator.\n\n" +
-          "Talk to me anytime — I'll respond to everything.\n" +
-          "Use /build when you're ready to turn the vibe into something real.\n\n" +
+          "안녕하세요 여러분! I'm Octivia — your BMAD dev assistant.\n\n" +
+          "@mention me with ideas — I'll generate specs with AC + TDD stubs.\n" +
+          "Use /spec <feature> for instant specs, /build for batch briefs.\n\n" +
           "잘 부탁드립니다 👂✨"
         );
       }
@@ -219,9 +255,10 @@ class TelegramDevelopmentBot {
 
     if (text === '/start') {
       return this.client?.sendMessage(chatId,
-        "Welcome to Octiv — I'm Octivia, your vibe translator.\n\n" +
-        "Tell me what you're thinking. Rough idea, half-baked thought, whatever. " +
-        "I'll help you turn it into something we can build.\n\n" +
+        "Welcome to Octiv — I'm Octivia, your BMAD development assistant.\n\n" +
+        "Tell me what you're thinking. I'll turn it into a spec with " +
+        "Acceptance Criteria and TDD test stubs — ready for the dev team.\n\n" +
+        "Or use /spec <feature> for instant spec generation.\n\n" +
         "아이디어 있으면 그냥 말해요 ✨"
       );
     }
@@ -231,12 +268,13 @@ class TelegramDevelopmentBot {
         "Available commands:\n" +
         "/start — intro\n" +
         "/status — system snapshot\n" +
-        "/context <idea> — check against what we have\n" +
+        "/spec <feature> — generate BMAD spec with AC + TDD stubs\n" +
         "/build — compile all vibes → BMAD brief for the dev team\n" +
+        "/context <idea> — check against what we have\n" +
         "/notebook <question> — query NotebookLM knowledge base\n" +
         "/doc <description> — create a Google Doc\n" +
         "/reset — start fresh\n\n" +
-        "Or just talk — I'm always listening. 그냥 말해요."
+        "Or just talk — I'll collect vibes for /build. 그냥 말해요."
       );
     }
 
@@ -255,6 +293,12 @@ class TelegramDevelopmentBot {
 
     if (text === '/build') {
       return this._handleBuild(chatId, msg.from);
+    }
+
+    if (text.startsWith('/spec ')) {
+      const feature = text.slice(6).trim();
+      if (!feature) return this.client?.sendMessage(chatId, 'Usage: /spec <feature description>');
+      return this._handleSpec(chatId, feature, msg.from);
     }
 
     if (text.startsWith('/context ')) {
@@ -335,6 +379,57 @@ class TelegramDevelopmentBot {
     return this.client?.sendMessage(chatId,
       brief + '\n\n> Saved to vault/00-Vibes/ · Claude Code ready to build'
     );
+  }
+
+  // ── /spec — Single-shot BMAD spec with AC + TDD ─────────
+
+  async _handleSpec(chatId, feature, from) {
+    if (!feature) return this.client?.sendMessage(chatId, 'Usage: /spec <feature description>');
+    const author = from?.username || from?.first_name || 'octivia';
+    this.client?.sendMessage(chatId, 'Generating BMAD spec with AC + TDD stubs... 잠깐만요');
+
+    const systemContext = await this._getSystemContext();
+    const spec = await this._llmCall(
+      SPEC_PROMPT(feature, 'single-shot spec request', 'production-quality', systemContext)
+    );
+
+    // Save to vault
+    await this._saveSpecToVault(spec, feature, author);
+
+    // Publish to Blackboard for Claude Code consumption
+    await this.board.publish('octivia:spec', {
+      author, spec, feature, chatId, timestamp: Date.now(),
+    }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
+
+    return this.client?.sendMessage(chatId,
+      spec + '\n\n> Saved to vault/01-Specs/ · Blackboard `octivia:spec` published'
+    );
+  }
+
+  async _saveSpecToVault(spec, feature, author = 'octivia') {
+    const specsDir = path.join(__dirname, '..', 'vault', '01-Specs');
+    try {
+      await fs.promises.mkdir(specsDir, { recursive: true });
+      const date = new Date().toISOString().slice(0, 10);
+      const slug = (feature || 'spec').slice(0, 30).replace(/[^\w가-힣\s]/g, '').trim().replace(/\s+/g, '-');
+      const filename = `${date}-${slug || 'spec'}.md`;
+      const content = [
+        '---',
+        'type: bmad-spec',
+        'status: ready',
+        `created: ${date}`,
+        `author: ${author}`,
+        'tags: [bmad, spec, tdd, ready]',
+        'source: telegram',
+        '---',
+        '',
+        spec,
+      ].join('\n');
+      await fs.promises.writeFile(path.join(specsDir, filename), content, 'utf8');
+      log.info('telegram-bot', `BMAD spec saved: vault/01-Specs/${filename}`);
+    } catch (err) {
+      log.warn('telegram-bot', 'Spec vault save failed', { error: err.message });
+    }
   }
 
   // ── Group: silent message recorder ───────────────────────
@@ -442,19 +537,20 @@ class TelegramDevelopmentBot {
       session.taste = text;
       await this._saveSession(chatId, { stage: 0, notes: [] });
 
-      // Octivia quietly compiles everything
-      this.client?.sendMessage(chatId, "Got it — putting this together for you.");
+      // Octivia quietly compiles everything into a BMAD spec
+      this.client?.sendMessage(chatId, "Got it — generating BMAD spec with AC + TDD stubs.");
 
       const systemContext = await this._getSystemContext();
       const spec = await this._llmCall(SPEC_PROMPT(session.idea, session.clarification, session.taste, systemContext));
 
       await this._saveToVault(spec, session);
-      await this.board.publish('vibe:golden', {
+      await this._saveSpecToVault(spec, session.idea, author);
+      await this.board.publish('octivia:spec', {
         author, spec, chatId, idea: session.idea,
         notes: session.notes, timestamp: Date.now(),
       }).catch(e => log.debug('telegram-bot', 'non-critical error', { error: e?.message }));
 
-      this.client?.sendMessage(chatId, spec + '\n\n> /build to trigger · vault/00-Vibes/ saved');
+      this.client?.sendMessage(chatId, spec + '\n\n> BMAD spec saved · /build for batch brief');
     }
   }
 
