@@ -180,4 +180,15 @@ module.exports = {
 
   /** Retry delay before second attempt */
   LM_STUDIO_RETRY_DELAY_MS: parseInt(process.env.LM_STUDIO_RETRY_DELAY_MS) || 1000,
+
+  // -- Octivia Autonomy --
+
+  /** Messages before auto-sync triggers (event-driven, not interval) */
+  OCTIVIA_AUTO_SYNC_THRESHOLD: parseInt(process.env.OCTIVIA_AUTO_SYNC_THRESHOLD) || 10,
+
+  /** Messages before pattern detection triggers */
+  OCTIVIA_PATTERN_DETECT_THRESHOLD: parseInt(process.env.OCTIVIA_PATTERN_DETECT_THRESHOLD) || 20,
+
+  /** Messages since last summary before @mention context recap activates */
+  OCTIVIA_CONTEXT_RECAP_THRESHOLD: parseInt(process.env.OCTIVIA_CONTEXT_RECAP_THRESHOLD) || 10,
 };

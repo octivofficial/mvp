@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const { getLogger } = require('./logger');
 const log = getLogger();
+const OctiviaAutonomy = require('./telegram-bot-autonomy');
 
 const VAULT_VIBES_DIR = path.join(__dirname, '..', 'vault', '00-Vibes');
 const MEMORY_PATH = path.join(__dirname, '..', 'vault', 'MEMORY.md');
@@ -173,6 +174,13 @@ class TelegramDevelopmentBot {
       const { Blackboard } = require('./blackboard');
       this.board = new Blackboard(config.blackboardUrl);
     }
+
+    // Autonomy module — auto-sync, pattern detection, context recap
+    this.autonomy = new OctiviaAutonomy({
+      board: this.board,
+      reflexion: this.reflexion,
+      context: this.context,
+    });
   }
 
   startPolling() {
@@ -248,8 +256,12 @@ class TelegramDevelopmentBot {
       const botUsername = this.config.botUsername || 'Octivia_bot';
       const mentionPattern = new RegExp(`@${botUsername}`, 'gi');
       if (!mentionPattern.test(text)) return; // recorded but no response
-      const cleanText = text.replace(mentionPattern, '').trim();
+      let cleanText = text.replace(mentionPattern, '').trim();
       if (!cleanText) return;
+      // Autonomy: inject context recap if enough messages accumulated
+      const session = await this._loadSession(chatId);
+      const recap = this.autonomy?.getContextRecap(chatId, session);
+      if (recap) cleanText = `[Context: ${recap}] ${cleanText}`;
       if (this.reflexion) {
         await this._vibeConversation(chatId, cleanText, msg.from);
       } else {
@@ -611,6 +623,8 @@ class TelegramDevelopmentBot {
       // Keep last 200 messages per group (memory limit)
       if (session.notes.length > 200) session.notes = session.notes.slice(-200);
       await this._saveSession(chatId, session);
+      // Autonomy hook — auto-sync + pattern detection
+      if (this.autonomy) await this.autonomy.onMessage(chatId, session);
     } catch (e) { log.debug('telegram-bot', 'recordGroupMessage error', { error: e.message }); }
   }
 
